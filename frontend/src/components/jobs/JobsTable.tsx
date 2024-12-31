@@ -54,7 +54,7 @@ const JobsTable: React.FC = () => {
       message.success('Job added successfully');
       toggleModal(false);
       form.resetFields();
-      setJobs([...jobs, response.data]);
+      setJobs([response.data, ...jobs]);
     } catch (error) {
       console.error(error);
       message.error('Failed to add job. Check the console');

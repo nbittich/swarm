@@ -52,7 +52,7 @@ const ScheduledJobsTable: React.FC = () => {
       message.success('Scheduled Job added successfully');
       toggleModal(false);
       form.resetFields();
-      setScheduledJobs([...scheduledJobs, response.data]);
+      setScheduledJobs([response.data, ...scheduledJobs]);
     } catch (error) {
       console.error(error);
       message.error('Failed to add job. Check the console');

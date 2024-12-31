@@ -116,7 +116,6 @@ async fn all_jobs(
     State(manager): State<JobManagerState>,
     _: Claims,
 ) -> Result<Json<Vec<Job>>, ApiError> {
-    // todo paginate
     let jobs = manager
         .job_repository
         .find_by_query(
@@ -136,10 +135,16 @@ async fn all_scheduled_jobs(
     State(manager): State<JobManagerState>,
     _: Claims,
 ) -> Result<Json<Vec<ScheduledJob>>, ApiError> {
-    // todo paginate
     let scheduled_jobs = manager
         .scheduled_job_repository
-        .find_all()
+        .find_by_query(
+            doc! {},
+            Some(
+                FindOptions::builder()
+                    .sort(Some(doc! { "creationDate": -1 }))
+                    .build(),
+            ),
+        )
         .await
         .map_err(|e| ApiError::AllScheduledJobs(e.to_string()))?;
     Ok(Json(scheduled_jobs))
@@ -154,8 +159,13 @@ async fn all_job_definitions(
 async fn sparql(
     State(manager): State<JobManagerState>,
     claims: Option<Claims>,
-    axum::extract::Form(SparqlQueryPayload { query }): axum::extract::Form<SparqlQueryPayload>,
+    axum::extract::Form(SparqlQueryPayload { query, update }): axum::extract::Form<
+        SparqlQueryPayload,
+    >,
 ) -> Result<Json<SparqlResponse>, ApiError> {
+    let query = query
+        .or(update)
+        .ok_or_else(|| ApiError::SparqlError("missing query param".to_string()))?;
     let is_update = spargebra::Update::parse(&query, None).is_ok();
     if claims.is_none() && is_update {
         return Err(ApiError::SparqlError("illegal access".into()));

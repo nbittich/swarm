@@ -10,7 +10,7 @@ export const ForbiddenInterceptor = () => {
       return response;
     },
     (error) => {
-      console.log(error.response.status);
+      console.log(error);
       if (error.status === 401 || error.status === 403) {
         localStorage.removeItem("token");
         setToken(null);

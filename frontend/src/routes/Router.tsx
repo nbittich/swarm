@@ -17,6 +17,10 @@ const SwarmRoutes = () => {
 
   const routesForPublic = [
     {
+      path: "yasgui",
+      element: <Sparql />,
+    },
+    {
       path: "*",
       element: <NoMatch />
     }
@@ -59,10 +63,7 @@ const SwarmRoutes = () => {
           path: "scheduled-jobs",
           element: <ScheduledJobsTable />,
         },
-        {
-          path: "yasgui",
-          element: <Sparql />,
-        },
+
         {
           path: "logout",
           element: <Logout />,

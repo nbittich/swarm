@@ -83,7 +83,8 @@ pub struct NewScheduledJobPayload {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SparqlQueryPayload {
-    pub query: String,
+    pub query: Option<String>,
+    pub update: Option<String>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

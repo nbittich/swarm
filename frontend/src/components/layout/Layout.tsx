@@ -54,7 +54,9 @@ export default function MainLayout() {
     items.push(getItem((<Link to="/logout">Logout</Link>), '/logout', <LogoutOutlined />));
   } else {
     items.push(getItem((<Link to="/login">Login</Link>), '/', <LoginOutlined />));
+    items.push(getItem((<Link to="/yasgui">Sparql</Link>), '/sparql', <ConsoleSqlOutlined />));
   }
+
 
 
   return (
