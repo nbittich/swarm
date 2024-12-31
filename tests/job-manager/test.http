@@ -1,0 +1,26 @@
+### Authorize
+POST {{BASE_URL}}/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin"
+}
+
+### Definitions
+GET {{BASE_URL}}/job-definitions
+Accept: application/json
+Authorization: Bearer {{TOKEN}}
+
+### New Job
+POST {{BASE_URL}}/jobs/new
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{TOKEN}}
+
+{
+  "definitionId": "0193e822c0377b8187a6d151dbbb4216",
+  "targetUrl": "https://bertem.meetingburger.net/?AlleVergaderingen=False"
+}
+
+

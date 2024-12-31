@@ -1,0 +1,4 @@
+/target/
+/data/
+.env
+rest_nvim_result*

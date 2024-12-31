@@ -1,0 +1,7 @@
+.yasgui .autocompleteWrapper {
+  display: none !important;
+}
+.yasgui .controlbar {
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}

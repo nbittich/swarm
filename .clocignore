@@ -1,0 +1,8 @@
+target
+app-docker
+.vscode
+node_modules
+tests
+.github
+cloc.sh
+.clocignore

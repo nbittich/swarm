@@ -1,0 +1,18 @@
+[package]
+name = "extractor"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow = { workspace = true, features = ["backtrace"] }
+chrono.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "fs", "time"] }
+swarm_common.workspace=true
+graph-rdfa-processor.workspace = true
+tortank.workspace = true
