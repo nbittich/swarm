@@ -1,7 +1,7 @@
 import { useEffect, } from "react";
 import { useNavigate, useParams } from "react-router-dom"; // For extracting path variables
-import { Table, Tag, Button, TableProps, Flex, Space, Pagination, } from "antd";
-import { colorForStatus, Status, SubTask, } from "@swarm/models/domain";
+import { Table, Tag, Button, TableProps, Flex, Space, Pagination, Typography } from "antd";
+import { colorForStatus, Status, SubTask, truncate, } from "@swarm/models/domain";
 import { ArrowLeftOutlined, DownloadOutlined, PlusOutlined } from "@ant-design/icons";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@swarm/states/Store";
@@ -9,6 +9,7 @@ import { fetchSubTasks, reset } from "@swarm/states/SuBTaskSlice";
 import { download } from "@swarm/states/file/Api";
 import dayjs from "dayjs";
 
+const { Text } = Typography;
 const SubTasksTable: React.FC = () => {
   const navigate = useNavigate();
   const { id: jobId, taskId, taskName } = useParams<{ id: string; taskId: string, taskName: string }>();
@@ -60,9 +61,9 @@ const SubTasksTable: React.FC = () => {
       key: "status",
       render: (status: Status) => {
         return (
-          <Tag color={colorForStatus(status)}>
-            {status.type}
-            {status.type === "failed" && status.value && `: ${status.value.join(", ")}`}
+          <Tag color={colorForStatus(status)} >
+            <Text>{status.type}
+              {status.type === "failed" && status.value && `: ${truncate(status.value.join(", "), 32)}`}</Text>
           </Tag>
         );
       },

@@ -120,7 +120,7 @@
         }
       },
       {
-        "name": "cleanup",
+        "name": "archive",
         "order": 6,
         "payload": {
           "type": "archive"
