@@ -109,11 +109,9 @@ const SubTasksTable: React.FC = () => {
           <h2>{taskName}</h2>
           <Space>
             <Button onClick={() => navigate(`/jobs/${jobId}/tasks`)} icon={<ArrowLeftOutlined />} size="large" color="default" variant="dashed">Back</Button>
-            {lastElementId && (
-              <Button disabled={loading} onClick={loadMore} size="large" color="default" variant="dashed" icon={<PlusOutlined />}>
-                Load {pageSize} more
-              </Button>
-            )}
+            <Button disabled={loading || !lastElementId} onClick={loadMore} size="large" color="default" variant="dashed" icon={<PlusOutlined />}>
+              Load {pageSize} more
+            </Button>
           </Space>
 
         </Flex>

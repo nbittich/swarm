@@ -169,8 +169,9 @@ async fn handle_task(nc: &NatsClient, task: &mut Task) -> anyhow::Result<Option<
         }
         while let Some(handle) = tasks.join_next().await {
             let mut sub_task = match handle?? {
-                Ok((mut sub_task, NTripleResult { len: 0, .. })) => {
+                Ok((mut sub_task, res @ NTripleResult { len: 0, .. })) => {
                     sub_task.status = Status::Failed(vec!["did not extract any data".into()]);
+                    sub_task.result = Some(SubTaskResult::NTriple(res));
                     failure_count += 1;
                     sub_task
                 }

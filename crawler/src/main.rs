@@ -300,7 +300,7 @@ async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlPro
                     {
                         if a_property
                             .attr("property")
-                            .map(str::to_owned)
+                            .map(|s| s.to_lowercase())
                             .inspect(|p| debug!("property {p}"))
                             .filter(|p| interesting_properties.iter().any(|ip| p.contains(ip)))
                             .is_none()
@@ -360,8 +360,8 @@ async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlPro
         };
         debug!("delay before next attempt");
         tokio::time::sleep(random_delay_millis(
-            configuration.min_delay_millis,
-            configuration.max_delay_millis,
+            configuration.min_delay_before_next_retry_millis,
+            configuration.max_delay_before_next_retry_millis,
         ))
         .await;
     }

@@ -4,7 +4,7 @@ import logger from 'redux-logger';
 
 export const store = configureStore({
   reducer: RootReducer,
-  middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(logger),
+  middleware: (getDefaultMiddleware) => import.meta.env.DEV ? getDefaultMiddleware().concat(logger) : getDefaultMiddleware(),
 })
 export type AppDispatch = typeof store.dispatch;
 export type RootState = ReturnType<typeof store.getState>;

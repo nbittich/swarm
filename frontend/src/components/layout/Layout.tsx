@@ -7,10 +7,15 @@ import {
   LoginOutlined,
   CalendarOutlined,
 } from "@ant-design/icons";
-import { Button, ConfigProvider, Image, Layout, Menu, MenuProps, Switch, theme } from "antd";
-import { useState } from "react";
+import { Button, ConfigProvider, Flex, Image, Layout, Menu, MenuProps, Switch, theme } from "antd";
+import { useEffect, useState } from "react";
 import MenuItem from "antd/es/menu/MenuItem";
 import { useAuth } from "@swarm/auth/authContextHook";
+import { useDispatch, useSelector } from "react-redux";
+import { RootState } from "@swarm/states/Store";
+import { toggleTheme } from "@swarm/states/ThemeSlice";
+import { gray, } from "@ant-design/colors";
+import { useNavigate } from "react-router-dom";
 // import frBE from 'antd/lib/locale/fr_BE';
 type MenuItem = Required<MenuProps>['items'][number];
 
@@ -23,6 +28,7 @@ function getItem(
   return {
     key,
     icon,
+    title: label,
     children,
     label,
   } as MenuItem;
@@ -30,34 +36,39 @@ function getItem(
 
 const { Header, Sider, Content, } = Layout;
 export default function MainLayout() {
+  const dispatch = useDispatch();
   const [collapsed, setCollapsed] = useState(false);
-
   const { token, userClaims: _ } = useAuth();
   const location = useLocation();
-
-  const [darkMode, setDarkMode] = useState(false);
+  const navigate = useNavigate();
+  const darkMode = useSelector((state: RootState) => state.theme.darkMode);
+  const currenTheme = () => darkMode ? "dark" : 'light';
   const darkToken = theme.getDesignToken({ algorithm: theme.darkAlgorithm });
   const defaultToken = theme.useToken().token;
   const backgroundColor = darkMode ? darkToken.colorBgContainer : defaultToken.colorBgContainer;
-
-  const currenTheme = () => darkMode ? "dark" : 'light'; // fixme this should go to store
   const handleThemeToggle = (checked: boolean) => {
-    setDarkMode(checked);
+    dispatch(toggleTheme(checked));
   };
+
   const items: MenuItem[] = [
   ];
 
   if (token) {
     items.push(getItem((<Link to="/jobs">Jobs</Link>), '/jobs', <ThunderboltOutlined />));
     items.push(getItem((<Link to="/scheduled-jobs">Scheduled Jobs</Link>), '/scheduled-jobs', <CalendarOutlined />));
-    items.push(getItem((<Link to="/yasgui">Sparql</Link>), '/sparql', <ConsoleSqlOutlined />));
-    items.push(getItem((<Link to="/logout">Logout</Link>), '/logout', <LogoutOutlined />));
+    items.push(getItem((<Link to="/yasgui">Sparql</Link>), '/yasgui', <ConsoleSqlOutlined />));
+    items.push({ type: 'divider' });
+    items.push(getItem((<Link to="/logout">Logout</Link>), '', <LogoutOutlined />));
   } else {
-    items.push(getItem((<Link to="/login">Login</Link>), '/', <LoginOutlined />));
-    items.push(getItem((<Link to="/yasgui">Sparql</Link>), '/sparql', <ConsoleSqlOutlined />));
+    items.push(getItem((<Link to="/yasgui">Sparql</Link>), '/yasgui', <ConsoleSqlOutlined />));
+    items.push({ type: 'divider' });
+    items.push(getItem((<Link to="/login">Login</Link>), '', <LoginOutlined />));
   }
 
-
+  // use system theme
+  useEffect(() => {
+    dispatch(toggleTheme(window.matchMedia('(prefers-color-scheme: dark)').matches));
+  }, [dispatch]);
 
   return (
     <ConfigProvider
@@ -69,29 +80,50 @@ export default function MainLayout() {
         },
         algorithm: darkMode ? theme.darkAlgorithm : theme.defaultAlgorithm, components: {
           Layout: {
-            siderBg: darkToken.colorBgBase,
-            headerBg: darkMode ? darkToken["cyan-1"] : defaultToken["cyan-7"]
+            headerBg: darkMode ? darkToken.colorBgBlur : defaultToken.colorBgBase,
+            headerPadding: 0,
           },
           Menu: {
-            darkItemBg: darkToken.colorFillQuaternary,
-          },
+            darkItemBg: darkToken.colorBgMask,
+          }
         }
       }}>
       <Layout style={{ height: '100vh', width: '100vw' }}>
-        <Sider width={0} collapsedWidth={80} theme={currenTheme()} trigger={null}
+        <Sider collapsedWidth={0} theme={currenTheme()} trigger={null}
+          style={{ display: "flex", flexDirection: 'column', }}
           collapsible collapsed={collapsed}>
-          <Menu
-            style={{ height: '100%' }}
-            mode="inline"
-            theme={currenTheme()}
-            defaultSelectedKeys={[location.pathname]}
-            items={items}
+          <Flex vertical style={{ height: '100vh' }}
           >
-          </Menu>
+            <Menu
+              style={{
+                flexGrow: 1,
+                borderWidth: darkToken ? 0.1 : undefined,
+                borderRightStyle: 'dotted',
+                borderColor: darkMode ? gray[6] : gray[1],
+              }}
+              theme={currenTheme()}
+              selectedKeys={[location.pathname]}
+              items={items.slice(0, -2)}
+            />
+            <Menu
+
+              style={{
+                borderWidth: darkToken ? 0.1 : undefined,
+                borderRightStyle: 'dotted',
+                borderColor: darkMode ? gray[6] : gray[1],
+              }}
+              theme={currenTheme()}
+              selectedKeys={[]}
+              defaultSelectedKeys={[]}
+              items={items.slice(-2)}
+            />
+          </Flex>
+
         </Sider>
         <Layout>
           <Header style={{
-            padding: 0,
+            height: 48,
+            width: '100%',
             justifyContent: 'space-between', display: 'flex', alignItems: "center"
           }}>
             <Button
@@ -100,18 +132,21 @@ export default function MainLayout() {
               onClick={() => setCollapsed(!collapsed)}
               style={{
                 fontSize: '16px',
-                width: 64,
-                height: 64,
+                width: 32,
+                height: 32,
                 border: 0,
+                marginLeft: "15px",
                 borderRadius: 0
               }}
             />
             <div>
-              <Image src="/favicon.svg" width={24} height={24}
+              <a onClick={() => navigate("/")}><Image preview={false} src="/favicon.svg" width={24} height={24}
                 style={{
                   display: "inline-block",
-                  verticalAlign: "middle", // Aligns the image vertically in text
-                }} />
+                  padding: 0,
+                  margin: 0,
+                  verticalAlign: "middle",
+                }} /></a>
             </div>
 
             <Switch
@@ -128,6 +163,7 @@ export default function MainLayout() {
               margin: '24px 16px',
               padding: 24,
               minHeight: '238px',
+
               overflow: 'auto',
               display: 'flex',
               flexDirection: 'column',

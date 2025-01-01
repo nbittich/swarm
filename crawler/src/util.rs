@@ -7,7 +7,8 @@ use reqwest::{
 };
 use swarm_common::constant::{
     BUFFER_BACK_PRESSURE, CONNECTION_POOL_MAX_IDLE_PER_HOST, DEFAULT_ACCEPT, DEFAULT_USER_AGENT,
-    INTERESTING_PROPERTIES, MAX_DELAY_MILLIS, MAX_RETRY, MIN_DELAY_MILLIS, REQUEST_TIMEOUT_SEC,
+    INTERESTING_PROPERTIES, MAX_DELAY_BEFORE_NEXT_RETRY_MILLIS, MAX_DELAY_MILLIS, MAX_RETRY,
+    MIN_DELAY_BEFORE_NEXT_RETRY_MILLIS, MIN_DELAY_MILLIS, REQUEST_TIMEOUT_SEC,
 };
 
 // static CACHE_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
@@ -26,9 +27,11 @@ pub struct Configuration {
     pub href_selector: scraper::Selector,
     // pub job_timeout: Duration,
     pub buffer: usize,
-    pub max_delay_millis: u64,
-    pub interesting_properties: Option<Vec<String>>,
     pub min_delay_millis: u64,
+    pub max_delay_millis: u64,
+    pub min_delay_before_next_retry_millis: u64,
+    pub max_delay_before_next_retry_millis: u64,
+    pub interesting_properties: Option<Vec<String>>,
 }
 pub fn get_reqwest_client() -> anyhow::Result<Client> {
     let default_user_agent = std::env::var(DEFAULT_USER_AGENT).unwrap_or_else(|_| {
@@ -62,6 +65,18 @@ pub async fn make_config(client: Client, folder_path: PathBuf) -> anyhow::Result
         .unwrap_or_else(|_| "3".into())
         .parse::<usize>()?;
 
+    let mut min_delay_before_next_retry_millis = std::env::var(MIN_DELAY_BEFORE_NEXT_RETRY_MILLIS)
+        .unwrap_or_else(|_| "200".into())
+        .parse::<u64>()?;
+    let mut max_delay_before_next_retry_millis = std::env::var(MAX_DELAY_BEFORE_NEXT_RETRY_MILLIS)
+        .unwrap_or_else(|_| "500".into())
+        .parse::<u64>()?;
+    if min_delay_before_next_retry_millis == 0 {
+        min_delay_before_next_retry_millis = 30; // cannot be 0
+    }
+    if max_delay_before_next_retry_millis == 0 {
+        max_delay_before_next_retry_millis = 30; // cannot be 0
+    }
     let mut min_delay_millis = std::env::var(MIN_DELAY_MILLIS)
         .unwrap_or_else(|_| "20".into())
         .parse::<u64>()?;
@@ -89,7 +104,7 @@ pub async fn make_config(client: Client, folder_path: PathBuf) -> anyhow::Result
         .unwrap_or_else(|_| "16".into())
         .parse::<usize>()?;
     let interesting_properties = std::env::var(INTERESTING_PROPERTIES)
-        .map(|ip| ip.split(",").map(|p| p.trim().to_string()).collect())
+        .map(|ip| ip.split(",").map(|p| p.trim().to_lowercase()).collect())
         .ok();
     Ok(Configuration {
         max_retry,
@@ -99,6 +114,8 @@ pub async fn make_config(client: Client, folder_path: PathBuf) -> anyhow::Result
         allowed_content_types,
         min_delay_millis,
         max_delay_millis,
+        min_delay_before_next_retry_millis,
+        max_delay_before_next_retry_millis,
         interesting_properties,
         ignore_extensions,
         folder_path,

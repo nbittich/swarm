@@ -7,7 +7,7 @@ use axum::{
         StatusCode,
     },
     response::{AppendHeaders, IntoResponse},
-    routing::{get, post},
+    routing::{delete, get, post},
     Json, Router,
 };
 use jsonwebtoken::Header;
@@ -44,10 +44,12 @@ pub async fn serve(
         .route("/sparql", get(sparql).post(sparql))
         .route("/login", post(authorize))
         .route("/scheduled-jobs/new", post(new_scheduled_job))
+        .route("/scheduled-jobs/{id}", delete(delete_scheduled_job))
         .route("/scheduled-jobs", get(all_scheduled_jobs))
-        .route("/jobs/:job_id/download", get(download))
-        .route("/jobs/:job_id/tasks/:task_id/subtasks", get(all_subtasks))
-        .route("/jobs/:job_id/tasks", get(all_tasks))
+        .route("/jobs/{job_id}", delete(delete_job))
+        .route("/jobs/{job_id}/download", get(download))
+        .route("/jobs/{job_id}/tasks/{task_id}/subtasks", get(all_subtasks))
+        .route("/jobs/{job_id}/tasks", get(all_tasks))
         .route("/jobs/new", post(new_job))
         .route("/jobs", get(all_jobs))
         .route("/job-definitions", get(all_job_definitions))
@@ -156,6 +158,8 @@ async fn all_job_definitions(
 ) -> Result<Json<Vec<JobDefinition>>, ApiError> {
     Ok(Json(manager.job_definitions.iter().cloned().collect()))
 }
+
+// #[axum::debug_handler]
 async fn sparql(
     State(manager): State<JobManagerState>,
     claims: Option<Claims>,
@@ -212,17 +216,41 @@ async fn new_scheduled_job(
     State(manager): State<JobManagerState>,
     _: Claims,
     Json(NewScheduledJobPayload {
+        name,
         definition_id,
         target_url,
         cron_expr,
     }): Json<NewScheduledJobPayload>,
 ) -> Result<Json<ScheduledJob>, ApiError> {
     let sj = manager
-        .new_scheduled_job(definition_id, target_url, cron_expr)
+        .new_scheduled_job(name, definition_id, target_url, cron_expr)
         .await?;
     Ok(Json(sj))
 }
 
+async fn delete_job(
+    State(manager): State<JobManagerState>,
+    _: Claims,
+    axum::extract::Path(job_id): axum::extract::Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    manager
+        .delete_job(&job_id)
+        .await
+        .map_err(|e| ApiError::DeleteJob(e.to_string()))?;
+    Ok(())
+}
+async fn delete_scheduled_job(
+    State(manager): State<JobManagerState>,
+    _: Claims,
+    axum::extract::Path(scheduled_job_id): axum::extract::Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    manager
+        .scheduled_job_repository
+        .delete_by_id(&scheduled_job_id)
+        .await
+        .map_err(|e| ApiError::DeleteScheduledJob(e.to_string()))?;
+    Ok(())
+}
 async fn download(
     State(manager): State<JobManagerState>,
     _: Claims,

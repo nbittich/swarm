@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, message, Flex, Select, TableProps, } from 'antd';
-import { PlusOutlined, SyncOutlined } from '@ant-design/icons';
+import { Table, Button, Space, Modal, Form, Input, message, Flex, Select, TableProps, Spin, Popconfirm, } from 'antd';
+import { DeleteOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import { JobDefinition, ScheduledJob, } from '@swarm/models/domain';
 import cron from 'cron-validate';
@@ -15,7 +15,21 @@ const ScheduledJobsTable: React.FC = () => {
   const toggleModal = (value: boolean) => {
     form.resetFields();
     setIsModalVisible(value);
-  }
+  };
+
+  const deleteScheduledJob = async (job: ScheduledJob) => {
+    try {
+      setLoading(true);
+      await axios.delete('/api/scheduled-jobs/' + job._id);
+      message.success('Scheduled Job deleted successfully');
+      setScheduledJobs(scheduledJobs.filter((j) => job._id !== j._id));
+    } catch (error) {
+      console.error(error);
+      message.error('Failed to delete scheduled job. Check the console');
+    } finally {
+      setLoading(false);
+    }
+  };
   const fetchScheduledJobs = async () => {
     setLoading(true);
     try {
@@ -26,7 +40,7 @@ const ScheduledJobsTable: React.FC = () => {
       setJobDefinitions(responseDefinitions.data);
     } catch (error) {
       console.error(error);
-      message.error('Failed to fetch jobs');
+      message.error('Failed to fetch scheduled jobs');
     } finally {
       setLoading(false);
     }
@@ -36,14 +50,18 @@ const ScheduledJobsTable: React.FC = () => {
   }, []);
 
   const handleAddScheduledJob = async (values: {
+    jobName?: string,
     definitionId: string,
     cronExpr: string,
     targetUrl?: string,
   }) => {
     try {
-      // Prepare the payload based on the form data
+
+      setLoading(true);
+
       const payload = {
         definitionId: values.definitionId,
+        name: values.jobName,
         cronExpr: values.cronExpr,
         targetUrl: values.targetUrl,
       };
@@ -55,12 +73,21 @@ const ScheduledJobsTable: React.FC = () => {
       setScheduledJobs([response.data, ...scheduledJobs]);
     } catch (error) {
       console.error(error);
-      message.error('Failed to add job. Check the console');
+      message.error('Failed to add scheduled job. Check the console');
+    } finally {
+      setLoading(false);
+
     }
   };
 
   // Columns for the Ant Design table
   const columns: TableProps<ScheduledJob>['columns'] = [
+    {
+      title: 'Name',
+      dataIndex: 'name',
+      key: 'name',
+      render: (name?: string) => name || 'N/A'
+    },
     {
       title: 'Target URL',
       dataIndex: 'targetUrl',
@@ -83,33 +110,52 @@ const ScheduledJobsTable: React.FC = () => {
       title: "Cron Expression",
       dataIndex: "cronExpr",
       key: "cronExpr"
+    },
+    {
+      title: 'Action',
+      key: 'action',
+      align: 'center',
+      render: (_, record) => (
+        <Popconfirm
+          placement='left'
+          title="Delete the scheduled job"
+          description="Are you sure to delete this scheduled job?"
+          onConfirm={() => deleteScheduledJob(record)}
+          okText="Yes"
+          cancelText="No"
+        >
+          <Button type="link" shape="default" danger icon={<DeleteOutlined />} />
+        </Popconfirm>
+      ),
     }
   ];
 
   return (
     <>
-      <Flex vertical gap="middle">
-        <Flex justify="space-between" wrap>
-          <h2>Scheduled Jobs</h2>
-          <Space>
-            <Button onClick={() => toggleModal(true)} size="large" color="default" variant="dashed" icon={<PlusOutlined />}>
-              New Scheduled Job
-            </Button>
-            <Button onClick={() => fetchScheduledJobs()} size="large" color="default" variant="dashed" icon={<SyncOutlined />}>
-              Refresh
-            </Button>
-          </Space>
+      <Spin spinning={loading}>
+        <Flex vertical gap="middle">
+          <Flex justify="space-between" wrap>
+            <h2>Scheduled Jobs</h2>
+            <Space>
+              <Button onClick={() => toggleModal(true)} size="large" color="default" variant="dashed" icon={<PlusOutlined />}>
+                New Scheduled Job
+              </Button>
+              <Button onClick={() => fetchScheduledJobs()} size="large" color="default" variant="dashed" icon={<SyncOutlined />}>
+                Refresh
+              </Button>
+            </Space>
 
+          </Flex>
+          <Table
+            bordered
+            dataSource={scheduledJobs}
+            columns={columns}
+            rowKey="_id"
+            pagination={{ pageSize: 10 }}
+          />
         </Flex>
-        <Table
-          bordered
-          dataSource={scheduledJobs}
-          columns={columns}
-          rowKey="_id"
-          loading={loading}
-          pagination={{ pageSize: 10 }}
-        />
-      </Flex>
+      </Spin>
+
       <Modal
         title="New Scheduled Job"
         open={isModalVisible}
@@ -127,6 +173,18 @@ const ScheduledJobsTable: React.FC = () => {
         )}
       >
         <Form form={form} onFinish={handleAddScheduledJob} layout="vertical">
+           <Form.Item
+            name="jobName"
+            label="Job Name"
+            rules={[
+              {
+                pattern: /^[A-Za-z][A-Za-z0-9]*$/,
+                message: 'Job name must be alphanumeric and start with a letter',
+              },
+            ]}
+          >
+            <Input />
+          </Form.Item>
           <Form.Item
             name="definitionId"
             label="Job Definition"

@@ -3,6 +3,15 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-redux', 'cron-validate', 'uuid', 'react-router-dom', '@reduxjs/toolkit'],
+          ui: ['@ant-design/colors', 'antd'],
+          yasgui: ['@triply/yasgui']
+        }
+      }
+    }
   },
   plugins: [react()],
   resolve: {

@@ -1,0 +1,265 @@
+.dark {
+  .yasgui .autocompleteWrapper {
+    display: none !important;
+  }
+  .yasgui .controlbar {
+    justify-content: flex-end;
+    margin-bottom: 1rem;
+  }
+
+  .yasgui {
+    .autocompleteWrapper,
+    .autocompleteList {
+      color: #6897bb;
+    }
+
+    input,
+    select {
+      display: inline-block;
+      margin-left: 10px;
+      color: #495057;
+      background-color: transparent;
+      background-clip: padding-box;
+      border: 1px solid;
+    }
+    .yasr_fallback_info,
+    .yasr_fallback_info:not(:empty) {
+      background: #2b2b2b;
+      border: none;
+      color: #6897bb;
+    }
+
+    pre span {
+      color: #cc7832;
+    }
+    .autocomplete,
+    .textRow input,
+    .graphInput input,
+    select {
+      border: 1px solid;
+      background-color: transparent;
+    }
+    .yasr_btn.overlay_btn {
+      background: #2b2b2b !important;
+    }
+    .yasr_btn,
+    .select_response {
+      background-color: #2b2b2b;
+    }
+    .select_response:hover,
+    .select_table:hover {
+      color: #6897bb !important;
+    }
+    input:focus,
+    select:focus,
+    a:focus,
+    button:focus {
+      outline: none;
+    }
+
+    .tab a {
+      background: #2b2b2b !important;
+      margin-right: 10px;
+    }
+    .yasr .dataTables_wrapper .dataTable thead tr th:hover {
+      background: #2b2b2b !important;
+    }
+    table.dataTable tbody tr {
+      background: #2b2b2b !important;
+    }
+
+    .overflow:before {
+      background: transparent !important;
+    }
+    .overlay_content {
+      background: transparent !important;
+    }
+    .dataTables_wrapper .dataTables_paginate .paginate_button {
+      color: #999 !important;
+    }
+    .yasr
+      .dataTables_wrapper
+      div.dataTables_paginate.paging_simple_numbers
+      a.paginate_button.current {
+      color: #cc7832 !important;
+    }
+
+    .yasr
+      .dataTables_wrapper
+      div.dataTables_paginate.paging_simple_numbers
+      a.paginate_button:hover:not(.disabled) {
+      color: #6897bb !important;
+    }
+    .yasr_response_chip,
+    .context-menu {
+      background-color: #303030 !important;
+    }
+
+    .context-menu-item {
+      color: #cc7832 !important;
+    }
+    .yasgui .tabMenu {
+      border: none;
+    }
+    .yasgui .tabMenu .requestConfigWrapper {
+      background: #303030 !important;
+    }
+    .requestConfigWrapper,
+    .errorMessage,
+    .yasqe_sharePopup,
+    .errorMessageContainer {
+      background: #303030 !important;
+      border: 0 !important;
+      color: #6897bb !important;
+    }
+    .tabMenu {
+      border-color: gray !important;
+    }
+    .yasr .yasr_results .CodeMirror {
+      border: none;
+    }
+
+    .cm-s-default {
+      font-family: Consolas, Menlo, Monaco, "Lucida Console", "Liberation Mono",
+        "DejaVu Sans Mono", "Bitstream Vera Sans Mono", "Courier New",
+        monospace, serif;
+    }
+    .cm-s-default.CodeMirror {
+      background-color: #2b2b2b !important;
+    }
+
+    .cm-s-default span.cm-meta {
+      color: #bbb529;
+    }
+    .cm-s-default span.cm-number {
+      color: #6897bb;
+    }
+    .cm-s-default span.cm-keyword {
+      color: #cc7832;
+      line-height: 1em;
+      font-weight: bold;
+    }
+    .cm-s-default span.cm-def {
+      font-style: italic;
+    }
+    .cm-s-default span.cm-variable {
+      color: #a9b7c6;
+    }
+    .cm-s-default span.cm-variable-2 {
+      color: #a9b7c6;
+    }
+    .cm-s-default span.cm-variable-3 {
+      color: #9876aa;
+    }
+    .cm-s-default span.cm-type {
+      color: #aabbcc;
+      font-weight: bold;
+    }
+    .cm-s-default span.cm-property {
+      color: #ffc66d;
+    }
+    .cm-s-default span.cm-operator {
+      color: #a9b7c6;
+    }
+    .cm-s-default span.cm-string {
+      color: #6a8759;
+    }
+    .cm-s-default span.cm-string-2 {
+      color: #6a8759;
+    }
+    .cm-s-default span.cm-comment {
+      color: #61a151;
+      font-style: italic;
+    }
+    .cm-s-default span.cm-link {
+      color: #cc7832;
+    }
+    .cm-s-default span.cm-atom {
+      color: #3272cc;
+    }
+    .cm-s-default span.cm-punc {
+      color: #b667ce;
+    }
+    .cm-s-default span.cm-error {
+      color: #bc3f3c;
+    }
+    .cm-s-default span.cm-tag {
+      color: #629755;
+      font-weight: bold;
+      font-style: italic;
+      text-decoration: underline;
+    }
+    .cm-s-default span.cm-attribute {
+      color: #6897bb;
+    }
+    .cm-s-default span.cm-qualifier {
+      color: #6a8759;
+    }
+    .cm-s-default span.cm-bracket {
+      color: #a9b7c6;
+    }
+    .cm-s-default span.cm-builtin {
+      color: #ff9e59;
+    }
+    .cm-s-default span.cm-special {
+      color: #ff9e59;
+    }
+    .cm-s-default span.cm-matchhighlight {
+      color: #ffffff;
+      background-color: rgba(50, 89, 48, 0.7);
+      font-weight: normal;
+    }
+    .cm-s-default span.cm-searching {
+      color: #ffffff;
+      background-color: rgba(61, 115, 59, 0.7);
+      font-weight: normal;
+    }
+
+    .cm-s-default .CodeMirror-cursor {
+      border-left: 1px solid #a9b7c6;
+    }
+    .cm-s-default .CodeMirror-activeline-background {
+      background: #323232;
+    }
+    .cm-s-default .CodeMirror-gutters {
+      background: #313335;
+      border-right: 1px solid #313335;
+    }
+    .cm-s-default .CodeMirror-guttermarker {
+      color: #ffee80;
+    }
+    .cm-s-default .CodeMirror-guttermarker-subtle {
+      color: #d0d0d0;
+    }
+    .cm-s-default .CodeMirrir-linenumber {
+      color: #606366;
+    }
+    .cm-s-default .CodeMirror-matchingbracket {
+      background-color: #3b514d;
+      color: #ffef28 !important;
+      font-weight: bold;
+    }
+
+    .cm-s-default div.CodeMirror-selected {
+      background: #214283;
+    }
+
+    .CodeMirror-hints.default {
+      font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+      color: #9c9e9e;
+      background-color: #3b3e3f !important;
+    }
+
+    .CodeMirror-hints.default .CodeMirror-hint-active {
+      background-color: #494d4e !important;
+      color: #9c9e9e !important;
+    }
+
+    .CodeMirror-wrap {
+      border: none !important;
+    }
+    .nonIri {
+      color: #9c9e9e;
+    }
+  }
+}

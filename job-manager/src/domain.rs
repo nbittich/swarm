@@ -1,8 +1,7 @@
 use std::{path::PathBuf, sync::LazyLock};
 
 use axum::{
-    async_trait,
-    extract::FromRequestParts,
+    extract::{FromRequestParts, OptionalFromRequestParts},
     http::{request::Parts, StatusCode},
     response::{IntoResponse, Response},
     Json, RequestPartsExt,
@@ -50,6 +49,8 @@ pub enum ApiError {
     AllJobs(String),
     AllScheduledJobs(String),
     SparqlError(String),
+    DeleteJob(String),
+    DeleteScheduledJob(String),
     AllTasks(String),
     AllSubTasks(String),
     Download(String),
@@ -76,6 +77,7 @@ pub struct GetSubTasksPayload {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NewScheduledJobPayload {
+    pub name: Option<String>,
     pub definition_id: String,
     pub target_url: Option<String>,
     pub cron_expr: String,
@@ -132,7 +134,23 @@ impl AuthBody {
     }
 }
 
-#[async_trait]
+impl<S> OptionalFromRequestParts<S> for Claims
+where
+    S: Send + Sync,
+{
+    type Rejection = AuthError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &S,
+    ) -> Result<Option<Self>, Self::Rejection> {
+        match <Claims as FromRequestParts<S>>::from_request_parts(parts, state).await {
+            Ok(res) => Ok(Some(res)),
+            Err(_) => Ok(None),
+        }
+    }
+}
+
 impl<S> FromRequestParts<S> for Claims
 where
     S: Send + Sync,
@@ -173,6 +191,8 @@ impl IntoResponse for ApiError {
             ApiError::AllJobs(e)
             | ApiError::AllScheduledJobs(e)
             | ApiError::AllTasks(e)
+            | ApiError::DeleteJob(e)
+            | ApiError::DeleteScheduledJob(e)
             | ApiError::AllSubTasks(e)
             | ApiError::Download(e)
             | ApiError::SparqlError(e)

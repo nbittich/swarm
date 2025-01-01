@@ -39,6 +39,7 @@ pub struct Job {
 pub struct ScheduledJob {
     #[serde(rename = "_id")]
     pub id: String,
+    pub name: Option<String>,
     pub creation_date: DateTime<Utc>,
     pub next_execution: Option<DateTime<Utc>>,
     pub target_url: Option<String>,

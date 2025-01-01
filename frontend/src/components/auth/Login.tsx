@@ -58,7 +58,7 @@ export default function Login() {
           <Input.Password />
         </Form.Item>
         <Form.Item>
-          <Button type="primary" htmlType="submit" loading={loading} style={{ width: '100%' }}>
+          <Button type="dashed" htmlType="submit" loading={loading} style={{ width: '100%' }}>
             Log in
           </Button>
         </Form.Item>

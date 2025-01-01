@@ -11,6 +11,7 @@ use swarm_common::{
         TASK_COLLECTION, TASK_EVENT_STREAM, TASK_STATUS_CHANGE_EVENT, TASK_STATUS_CHANGE_SUBJECT,
         USER_COLLECTION,
     },
+    debug,
     domain::{
         Job, JobDefinition, JsonMapper, Payload, ScheduledJob, Status, SubTask, Task,
         TaskDefinition, User,
@@ -107,6 +108,35 @@ impl JobManagerState {
         })
     }
 
+    pub async fn delete_job(&self, job_id: &str) -> anyhow::Result<()> {
+        let Some(job) = self.job_repository.find_by_id(job_id).await? else {
+            debug!("");
+            return Err(anyhow!("job not found {job_id:?}"));
+        };
+        let tasks = self
+            .task_repository
+            .find_by_query(
+                doc! {
+                  "jobId": &job.id
+                },
+                None,
+            )
+            .await?;
+        for ot in tasks {
+            self.sub_task_repository
+                .delete_many(Some(doc! {
+                    "taskId": &ot.id
+                }))
+                .await?;
+            self.task_repository.delete_by_id(&ot.id).await?;
+        }
+        if let Err(e) = tokio::fs::remove_dir_all(job.root_dir).await {
+            return Err(anyhow!("could not delete directory {e}"));
+        }
+        self.job_repository.delete_by_id(&job.id).await?;
+        Ok(())
+    }
+
     pub async fn start_scheduled_job_executor(&self) -> anyhow::Result<()> {
         let mut interval = tokio::time::interval(Duration::from_secs(10));
         loop {
@@ -133,7 +163,7 @@ impl JobManagerState {
                         ..sj
                     };
                     self.scheduled_job_repository.upsert(&sj.id, &sj).await?;
-                    self.new_job(sj.definition_id, None, sj.target_url)
+                    self.new_job(sj.definition_id, sj.name, sj.target_url)
                         .await
                         .map_err(|e| anyhow!("{e:?}"))?;
                 }
@@ -272,6 +302,7 @@ impl JobManagerState {
     }
     pub async fn new_scheduled_job(
         &self,
+        name: Option<String>,
         definition_id: String,
         target_url: Option<String>,
         cron_expr: String,
@@ -292,6 +323,7 @@ impl JobManagerState {
             id: IdGenerator.get(),
             creation_date: Local::now().to_utc(),
             target_url,
+            name,
             definition_id,
             next_execution,
             cron_expr,

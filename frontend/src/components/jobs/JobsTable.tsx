@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, message, Flex, Select, TableProps, Tag, } from 'antd';
-import { PlusOutlined, RightSquareOutlined, SyncOutlined } from '@ant-design/icons';
+import { Table, Button, Space, Modal, Form, Input, message, Flex, Select, TableProps, Tag, Spin, Popconfirm, } from 'antd';
+import { DeleteOutlined, PlusOutlined, RightSquareOutlined, SyncOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import { colorForStatus, Job, JobDefinition, Status } from '@swarm/models/domain';
 import { useNavigate } from 'react-router-dom';
@@ -43,7 +43,8 @@ const JobsTable: React.FC = () => {
     targetUrl?: string,
   }) => {
     try {
-      // Prepare the payload based on the form data
+      setLoading(true);
+
       const payload = {
         definitionId: values.definitionId,
         jobName: values.jobName,
@@ -58,9 +59,24 @@ const JobsTable: React.FC = () => {
     } catch (error) {
       console.error(error);
       message.error('Failed to add job. Check the console');
+    } finally {
+      setLoading(false);
     }
   };
 
+  const deleteJob = async (job: Job) => {
+    try {
+      setLoading(true);
+      await axios.delete('/api/jobs/' + job._id);
+      message.success('Job deleted successfully');
+      setJobs(jobs.filter((j) => job._id !== j._id));
+    } catch (error) {
+      console.error(error);
+      message.error('Failed to delete job. Check the console');
+    } finally {
+      setLoading(false);
+    }
+  };
   // Columns for the Ant Design table
   const columns: TableProps<Job>['columns'] = [
     {
@@ -114,10 +130,27 @@ const JobsTable: React.FC = () => {
         <Button onClick={() => navigate(`/jobs/${record._id}/tasks`)} type="link" shape="default" icon={<RightSquareOutlined />} />
       ),
     },
+    {
+      title: 'Action',
+      key: 'action',
+      align: 'center',
+      render: (_, record) => (
+        <Popconfirm
+          placement='left'
+          title="Delete the job"
+          description="Are you sure to delete this job?"
+          onConfirm={() => deleteJob(record)}
+          okText="Yes"
+          cancelText="No"
+        >
+          <Button type="link" shape="default" danger icon={<DeleteOutlined />} />
+        </Popconfirm>
+      ),
+    },
   ];
 
   return (
-    <>
+    <Spin spinning={loading}>
       <Flex vertical gap="middle">
         <Flex justify="space-between" wrap>
           <h2>Jobs</h2>
@@ -136,7 +169,6 @@ const JobsTable: React.FC = () => {
           dataSource={jobs}
           columns={columns}
           rowKey="_id"
-          loading={loading}
           pagination={{ pageSize: 10 }}
         />
       </Flex>
@@ -151,7 +183,7 @@ const JobsTable: React.FC = () => {
                 e.stopPropagation()
                 toggleModal(false)
               }}>Cancel</Button>
-              <Button onClick={() => form.submit()} type="primary">Submit</Button></Space>
+              <Button onClick={() => form.submit()} type="dashed">Submit</Button></Space>
           </Flex >
 
         )}
@@ -170,13 +202,19 @@ const JobsTable: React.FC = () => {
               ))}
             </Select>
           </Form.Item>
-          {/**/}
-          {/* <Form.Item */}
-          {/*   name="jobName" */}
-          {/*   label="Job Name" */}
-          {/* > */}
-          {/*   <Input /> */}
-          {/* </Form.Item> */}
+
+          <Form.Item
+            name="jobName"
+            label="Job Name"
+            rules={[
+              {
+                pattern: /^[A-Za-z][A-Za-z0-9]*$/,
+                message: 'Job name must be alphanumeric and start with a letter',
+              },
+            ]}
+          >
+            <Input />
+          </Form.Item>
 
           <Form.Item
             name="targetUrl"
@@ -194,7 +232,7 @@ const JobsTable: React.FC = () => {
         </Form>
       </Modal>
 
-    </>
+    </Spin>
   );
 };
 

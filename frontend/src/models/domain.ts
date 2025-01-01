@@ -34,6 +34,7 @@ export interface Job {
 
 export interface ScheduledJob {
   _id: string;
+  name?: string;
   creationDate: string;
   nextExecution?: string;
   targetUrl?: string;

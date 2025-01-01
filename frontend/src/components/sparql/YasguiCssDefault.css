@@ -1,0 +1,14 @@
+.light {
+  .yasgui .autocompleteWrapper {
+    display: none !important;
+  }
+  .yasgui .controlbar {
+    justify-content: flex-end;
+    margin-bottom: 1rem;
+  }
+  .tableFilter,
+  .tableSizer {
+    background-color: transparent !important;
+    color: black !important;
+  }
+}
