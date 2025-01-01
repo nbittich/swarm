@@ -1054,9 +1054,9 @@ checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 
 [[package]]
 name = "graph-rdfa-processor"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5450ff1d9bc16efe36e695db4b8b94cead028500559e95231c868a512de59b7"
+checksum = "042db31d83654304de469177fdc6c249e28f895cea93b6937e7f465cfdc926e3"
 dependencies = [
  "ego-tree",
  "lazy_static",
@@ -3409,9 +3409,9 @@ dependencies = [
 
 [[package]]
 name = "tortank"
-version = "0.24.3"
+version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8f51c3eb8351aff4ac7c9b3626e8a230f6f634f95d95a38f9b26b8118bccf57"
+checksum = "6b33ceba3b40ffed9be8fe392436450ad6e86b242e4f72a1157b6dfd819d7f12"
 dependencies = [
  "chrono",
  "nom",

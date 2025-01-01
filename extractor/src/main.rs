@@ -1,9 +1,8 @@
 /* CUSTOM ALLOC, disabled as it consumes more memory */
 //pub use swarm_common::alloc;
 
-use std::{borrow::Cow, env::var, path::Path, time::Duration};
+use std::{borrow::Cow, env::var, error::Error, fmt::Display, path::Path, time::Duration};
 mod fix_stmt;
-use anyhow::anyhow;
 use chrono::Local;
 use fix_stmt::fix_triples;
 use graph_rdfa_processor::RdfaGraph;
@@ -146,7 +145,7 @@ async fn handle_task(nc: &NatsClient, task: &mut Task) -> anyhow::Result<Option<
             if line.trim().is_empty() {
                 continue;
             }
-            let sub_task = SubTask {
+            let mut sub_task = SubTask {
                 id: IdGenerator.get(),
                 task_id: task.id.clone(),
                 creation_date: Local::now().to_utc(),
@@ -161,7 +160,15 @@ async fn handle_task(nc: &NatsClient, task: &mut Task) -> anyhow::Result<Option<
             tasks.spawn(tokio::spawn(async move {
                 match extract_rdfa(&line, &out_dir).await {
                     Ok(o) => Ok((sub_task, o)),
-                    Err(e) => Err((sub_task, e)),
+                    Err(ExtractRDFaError { base_url, error }) => {
+                        sub_task.result = Some(SubTaskResult::NTriple(NTripleResult {
+                            base_url,
+                            len: 0,
+                            path: Default::default(),
+                            creation_date: Local::now().to_utc(),
+                        }));
+                        Err((sub_task, error))
+                    }
                 }
             }));
             // sleep just a little to avoid using all the cpu
@@ -212,18 +219,47 @@ async fn handle_task(nc: &NatsClient, task: &mut Task) -> anyhow::Result<Option<
     }
     Ok(None)
 }
+#[derive(Debug)]
+struct ExtractRDFaError {
+    base_url: String,
+    error: String,
+}
+impl Display for ExtractRDFaError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} -> {}", self.base_url, self.error)
+    }
+}
+impl Error for ExtractRDFaError {}
+async fn extract_rdfa(line: &str, output_dir: &Path) -> Result<NTripleResult, ExtractRDFaError> {
+    let payload = ScrapeResult::deserialize(line).map_err(|e| ExtractRDFaError {
+        base_url: "N/A".into(),
+        error: e.to_string(),
+    })?;
+    let html_file =
+        tokio::fs::read_to_string(payload.path)
+            .await
+            .map_err(|e| ExtractRDFaError {
+                base_url: payload.base_url.to_string(),
+                error: e.to_string(),
+            })?;
 
-async fn extract_rdfa(line: &str, output_dir: &Path) -> anyhow::Result<NTripleResult> {
-    let payload = ScrapeResult::deserialize(line)?;
-    let html_file = tokio::fs::read_to_string(payload.path).await?;
-
-    let ttl = RdfaGraph::parse_str(&html_file, &payload.base_url, None)
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
-    let doc = TurtleDoc::try_from((ttl.as_str(), None)).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let ttl = RdfaGraph::parse_str(&html_file, &payload.base_url, None).map_err(|e| {
+        ExtractRDFaError {
+            base_url: payload.base_url.to_string(),
+            error: e.to_string(),
+        }
+    })?;
+    let doc = TurtleDoc::try_from((ttl.as_str(), None)).map_err(|e| ExtractRDFaError {
+        base_url: payload.base_url.to_string(),
+        error: e.to_string(),
+    })?;
     let subjects = doc.all_subjects();
     let mut doc = doc
         .difference(&TurtleDoc::default())
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+        .map_err(|e| ExtractRDFaError {
+            base_url: payload.base_url.to_string(),
+            error: e.to_string(),
+        })?;
 
     for subject in subjects {
         doc.add_statement(
@@ -232,13 +268,19 @@ async fn extract_rdfa(line: &str, output_dir: &Path) -> anyhow::Result<NTripleRe
             tortank::turtle::turtle_doc::Node::Iri(Cow::Owned(payload.base_url.clone())),
         );
     }
-    doc = fix_triples(doc)?;
+    doc = fix_triples(doc).map_err(|e| ExtractRDFaError {
+        base_url: payload.base_url.to_string(),
+        error: e.to_string(),
+    })?;
     let id = IdGenerator.get();
 
     let path = output_dir.join(format!("{id}.ttl"));
     tokio::fs::write(&path, doc.to_string())
         .await
-        .map_err(|e| anyhow!("{e}"))?;
+        .map_err(|e| ExtractRDFaError {
+            base_url: payload.base_url.to_string(),
+            error: e.to_string(),
+        })?;
     Ok(NTripleResult {
         base_url: payload.base_url,
         len: doc.len(),
