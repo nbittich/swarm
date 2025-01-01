@@ -70,6 +70,11 @@ services:
       - ./config/env-files/dev/nats.env
       - ./config/env-files/dev/mongo_cli.env
       - ./config/env-files/dev/cleanup.env
+  archive:
+    env_file:
+      - ./config/env-files/dev/nats.env
+      - ./config/env-files/dev/mongo_cli.env
+      - ./config/env-files/dev/archive.env
   frontend:
     env_file:
       - ./config/env-files/dev/frontend.env

@@ -58,13 +58,24 @@ public class JobModel {
   @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
   @JsonSubTypes({
       @JsonSubTypes.Type(value = Payload.None.class, name = "none"),
+      @JsonSubTypes.Type(value = Payload.Archive.class, name = "archive"),
+      @JsonSubTypes.Type(value = Payload.Cleanup.class, name = "cleanup"),
       @JsonSubTypes.Type(value = Payload.ScrapeUrl.class, name = "scrapeUrl"),
       @JsonSubTypes.Type(value = Payload.FromPreviousStep.class, name = "fromPreviousStep")
   })
-  public sealed interface Payload permits Payload.None, Payload.ScrapeUrl, Payload.FromPreviousStep {
+  public sealed interface Payload
+      permits Payload.None, Payload.Archive, Payload.Cleanup, Payload.ScrapeUrl, Payload.FromPreviousStep {
 
     @Builder(toBuilder = true)
     public record None() implements Payload {
+    }
+
+    @Builder(toBuilder = true)
+    public record Archive() implements Payload {
+    }
+
+    @Builder(toBuilder = true)
+    public record Cleanup(@JsonProperty("value") Status value) implements Payload {
     }
 
     @Builder(toBuilder = true)
@@ -228,9 +239,14 @@ public class JobModel {
       @JsonSubTypes.Type(value = Status.Success.class, name = "success"),
       @JsonSubTypes.Type(value = Status.Failed.class, name = "failed")
   })
-  public sealed interface Status permits Status.Pending, Status.Scheduled, Status.Busy, Status.Success, Status.Failed {
+  public sealed interface Status
+      permits Status.Pending, Status.Archived, Status.Scheduled, Status.Busy, Status.Success, Status.Failed {
     @Builder(toBuilder = true)
     public record Pending() implements Status {
+    }
+
+    @Builder(toBuilder = true)
+    public record Archived() implements Status {
     }
 
     @Builder(toBuilder = true)

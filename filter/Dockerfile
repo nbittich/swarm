@@ -12,8 +12,13 @@ RUN mvn package -DskipTests
 
 FROM eclipse-temurin:21-jre-alpine
 
+RUN apk add --no-cache tzdata
+RUN ln -s /usr/share/zoneinfo/Europe/Brussels /etc/localtime
+
 WORKDIR /app
 
 COPY --from=build /app/target/filter.jar app.jar
+
+
 
 ENTRYPOINT ["java","-jar","/app/app.jar"]

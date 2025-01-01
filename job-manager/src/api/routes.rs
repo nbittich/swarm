@@ -205,10 +205,12 @@ async fn new_job(
     Json(NewJobPayload {
         definition_id,
         job_name,
-        target_url,
+        task_definition,
     }): Json<NewJobPayload>,
 ) -> Result<Json<Job>, ApiError> {
-    let job = manager.new_job(definition_id, job_name, target_url).await?;
+    let job = manager
+        .new_job(definition_id, job_name, task_definition)
+        .await?;
     Ok(Json(job))
 }
 
@@ -218,12 +220,12 @@ async fn new_scheduled_job(
     Json(NewScheduledJobPayload {
         name,
         definition_id,
-        target_url,
+        task_definition,
         cron_expr,
     }): Json<NewScheduledJobPayload>,
 ) -> Result<Json<ScheduledJob>, ApiError> {
     let sj = manager
-        .new_scheduled_job(name, definition_id, target_url, cron_expr)
+        .new_scheduled_job(name, definition_id, task_definition, cron_expr)
         .await?;
     Ok(Json(sj))
 }

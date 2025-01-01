@@ -14,7 +14,10 @@ use chrono::{Duration, Local};
 use jsonwebtoken::{decode, DecodingKey, EncodingKey, Validation};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use swarm_common::constant::{JWT_EXPIRATION_TIME_SEC, JWT_SECRET, ROOT_OUTPUT_DIR};
+use swarm_common::{
+    constant::{JWT_EXPIRATION_TIME_SEC, JWT_SECRET, ROOT_OUTPUT_DIR},
+    domain::TaskDefinition,
+};
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Claims {
@@ -58,7 +61,6 @@ pub enum ApiError {
     CronExpression(String),
     NewScheduledJob(String),
     JobDefinitionNotFound,
-    TaskDefinitionNotFound,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -66,7 +68,7 @@ pub enum ApiError {
 pub struct NewJobPayload {
     pub definition_id: String,
     pub job_name: Option<String>,
-    pub target_url: Option<String>,
+    pub task_definition: TaskDefinition,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -79,7 +81,7 @@ pub struct GetSubTasksPayload {
 pub struct NewScheduledJobPayload {
     pub name: Option<String>,
     pub definition_id: String,
-    pub target_url: Option<String>,
+    pub task_definition: TaskDefinition,
     pub cron_expr: String,
 }
 #[derive(Serialize, Deserialize)]
@@ -177,7 +179,7 @@ impl IntoResponse for AuthError {
             AuthError::WrongCredentials => (StatusCode::UNAUTHORIZED, "Wrong credentials"),
             AuthError::MissingCredentials => (StatusCode::BAD_REQUEST, "Missing credentials"),
             AuthError::TokenCreation => (StatusCode::INTERNAL_SERVER_ERROR, "Token creation error"),
-            AuthError::InvalidToken => (StatusCode::BAD_REQUEST, "Invalid token"),
+            AuthError::InvalidToken => (StatusCode::FORBIDDEN, "Invalid token"),
         };
         let body = Json(json!({
             "error": error_message,
@@ -202,10 +204,6 @@ impl IntoResponse for ApiError {
             ApiError::JobDefinitionNotFound => {
                 (StatusCode::NOT_FOUND, "job definition not found".to_owned())
             }
-            ApiError::TaskDefinitionNotFound => (
-                StatusCode::NOT_FOUND,
-                "task definition not found".to_owned(),
-            ),
         };
         let body = Json(json!({
             "error": error_message,

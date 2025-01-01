@@ -1,6 +1,6 @@
 
 [workspace]
-members = [ "add-uuid", "cleanup", "common","crawler", "diff", "extractor", "job-manager", "publish", "sparql_client"]
+members = [ "add-uuid", "archive", "cleanup", "common","crawler", "diff", "extractor", "job-manager", "publish", "sparql_client"]
 resolver = "2"
 
 [workspace.package]

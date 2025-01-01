@@ -6,6 +6,7 @@ import axios from 'axios';
 import { colorForStatus, Status, Task } from '@swarm/models/domain';
 import { ArrowLeftOutlined, DownloadOutlined, RightSquareOutlined, SyncOutlined } from "@ant-design/icons";
 import { download } from '@swarm/states/file/Api';
+import dayjs from 'dayjs';
 
 
 const TasksTable: React.FC = () => {
@@ -48,13 +49,13 @@ const TasksTable: React.FC = () => {
       title: 'Creation Date',
       dataIndex: 'creationDate',
       key: 'creationDate',
-      render: (date: string) => new Date(date).toLocaleString(),
+      render: (date: string) => dayjs(new Date(date)).format('DD/MM/YYYY HH:mm:ss'),
     },
     {
       title: 'Modified Date',
       dataIndex: 'modifiedDate',
       key: 'modifiedDate',
-      render: (date?: string) => date ? new Date(date).toLocaleString() : 'N/A',
+      render: (date?: string) => date ? dayjs(new Date(date)).format('DD/MM/YYYY HH:mm:ss') : 'N/A',
     },
     {
       title: 'Success',

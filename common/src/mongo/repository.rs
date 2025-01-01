@@ -272,8 +272,22 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
         Ok(res)
     }
 
+    /// example:
+    /// let filter = doc! { "targetUrl": "http://x.com", "status.type": "success" };
+    /// let update = doc! { "$set": { "status.type": "archived" } };
+    /// repository.update_many(filter, update).await?;
+    async fn update_many(&self, filter: Document, replace: Document) -> Result<u64, StoreError> {
+        let collection = self.get_collection();
+        let update_result = collection
+            .update_many(filter, replace)
+            .await
+            .map_err(|e| StoreError { msg: e.to_string() })?;
+        Ok(update_result.modified_count)
+    }
+
     async fn upsert(&self, id: &str, entity: &T) -> Result<Option<T>, StoreError> {
         let collection = self.get_collection();
+
         let options = FindOneAndReplaceOptions::builder()
             .upsert(Some(true))
             .build();

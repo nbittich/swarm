@@ -5,7 +5,7 @@ use chrono::Local;
 use std::env::var;
 use swarm_common::{
     constant::{
-        APPLICATION_NAME, CLEANUP_CONSUMER, JOB_COLLECTION, PUBLIC_TENANT, SUB_TASK_COLLECTION,
+        APPLICATION_NAME, ARCHIVE_CONSUMER, JOB_COLLECTION, PUBLIC_TENANT, SUB_TASK_COLLECTION,
         SUB_TASK_EVENT_STREAM, SUB_TASK_STATUS_CHANGE_SUBJECT, TASK_COLLECTION, TASK_EVENT_STREAM,
         TASK_STATUS_CHANGE_EVENT, TASK_STATUS_CHANGE_SUBJECT,
     },
@@ -29,7 +29,7 @@ struct Config {
 async fn main() -> anyhow::Result<()> {
     setup_tracing();
 
-    let app_name = var(APPLICATION_NAME).unwrap_or_else(|_| "cleanup".into());
+    let app_name = var(APPLICATION_NAME).unwrap_or_else(|_| "archive".into());
     let nc = nats_client::connect().await?;
 
     let task_event_stream = nc
@@ -45,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .await?;
     let task_event_consumer = nc
-        .create_durable_consumer(CLEANUP_CONSUMER, &task_event_stream)
+        .create_durable_consumer(ARCHIVE_CONSUMER, &task_event_stream)
         .await?;
 
     let mongo_client = StoreClient::new(app_name.to_string()).await?;
@@ -69,7 +69,7 @@ async fn main() -> anyhow::Result<()> {
         match message {
             Ok(message) => match Task::deserialize_bytes(&message.payload) {
                 Ok(mut task)
-                    if matches!(&task.payload, Payload::Cleanup(_))
+                    if matches!(&task.payload, Payload::Archive)
                         && task.status == Status::Scheduled =>
                 {
                     let config = config.clone();
@@ -121,14 +121,18 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<()> {
-    let Payload::Cleanup(status) = &task.payload else {
-        return Err(anyhow::anyhow!("{task:?} is not a cleanup task!"));
+    let Some(current_job) = config.job_repository.find_by_id(&task.job_id).await? else {
+        debug!("current job not found {task:?}");
+        return Ok(());
     };
     let old_jobs = config
         .job_repository
         .find_by_query(
             doc! {
-                 "status.type": status.get_type(),
+                 "_id": { "$ne": &current_job.id },
+                 "targetUrl": &current_job.target_url,
+                 "definition.id": &current_job.definition.id, // this is to make sure steps are the same
+                 "status.type": "success",
             },
             None,
         )
@@ -137,7 +141,7 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<()> {
             error!("{e}");
             vec![]
         });
-    for old_job in old_jobs {
+    for mut old_job in old_jobs {
         let old_tasks = config
             .task_repository
             .find_by_query(
@@ -147,19 +151,22 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<()> {
                 None,
             )
             .await?;
-        for ot in old_tasks {
+        for mut ot in old_tasks {
             config
                 .sub_task_repository
-                .delete_many(Some(doc! {
-                    "taskId": &ot.id
-                }))
+                .update_many(
+                    doc! {
+                        "taskId": &ot.id,
+                        "status.type": "success",
+                    },
+                    doc! { "$set": { "status.type": "archived" } },
+                )
                 .await?;
-            config.task_repository.delete_by_id(&ot.id).await?;
+            ot.status = Status::Archived;
+            config.task_repository.upsert(&ot.id, &ot).await?;
         }
-        if let Err(e) = tokio::fs::remove_dir_all(old_job.root_dir).await {
-            error!("{e}");
-        }
-        config.job_repository.delete_by_id(&old_job.id).await?;
+        old_job.status = Status::Archived;
+        config.job_repository.upsert(&old_job.id, &old_job).await?;
     }
 
     task.modified_date = Some(Local::now().to_utc());

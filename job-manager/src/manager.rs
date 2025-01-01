@@ -1,7 +1,7 @@
-use std::{str::FromStr, sync::Arc, time::Duration};
+use std::{mem::discriminant, str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::anyhow;
-use chrono::{Local, Utc};
+use chrono::Local;
 use cron::Schedule;
 use sparql_client::SparqlClient;
 use swarm_common::{
@@ -145,10 +145,10 @@ impl JobManagerState {
             let now = Local::now().to_utc();
             for mut sj in scheduled_jobs {
                 let schedule = Schedule::from_str(&sj.cron_expr)?;
-                let mut upcomings = schedule.upcoming(Utc);
+                let mut upcomings = schedule.upcoming(chrono::Local);
                 if sj.next_execution.is_none() {
                     sj = ScheduledJob {
-                        next_execution: upcomings.next(),
+                        next_execution: upcomings.next().map(|e| e.to_utc()),
                         ..sj
                     };
                     self.scheduled_job_repository.upsert(&sj.id, &sj).await?;
@@ -159,11 +159,11 @@ impl JobManagerState {
                 };
                 if upcoming <= now {
                     sj = ScheduledJob {
-                        next_execution: upcomings.next(),
+                        next_execution: upcomings.next().map(|ne| ne.to_utc()),
                         ..sj
                     };
                     self.scheduled_job_repository.upsert(&sj.id, &sj).await?;
-                    self.new_job(sj.definition_id, sj.name, sj.target_url)
+                    self.new_job(sj.definition_id, sj.name, sj.task_definition)
                         .await
                         .map_err(|e| anyhow!("{e:?}"))?;
                 }
@@ -304,7 +304,7 @@ impl JobManagerState {
         &self,
         name: Option<String>,
         definition_id: String,
-        target_url: Option<String>,
+        task_definition: TaskDefinition,
         cron_expr: String,
     ) -> Result<ScheduledJob, ApiError> {
         // validation stuff
@@ -317,12 +317,15 @@ impl JobManagerState {
         };
         let schedule = cron::Schedule::from_str(&cron_expr)
             .map_err(|e| ApiError::CronExpression(e.to_string()))?;
-        let next_execution = schedule.upcoming(Utc).next();
+        let next_execution = schedule
+            .upcoming(chrono::Local)
+            .next()
+            .map(|ne| ne.to_utc());
 
         let scheduled_job = ScheduledJob {
             id: IdGenerator.get(),
             creation_date: Local::now().to_utc(),
-            target_url,
+            task_definition,
             name,
             definition_id,
             next_execution,
@@ -338,7 +341,7 @@ impl JobManagerState {
         &self,
         definition_id: String,
         job_name: Option<String>,
-        target_url: Option<String>,
+        task_definition: TaskDefinition,
     ) -> Result<Job, ApiError> {
         let Some(mut jd) = self
             .job_definitions
@@ -348,31 +351,45 @@ impl JobManagerState {
         else {
             return Err(ApiError::JobDefinitionNotFound);
         };
-        let target_url = target_url.map(|t| REGEX_CLEAN_URL.replace_all(&t, "").trim().to_string());
         let job_id = IdGenerator.get();
         let job_root_dir = ROOT_OUTPUT_DIR_PB.join(&job_id);
-        tokio::fs::create_dir_all(&job_root_dir)
-            .await
-            .map_err(|e| ApiError::NewJob(e.to_string()))?;
-        // it has to be a scrape job
-        if let Some(target_url) = &target_url {
-            let Some(td) = jd
-                .tasks
-                .iter_mut()
-                .find(|t| matches!(t.payload, Payload::ScrapeUrl(_)))
-            else {
-                return Err(ApiError::TaskDefinitionNotFound);
-            };
-            let Payload::ScrapeUrl(url) = &mut td.payload else {
-                return Err(ApiError::TaskDefinitionNotFound);
-            };
-            *url = target_url.into();
+
+        if discriminant(&task_definition.payload) != discriminant(&jd.tasks[0].payload)
+            || task_definition.order != jd.tasks[0].order
+            || task_definition.name != jd.tasks[0].name
+        {
+            return Err(ApiError::NewJob(
+                "invalid task definition! You can only modify the payload value.".into(),
+            ));
         }
-        let TaskDefinition {
-            name,
-            order,
-            payload,
-        } = jd.tasks[0].clone();
+
+        let mut target_url = None;
+        let td = match task_definition.payload {
+            cleanup @ Payload::Cleanup(_) => TaskDefinition {
+                name: task_definition.name,
+                order: task_definition.order,
+                payload: cleanup,
+            },
+            Payload::ScrapeUrl(url) => {
+                tokio::fs::create_dir_all(&job_root_dir)
+                    .await
+                    .map_err(|e| ApiError::NewJob(e.to_string()))?;
+                let scrape_url = REGEX_CLEAN_URL.replace_all(&url, "").trim().to_string();
+                target_url = Some(scrape_url.clone());
+                TaskDefinition {
+                    name: task_definition.name,
+                    order: task_definition.order,
+                    payload: Payload::ScrapeUrl(scrape_url),
+                }
+            }
+            other => {
+                return Err(ApiError::NewJob(format!(
+                    "kind {other:?} not yet handled as a first task!"
+                )))
+            }
+        };
+
+        jd.tasks[0] = td.clone();
         let job = Job {
             id: job_id,
             name: if let Some(job_name) = job_name {
@@ -394,12 +411,12 @@ impl JobManagerState {
 
         let first_task = Task {
             id: IdGenerator.get(),
-            order,
+            order: td.order,
             job_id: job.id.clone(),
-            name,
+            name: td.name,
             creation_date: Local::now().to_utc(),
             modified_date: None,
-            payload,
+            payload: td.payload,
             result: None,
             status: Status::Pending,
             has_sub_task: false,

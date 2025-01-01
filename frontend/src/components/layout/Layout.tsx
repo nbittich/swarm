@@ -7,7 +7,7 @@ import {
   LoginOutlined,
   CalendarOutlined,
 } from "@ant-design/icons";
-import { Button, ConfigProvider, Flex, Image, Layout, Menu, MenuProps, Switch, theme } from "antd";
+import { App, Button, ConfigProvider, Flex, Image, Layout, Menu, MenuProps, Switch, theme } from "antd";
 import { useEffect, useState } from "react";
 import MenuItem from "antd/es/menu/MenuItem";
 import { useAuth } from "@swarm/auth/authContextHook";
@@ -16,7 +16,7 @@ import { RootState } from "@swarm/states/Store";
 import { toggleTheme } from "@swarm/states/ThemeSlice";
 import { gray, } from "@ant-design/colors";
 import { useNavigate } from "react-router-dom";
-// import frBE from 'antd/lib/locale/fr_BE';
+/* import frBE from 'antd/lib/locale/fr_BE'; */
 type MenuItem = Required<MenuProps>['items'][number];
 
 function getItem(
@@ -65,6 +65,7 @@ export default function MainLayout() {
     items.push(getItem((<Link to="/login">Login</Link>), '', <LoginOutlined />));
   }
 
+
   // use system theme
   useEffect(() => {
     dispatch(toggleTheme(window.matchMedia('(prefers-color-scheme: dark)').matches));
@@ -84,8 +85,9 @@ export default function MainLayout() {
             headerPadding: 0,
           },
           Menu: {
-            darkItemBg: darkToken.colorBgMask,
-          }
+            // darkItemBg: darkToken.colorBgMask,
+          },
+
         }
       }}>
       <Layout style={{ height: '100vh', width: '100vw' }}>
@@ -169,7 +171,10 @@ export default function MainLayout() {
               flexDirection: 'column',
             }}
           >
-            <Outlet />
+            <App>
+              <Outlet />
+            </App>
+
           </Content>
 
         </Layout>

@@ -54,6 +54,7 @@ pub static CRAWLER_CONSUMER: &str = "crawler";
 pub static ADD_UUID_CONSUMER: &str = "addUuid";
 pub static DIFF_CONSUMER: &str = "diff";
 pub static CLEANUP_CONSUMER: &str = "cleanup";
+pub static ARCHIVE_CONSUMER: &str = "archive";
 pub static EXTRACTOR_CONSUMER: &str = "extractor";
 pub static PUBLISH_CONSUMER: &str = "publish";
 pub static JOB_MANAGER_CONSUMER: &str = "jobManager";

@@ -17,6 +17,7 @@ jobs:
           - add-uuid
           - diff
           - publish
+          - archive
           - cleanup
     steps:
       - name: Set up QEMU

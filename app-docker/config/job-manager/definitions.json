@@ -1,5 +1,22 @@
 [
   {
+    "id": "019422ef4fd57db2a30207486a1eba55",
+    "name": "Cleanup",
+    "allowConcurrentRun": false,
+    "tasks": [
+      {
+        "name": "cleanup",
+        "order": 0,
+        "payload": {
+          "type": "cleanup",
+          "value": {
+            "type": "archived"
+          }
+        }
+      }
+    ]
+  },
+  {
     "id": "0193e822c0377b8187a6d151dbbb4216",
     "name": "Harvest",
     "allowConcurrentRun": false,
@@ -106,7 +123,7 @@
         "name": "cleanup",
         "order": 6,
         "payload": {
-          "type": "none"
+          "type": "archive"
         }
       }
     ]

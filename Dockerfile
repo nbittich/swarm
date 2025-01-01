@@ -37,6 +37,10 @@ RUN apk add \
   --repository http://dl-cdn.alpinelinux.org/alpine/edge/main \
   gperftools-dev
 
+# set timezone
+RUN apk add --no-cache tzdata
+RUN ln -s /usr/share/zoneinfo/Europe/Brussels /etc/localtime
+
 FROM runtime
 ARG CRATE_NAME
 ARG USERNAME=${CRATE_NAME}
@@ -53,4 +57,5 @@ ENV CRATE=${CRATE_NAME}
 ENV RUST_LOG=INFO
 ENV LD_PRELOAD=/usr/lib/libtcmalloc.so
 ENV TCMALLOC_AGGRESSIVE_DECOMMIT=t
+
 ENTRYPOINT  "/app/${CRATE}"

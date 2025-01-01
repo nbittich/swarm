@@ -37,7 +37,7 @@ export interface ScheduledJob {
   name?: string;
   creationDate: string;
   nextExecution?: string;
-  targetUrl?: string;
+  taskDefinition: TaskDefinition;
   definitionId: string;
   cronExpr: string;
 }
@@ -67,6 +67,8 @@ export interface SubTask {
 
 export type Payload =
   | { type: "none" }
+  | { type: "archive" }
+  | { type: "cleanup"; value: Status }
   | { type: "scrapeUrl"; value: string }
   | { type: "fromPreviousStep"; value: { taskId: string; payload?: TaskResult } };
 
@@ -111,8 +113,17 @@ export type Status =
   | { type: "scheduled" }
   | { type: "busy" }
   | { type: "success" }
+  | { type: "archived" }
   | { type: "failed"; value: string[] };
 
+export const statusOptions: Status[] = [
+  { type: "pending" },
+  { type: "scheduled" },
+  { type: "busy" },
+  { type: "success" },
+  { type: "archived" },
+  { type: "failed", value: [] }
+]
 export interface UserClaims {
   sub: string;
   firstName?: string;
@@ -123,10 +134,11 @@ export interface UserClaims {
 
 export function colorForStatus(status: Status): string {
   let color = "default";
-  if (status.type === "pending") color = "orange";
+  if (status.type === "pending") color = "gray";
   if (status.type === "scheduled") color = "blue";
-  if (status.type === "busy") color = "purple";
+  if (status.type === "busy") color = "orange";
   if (status.type === "success") color = "green";
+  if (status.type === "archived") color = "purple";
   if (status.type === "failed") color = "red";
   return color;
 }

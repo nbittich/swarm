@@ -39,6 +39,11 @@ services:
       context: ../
       args:
         CRATE_NAME: cleanup
+  archive:
+    build:
+      context: ../
+      args:
+        CRATE_NAME: archive
   frontend:
     build:
       context: ../frontend/

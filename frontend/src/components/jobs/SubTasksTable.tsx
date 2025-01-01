@@ -7,6 +7,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@swarm/states/Store";
 import { fetchSubTasks, reset } from "@swarm/states/SuBTaskSlice";
 import { download } from "@swarm/states/file/Api";
+import dayjs from "dayjs";
 
 const SubTasksTable: React.FC = () => {
   const navigate = useNavigate();
@@ -50,7 +51,7 @@ const SubTasksTable: React.FC = () => {
       title: "Creation Date",
       dataIndex: "creationDate",
       key: "creationDate",
-      render: (date: string) => new Date(date).toLocaleString(),
+      render: (date: string) => dayjs(new Date(date)).format('DD/MM/YYYY HH:mm:ss'),
     },
 
     {
@@ -60,7 +61,7 @@ const SubTasksTable: React.FC = () => {
       render: (status: Status) => {
         return (
           <Tag color={colorForStatus(status)}>
-            {status.type.toUpperCase()}
+            {status.type}
             {status.type === "failed" && status.value && `: ${status.value.join(", ")}`}
           </Tag>
         );

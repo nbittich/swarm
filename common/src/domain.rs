@@ -42,7 +42,7 @@ pub struct ScheduledJob {
     pub name: Option<String>,
     pub creation_date: DateTime<Utc>,
     pub next_execution: Option<DateTime<Utc>>,
-    pub target_url: Option<String>,
+    pub task_definition: TaskDefinition,
     pub definition_id: String,
     pub cron_expr: String,
 }
@@ -82,6 +82,8 @@ pub struct SubTask {
 pub enum Payload {
     #[default]
     None,
+    Archive,
+    Cleanup(Status),
     ScrapeUrl(String),
     #[serde(rename_all = "camelCase")]
     FromPreviousStep {
@@ -177,9 +179,22 @@ pub enum Status {
     #[default]
     Pending,
     Scheduled,
+    Archived,
     Busy,
     Success,
     Failed(Vec<String>),
+}
+impl Status {
+    pub fn get_type(&self) -> &'static str {
+        match self {
+            Status::Pending => "pending",
+            Status::Scheduled => "scheduled",
+            Status::Archived => "archived",
+            Status::Busy => "busy",
+            Status::Success => "success",
+            Status::Failed(_) => "failed",
+        }
+    }
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -251,9 +266,9 @@ mod test {
             name: "Harvest".to_owned(),
             allow_concurrent_run: false,
             tasks: vec![TaskDefinition {
-                name: "collect".to_string(),
+                name: "archive".to_string(),
                 order: 0,
-                payload: Payload::None,
+                payload: Payload::Archive,
             }],
         };
         println!("{}", jd.serialize().unwrap());
