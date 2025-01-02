@@ -18,7 +18,7 @@ use swarm_common::{
     },
     error,
     mongo::{doc, Repository, StoreClient, StoreRepository},
-    nats_client::{self, NatsClient, PullConsumer, Stream},
+    nats_client::{self, Message, NatsClient, PullConsumer, Stream},
     warn, IdGenerator, StreamExt, REGEX_CLEAN_URL,
 };
 
@@ -284,21 +284,33 @@ impl JobManagerState {
         Ok(())
     }
     pub async fn start_consuming_sub_task(&self) -> anyhow::Result<()> {
+        let mut buffer = Vec::with_capacity(100);
+        let mut last_flush = tokio::time::Instant::now();
         let mut messages = self.sub_task_event_consumer.messages().await?;
-        while let Some(message) = messages.next().await {
-            match message {
-                Ok(message) => {
-                    if let Ok(sub_task) = SubTask::deserialize_bytes(&message.payload) {
-                        self.sub_task_repository
-                            .upsert(&sub_task.id, &sub_task)
-                            .await?;
-                    }
+        loop {
+            // buffer insert sub tasks
+            if !buffer.is_empty()
+                && (buffer.len() == 100 || last_flush.elapsed() >= Duration::from_secs(5))
+            {
+                let (sub_tasks, messages) =
+                    buffer.drain(..).collect::<(Vec<SubTask>, Vec<Message>)>();
+                self.sub_task_repository.upsert_many(&sub_tasks).await?;
+                for message in messages {
                     message.ack().await.map_err(|e| anyhow!("{e}"))?;
                 }
-                Err(e) => error!("could not get message {e}"),
+                last_flush = tokio::time::Instant::now();
+            }
+            if let Some(message) = messages.next().await {
+                match message {
+                    Ok(message) => {
+                        if let Ok(sub_task) = SubTask::deserialize_bytes(&message.payload) {
+                            buffer.push((sub_task, message));
+                        }
+                    }
+                    Err(e) => error!("could not get message {e}"),
+                }
             }
         }
-        Ok(())
     }
     pub async fn new_scheduled_job(
         &self,

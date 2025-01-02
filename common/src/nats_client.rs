@@ -1,5 +1,14 @@
 use std::{sync::LazyLock, time::Duration};
 
+use crate::{
+    constant::{
+        NATS_ACK_WAIT, NATS_CONNECTION_URL, NATS_MAX_RECONNECT, NATS_PASSWORD, NATS_USERNAME,
+    },
+    domain::JsonMapper,
+};
+pub use async_nats::jetstream::consumer::PullConsumer;
+pub use async_nats::jetstream::stream::Stream;
+pub use async_nats::jetstream::Message;
 use async_nats::{
     jetstream::{
         self,
@@ -9,15 +18,6 @@ use async_nats::{
     },
     Client,
 };
-
-use crate::{
-    constant::{
-        NATS_ACK_WAIT, NATS_CONNECTION_URL, NATS_MAX_RECONNECT, NATS_PASSWORD, NATS_USERNAME,
-    },
-    domain::JsonMapper,
-};
-pub use async_nats::jetstream::consumer::PullConsumer;
-pub use async_nats::jetstream::stream::Stream;
 
 pub static NATS_WAIT_BEFORE_REDELIVERY: LazyLock<Duration> = LazyLock::new(|| {
     std::env::var(NATS_ACK_WAIT)

@@ -1,6 +1,7 @@
 use futures::TryStreamExt;
-use mongodb::bson::{doc, Document};
+use mongodb::bson::{self, doc, Document};
 pub use mongodb::options::{FindOneAndReplaceOptions, FindOptions};
+use mongodb::options::ReplaceOneModel;
 use mongodb::results::{DeleteResult, InsertManyResult, InsertOneResult};
 use mongodb::Collection;
 use serde::de::DeserializeOwned;
@@ -28,17 +29,24 @@ pub struct StoreRepository<T: Serialize + DeserializeOwned + Unpin + Send + Sync
     collection: Collection<T>,
     _db_name: String,
     _collection_name: String,
+    _client: StoreClient,
 }
 
 impl<T> StoreRepository<T>
 where
     T: Serialize + DeserializeOwned + Unpin + Send + Sync,
 {
-    pub fn new(collection: Collection<T>, collection_name: &str, tenant_id: &str) -> Self {
+    pub fn new(
+        client: &StoreClient,
+        collection: Collection<T>,
+        collection_name: &str,
+        tenant_id: &str,
+    ) -> Self {
         StoreRepository {
             collection,
             _db_name: tenant_id.to_string(),
             _collection_name: collection_name.to_string(),
+            _client: client.clone(),
         }
     }
 }
@@ -50,7 +58,7 @@ where
     pub fn get_repository(client: &StoreClient, collection_name: &str, tenant_id: &str) -> Self {
         let db = client.get_db(tenant_id);
         let collection = db.collection::<T>(collection_name);
-        StoreRepository::new(collection, collection_name, tenant_id)
+        StoreRepository::new(client, collection, collection_name, tenant_id)
     }
     pub fn get_collection_name(&self) -> &str {
         &self._collection_name
@@ -67,11 +75,15 @@ where
     fn get_collection(&self) -> &Collection<T> {
         &self.collection
     }
+    fn get_client(&self) -> &StoreClient {
+        &self._client
+    }
 }
 
 #[async_trait::async_trait]
 pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std::fmt::Debug> {
     fn get_collection(&self) -> &Collection<T>;
+    fn get_client(&self) -> &StoreClient;
 
     async fn find_all(&self) -> Result<Vec<T>, StoreError> {
         let collection = self.get_collection();
@@ -297,5 +309,29 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
             .await
             .map_err(|e| StoreError { msg: e.to_string() })?;
         Ok(res)
+    }
+
+    async fn upsert_many(&self, entities: &[T]) -> Result<(), StoreError> {
+        let client = self.get_client().get_raw_client();
+
+        let bulk_update = entities
+            .iter()
+            .filter_map(|e| bson::to_document(e).ok())
+            .map(|e| {
+                ReplaceOneModel::builder()
+                    .namespace(self.get_collection().namespace())
+                    .filter(doc! {"_id": e.get("_id")})
+                    .replacement(e)
+                    .upsert(true)
+                    .build()
+            })
+            .collect::<Vec<_>>();
+        client
+            .bulk_write(bulk_update)
+            .ordered(true)
+            .await
+            .map_err(|e| StoreError { msg: e.to_string() })?;
+
+        Ok(())
     }
 }
