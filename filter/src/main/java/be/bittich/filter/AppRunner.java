@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 
 import org.apache.jena.riot.Lang;
@@ -34,6 +35,7 @@ import be.bittich.filter.lib.JobModel.TaskResult;
 import be.bittich.filter.lib.JobModel.TaskResult.ExtractRDFa;
 import be.bittich.filter.lib.JobModel.TaskResult.ExtractRDFa.ExtractRDFaValue;
 import be.bittich.filter.lib.JobModel.TaskResult.FilterSHACL.FilterSHACLValue;
+import lombok.Builder;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import be.bittich.filter.lib.Constant;
@@ -169,11 +171,27 @@ public class AppRunner implements CommandLineRunner {
 
             }
 
-          } catch (Exception exc) {
+          } catch (InterruptedException | ExecutionException exc) {
             log.debug("error {}", exc);
-            subTask = subTask.toBuilder()
-                .status(Status.Failed.builder().value(List.of("error during extraction! " + exc.getMessage())).build())
-                .build();
+            if (exc.getCause() instanceof ValidateAndFilterException ex) {
+              subTask = subTask.toBuilder()
+                  .status(
+                      Status.Failed.builder().value(List.of("error during extraction! " + ex.exception.getMessage()))
+                          .build())
+                  .result(Optional.of(SubTaskResult.NTriple.builder()
+                      .value(NTripleResult.builder()
+                          .len(0)
+                          .creationDate(OffsetDateTime.now(ZoneOffset.UTC))
+                          .baseUrl(ex.baseUrl).path(ex.path).build())
+                      .build()))
+                  .build();
+            } else {
+              subTask = subTask.toBuilder()
+                  .status(
+                      Status.Failed.builder().value(List.of("unexpected error during extraction! " + exc.getMessage()))
+                          .build())
+                  .build();
+            }
             failureCount += 1;
           }
           nc.publish(Constant.SUB_TASK_STATUS_CHANGE_EVENT.apply(subTask.id()), subTask);
@@ -217,24 +235,45 @@ public class AppRunner implements CommandLineRunner {
 
   }
 
-  @SneakyThrows
-  public NTripleResult validateAndFilter(String line, Path outputDir) {
-    var payload = Constant.MAPPER.readValue(line, NTripleResult.class);
-    var model = ModelUtils.toModel(new FileInputStream(payload.path().toFile()),
-        ModelUtils.filenameToLang(payload.path().toFile().getName(), Lang.TURTLE));
-    var report = this.shaclService.validate(model.getGraph());
-    log.debug("{} is conforms: {}", payload.path(), report.conforms());
-    var filtered = this.shaclService.filter(model, report);
+  @Builder
+  static class ValidateAndFilterException extends RuntimeException {
+    public String baseUrl;
+    public Path path;
+    public Exception exception;
+  }
 
-    var id = UUIDv7.get();
-    var path = outputDir.resolve(String.format("valid-%s.ttl", id));
-    ModelUtils.toFile(filtered, Lang.NTRIPLES, path);
-    return NTripleResult.builder()
-        .baseUrl(payload.baseUrl())
-        .len(filtered.size())
-        .path(path)
-        .creationDate(OffsetDateTime.now(ZoneOffset.UTC))
-        .build();
+  @Builder
+  static class ParseException extends RuntimeException {
+    public Exception exception;
+  }
+
+  @SneakyThrows
+  NTripleResult parse(String line) {
+    return Constant.MAPPER.readValue(line, NTripleResult.class);
+  }
+
+  public NTripleResult validateAndFilter(String line, Path outputDir) {
+    var payload = parse(line);
+    try {
+      var model = ModelUtils.toModel(new FileInputStream(payload.path().toFile()),
+          ModelUtils.filenameToLang(payload.path().toFile().getName(), Lang.TURTLE));
+      var report = this.shaclService.validate(model.getGraph());
+      log.debug("{} is conforms: {}", payload.path(), report.conforms());
+      var filtered = this.shaclService.filter(model, report);
+
+      var id = UUIDv7.get();
+      var path = outputDir.resolve(String.format("valid-%s.ttl", id));
+      ModelUtils.toFile(filtered, Lang.NTRIPLES, path);
+      return NTripleResult.builder()
+          .baseUrl(payload.baseUrl())
+          .len(filtered.size())
+          .path(path)
+          .creationDate(OffsetDateTime.now(ZoneOffset.UTC))
+          .build();
+    } catch (Throwable ex) {
+      throw ValidateAndFilterException.builder().exception(new RuntimeException(ex)).baseUrl(payload.baseUrl())
+          .path(payload.path()).build();
+    }
 
   }
 
