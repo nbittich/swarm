@@ -7,6 +7,7 @@ pub use mongodb::bson::doc;
 use serde::{Deserialize, Serialize};
 
 pub use client::*;
+pub use mongodb::bson::*;
 pub use repository::*;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StoreError {

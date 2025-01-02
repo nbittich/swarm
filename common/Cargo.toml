@@ -21,7 +21,7 @@ futures.workspace = true
 async-trait.workspace = true
 uuid = { workspace = true, features = ["v4","v7"] }
 regex.workspace = true
-mongodb = {workspace=true}
+mongodb.workspace = true
 # mimalloc={workspace=true, features=["secure"]}
 
 

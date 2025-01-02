@@ -16,3 +16,4 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "fs
 swarm_common.workspace=true
 tortank.workspace = true
 moka = { workspace = true, features = ["future"] }
+xxhash-rust = { workspace = true, features = ["xxh3"] }

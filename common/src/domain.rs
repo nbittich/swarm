@@ -213,7 +213,7 @@ pub struct User {
 pub struct UuidSubject {
     #[serde(rename = "_id")]
     pub id: String,
-    pub subject: String,
+    pub subject_hash: String,
 }
 
 pub trait JsonMapper: Serialize + DeserializeOwned + Unpin + Send + Sync {

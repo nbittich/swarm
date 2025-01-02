@@ -4,7 +4,7 @@
 use anyhow::anyhow;
 use chrono::Local;
 use moka::future::Cache;
-use std::{borrow::Cow, env::var, path::Path};
+use std::{borrow::Cow, collections::HashMap, env::var, path::Path};
 use swarm_common::{
     constant::{
         ADD_UUID_CONSUMER, APPLICATION_NAME, MANIFEST_FILE_NAME, PUBLIC_TENANT,
@@ -23,7 +23,7 @@ use swarm_common::{
     setup_tracing, IdGenerator, StreamExt,
 };
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
-use tortank::turtle::turtle_doc::TurtleDoc;
+use tortank::turtle::turtle_doc::{Node, TurtleDoc};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -52,7 +52,7 @@ async fn main() -> anyhow::Result<()> {
     let mongo_client = StoreClient::new(app_name.to_string()).await?;
     let uuid_repository: StoreRepository<UuidSubject> =
         StoreRepository::get_repository(&mongo_client, UUID_COLLECTION, PUBLIC_TENANT);
-    let cache = moka::future::Cache::new(10_000);
+    let cache = moka::future::Cache::new(50_000);
 
     let mut messages = task_event_consumer.messages().await?;
 
@@ -215,37 +215,72 @@ async fn handle_task(
     }
     Ok(None)
 }
-
-async fn get_id_from_cache_or_insert(
-    subject_str: String,
+async fn get_ids_from_cache_or_insert<'a>(
+    mut subject_nodes: Vec<Node<'a>>,
     cache: &Cache<String, String>,
     repository: &StoreRepository<UuidSubject>,
-) -> anyhow::Result<String> {
-    match cache.get(&subject_str).await {
-        Some(id) => Ok(id),
-        None => {
-            let id = match repository
-                .find_one(Some(doc! {
-                    "subject": &subject_str
-                }))
-                .await?
-            {
-                Some(UuidSubject { id, .. }) => id,
-                None => {
-                    let id = IdGenerator.get();
-                    repository
-                        .insert_one(&UuidSubject {
-                            id: id.to_string(),
-                            subject: subject_str.clone(),
-                        })
-                        .await?;
-                    id
-                }
-            };
-            cache.insert(subject_str, id.to_string()).await;
-            Ok(id)
+) -> anyhow::Result<HashMap<String, Node<'a>>> {
+    // FIXME optimization:
+    // assuming the uuid is in mongo, we can infer that it's also already in the db
+    // so we don't need to insert extra triples
+    // but to be sure just leave it like that for now
+    if subject_nodes.is_empty() {
+        return Ok(HashMap::with_capacity(0));
+    }
+    let mut result = HashMap::with_capacity(subject_nodes.len());
+    let mut to_check_in_db = HashMap::with_capacity(subject_nodes.len());
+    while let Some(subject) = subject_nodes.pop() {
+        let subject_hash = xxhash_rust::xxh3::xxh3_128(subject.to_string().as_bytes()).to_string();
+        if let Some(id) = cache.get(&subject_hash).await {
+            result.insert(id, subject);
+        } else {
+            to_check_in_db.insert(subject_hash, subject);
         }
     }
+    if !to_check_in_db.is_empty() {
+        let in_db = repository
+            .find_by_query(
+                doc! {
+                    "subjectHash": {
+                      "$in": &to_check_in_db.keys()
+                        .collect::<Vec<_>>()
+                    }
+                },
+                None,
+            )
+            .await?;
+        let (found_in_db, to_inserts): (Vec<_>, Vec<_>) = to_check_in_db
+            .into_iter()
+            .map(|(subject_hash, node)| {
+                if let Some(u) = in_db.iter().find(|u| u.subject_hash == subject_hash) {
+                    (u.id.to_string(), node)
+                } else {
+                    (IdGenerator.get(), node)
+                }
+            })
+            .partition(|(id, _)| in_db.iter().any(|u| &u.id == id));
+
+        let to_add_in_cache = to_inserts
+            .iter()
+            .map(|(id, node)| UuidSubject {
+                id: id.clone(),
+                subject_hash: xxhash_rust::xxh3::xxh3_128(node.to_string().as_bytes()).to_string(),
+            })
+            .collect::<Vec<_>>();
+        if !to_add_in_cache.is_empty() {
+            repository.insert_many(&to_add_in_cache).await?;
+            // now we add to cache
+            for us in to_add_in_cache.iter() {
+                cache.insert(us.subject_hash.clone(), us.id.clone()).await;
+            }
+        }
+        result = result
+            .into_iter()
+            .chain(found_in_db.into_iter())
+            .chain(to_inserts.into_iter())
+            .collect();
+    }
+    Ok(result)
 }
 async fn complement(
     line: &str,
@@ -263,9 +298,8 @@ async fn complement(
         .difference(&TurtleDoc::default())
         .map_err(|e| anyhow::anyhow!("{e}"))?;
 
-    for subject in subjects {
-        let subject_str = subject.to_string();
-        let id = get_id_from_cache_or_insert(subject_str, cache, repository).await?;
+    let uuid_complement = get_ids_from_cache_or_insert(subjects, cache, repository).await?;
+    for (id, subject) in uuid_complement {
         triples.add_statement(
             subject,
             tortank::turtle::turtle_doc::Node::Iri(Cow::Borrowed(predicate)),
