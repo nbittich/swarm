@@ -57,7 +57,6 @@ export const addScheduledJob = createAsyncThunk(
     }
 );
 
-// Async thunk for deleting a scheduled job
 export const deleteScheduledJob = createAsyncThunk(
     'scheduledJobs/deleteScheduledJob',
     async (jobId: string, { rejectWithValue }) => {

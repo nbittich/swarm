@@ -11,127 +11,127 @@ import dayjs from "dayjs";
 
 const { Text } = Typography;
 const SubTasksTable: React.FC = () => {
-  const navigate = useNavigate();
-  const { id: jobId, taskId, taskName } = useParams<{ id: string; taskId: string, taskName: string }>();
-  const dispatch = useDispatch<AppDispatch>();
+    const navigate = useNavigate();
+    const { id: jobId, taskId, taskName } = useParams<{ id: string; taskId: string, taskName: string }>();
+    const dispatch = useDispatch<AppDispatch>();
 
-  const { data, loading, lastElementId } = useSelector((state: RootState) => state.subTasks);
+    const { data, loading, lastElementId } = useSelector((state: RootState) => state.appReducer.subTasks);
 
-  const pageSize = 50;
-  useEffect(() => {
-    dispatch(reset());
-    if (jobId && taskId) {
-      dispatch(fetchSubTasks({ jobId, taskId, lastElementId: null, pageSize }));
-    }
-  }, [dispatch, jobId, taskId, taskName]);
-  const loadMore = () => {
-    if (jobId && taskId) {
-      dispatch(fetchSubTasks({ jobId, taskId, lastElementId, pageSize }));
-    }
-  };
-
-  const columns: TableProps<SubTask>["columns"] = [
-    {
-      title: "Base url",
-      key: "baseUrl",
-      render: (_, record) => {
-        if (record.result &&
-          (record.result.type === "nTriple" ||
-            record.result.type === "diff" ||
-            record.result?.type == "scrapeUrl")) {
-          return <a href={record.result.value.baseUrl} target="_blank">{record.result.value.baseUrl} </a>
-        } else {
-          return (<>
-            N/A
-          </>)
-
+    const pageSize = 50;
+    useEffect(() => {
+        dispatch(reset());
+        if (jobId && taskId) {
+            dispatch(fetchSubTasks({ jobId, taskId, lastElementId: null, pageSize }));
         }
-      }
-    },
-    {
-      title: "Creation Date",
-      dataIndex: "creationDate",
-      key: "creationDate",
-      render: (date: string) => dayjs(new Date(date)).format('DD/MM/YYYY HH:mm:ss'),
-    },
-
-    {
-      title: "Status",
-      dataIndex: "status",
-      key: "status",
-      render: (status: Status) => {
-        return (
-          <Tag color={colorForStatus(status)} >
-            <Text>{status.type}
-              {status.type === "failed" && status.value && `: ${truncate(status.value.join(", "), 32)}`}</Text>
-          </Tag>
-        );
-      },
-    },
-    {
-      title: "Download",
-      key: "actions",
-      align: "center",
-      render: (_, record: SubTask) => {
-        const res = record.result;
-        let component = <>N/A</>;
-        if (res) {
-          switch (res.type) {
-            case "scrapeUrl":
-              component = <Tag>
-                <a onClick={async () => await download(jobId, res.value.path)}><DownloadOutlined />file.html</a>
-              </Tag>;
-              break;
-            case "diff":
-              component = <Space>
-                {res.value.toRemovePath && <a onClick={async () => await download(jobId, res.value.toRemovePath)}><DownloadOutlined />to-remove.ttl</a>}
-                {res.value.intersectPath && <a onClick={async () => await download(jobId, res.value.intersectPath)}><DownloadOutlined />intersect.ttl</a>}
-                {res.value.newInsertPath && <a onClick={async () => await download(jobId, res.value.newInsertPath)}><DownloadOutlined />new-inserts.ttl</a>}
-              </Space>;
-              break;
-            case "nTriple":
-              component = <Tag>
-                <a onClick={async () => await download(jobId, res.value.path)}><DownloadOutlined />result.ttl</a>
-              </Tag>;
-              break;
-          }
+    }, [dispatch, jobId, taskId, taskName]);
+    const loadMore = () => {
+        if (jobId && taskId) {
+            dispatch(fetchSubTasks({ jobId, taskId, lastElementId, pageSize }));
         }
+    };
 
-        return component;
+    const columns: TableProps<SubTask>["columns"] = [
+        {
+            title: "Base url",
+            key: "baseUrl",
+            render: (_, record) => {
+                if (record.result &&
+                    (record.result.type === "nTriple" ||
+                        record.result.type === "diff" ||
+                        record.result?.type == "scrapeUrl")) {
+                    return <a href={record.result.value.baseUrl} target="_blank">{record.result.value.baseUrl} </a>
+                } else {
+                    return (<>
+                        N/A
+                    </>)
 
-      },
-    },
+                }
+            }
+        },
+        {
+            title: "Creation Date",
+            dataIndex: "creationDate",
+            key: "creationDate",
+            render: (date: string) => dayjs(new Date(date)).format('DD/MM/YYYY HH:mm:ss'),
+        },
 
-  ];
+        {
+            title: "Status",
+            dataIndex: "status",
+            key: "status",
+            render: (status: Status) => {
+                return (
+                    <Tag color={colorForStatus(status)} >
+                        <Text>{status.type}
+                            {status.type === "failed" && status.value && `: ${truncate(status.value.join(", "), 32)}`}</Text>
+                    </Tag>
+                );
+            },
+        },
+        {
+            title: "Download",
+            key: "actions",
+            align: "center",
+            render: (_, record: SubTask) => {
+                const res = record.result;
+                let component = <>N/A</>;
+                if (res) {
+                    switch (res.type) {
+                        case "scrapeUrl":
+                            component = <Tag>
+                                <a onClick={async () => await download(jobId, res.value.path)}><DownloadOutlined />file.html</a>
+                            </Tag>;
+                            break;
+                        case "diff":
+                            component = <Space>
+                                {res.value.toRemovePath && <a onClick={async () => await download(jobId, res.value.toRemovePath)}><DownloadOutlined />to-remove.ttl</a>}
+                                {res.value.intersectPath && <a onClick={async () => await download(jobId, res.value.intersectPath)}><DownloadOutlined />intersect.ttl</a>}
+                                {res.value.newInsertPath && <a onClick={async () => await download(jobId, res.value.newInsertPath)}><DownloadOutlined />new-inserts.ttl</a>}
+                            </Space>;
+                            break;
+                        case "nTriple":
+                            component = <Tag>
+                                <a onClick={async () => await download(jobId, res.value.path)}><DownloadOutlined />result.ttl</a>
+                            </Tag>;
+                            break;
+                    }
+                }
 
-  return (
-    <>
-      <Flex vertical gap="middle">
-        <Flex justify="space-between" wrap>
-          <h2>{taskName}</h2>
-          <Space>
-            <Button onClick={() => navigate(`/jobs/${jobId}/tasks`)} icon={<ArrowLeftOutlined />} size="large" color="default" variant="dashed">Back</Button>
-            <Button disabled={loading || !lastElementId} onClick={loadMore} size="large" color="default" variant="dashed" icon={<PlusOutlined />}>
-              Load {pageSize} more
-            </Button>
-          </Space>
+                return component;
 
-        </Flex>
-        <Table
-          bordered
-          dataSource={data}
-          columns={columns}
-          rowKey="_id"
-          loading={loading}
+            },
+        },
 
-        >
-          <Pagination responsive pageSize={pageSize} />
-        </Table>
-      </Flex>
+    ];
 
-    </>
+    return (
+        <>
+            <Flex vertical gap="middle">
+                <Flex justify="space-between" wrap>
+                    <h2>{taskName}</h2>
+                    <Space>
+                        <Button onClick={() => navigate(`/jobs/${jobId}/tasks`)} icon={<ArrowLeftOutlined />} size="large" color="default" variant="dashed">Back</Button>
+                        <Button disabled={loading || !lastElementId} onClick={loadMore} size="large" color="default" variant="dashed" icon={<PlusOutlined />}>
+                            Load {pageSize} more
+                        </Button>
+                    </Space>
 
-  );
+                </Flex>
+                <Table
+                    bordered
+                    dataSource={data}
+                    columns={columns}
+                    rowKey="_id"
+                    loading={loading}
+
+                >
+                    <Pagination responsive pageSize={pageSize} />
+                </Table>
+            </Flex>
+
+        </>
+
+    );
 };
 
 export default SubTasksTable;

@@ -132,7 +132,7 @@ const jobsSlice = createSlice({
                     total: page.totalElements,
                     current: page.currentPage + 1,
                 };
-                state.loading = false;
+                state.loading;
             })
             .addCase(fetchJobs.rejected, (state, action) => {
                 state.loading = false;

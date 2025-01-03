@@ -24,8 +24,8 @@ const JobsTable: React.FC = () => {
     );
     const [taskDefinition, setTaskDefinition] = useState<TaskDefinition | null>(null);
     const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
-    const { jobDefinitions, loading: jobDefLoading } = useSelector((state: RootState) => state.jobDefinitions);
-    const { jobs, pagination, loading: jobLoading, pageable } = useSelector((state: RootState) => state.jobs);
+    const { jobDefinitions, loading: jobDefLoading } = useSelector((state: RootState) => state.appReducer.jobDefinitions);
+    const { jobs, pagination, loading: jobLoading, pageable } = useSelector((state: RootState) => state.appReducer.jobs);
     const [form] = Form.useForm();
     const toggleModal = (value: boolean) => {
         form.resetFields();
@@ -100,6 +100,7 @@ const JobsTable: React.FC = () => {
         {
             title: () => <Input placeholder='Name' onChange={searchNameDebounced}></Input>,
             dataIndex: 'name',
+            width: '20%',
             key: 'name',
             render: (name: string) => {
                 return <>
@@ -112,6 +113,7 @@ const JobsTable: React.FC = () => {
 
         {
             title: 'Payload',
+            width: '40%',
             dataIndex: 'payload',
             key: 'payload',
             render: (_, record) => {

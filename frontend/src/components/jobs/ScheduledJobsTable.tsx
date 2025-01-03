@@ -20,8 +20,8 @@ const ScheduledJobsTable: React.FC = () => {
         },
         500
     );
-    const { jobDefinitions, loading: jobDefLoading } = useSelector((state: RootState) => state.jobDefinitions);
-    const { scheduledJobs, pagination, loading: scheduledJobLoading, pageable } = useSelector((state: RootState) => state.scheduledJobs);
+    const { jobDefinitions, loading: jobDefLoading } = useSelector((state: RootState) => state.appReducer.jobDefinitions);
+    const { scheduledJobs, pagination, loading: scheduledJobLoading, pageable } = useSelector((state: RootState) => state.appReducer.scheduledJobs);
     const [taskDefinition, setTaskDefinition] = useState<TaskDefinition | null>(null);
     const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
     const [form] = Form.useForm();
@@ -105,11 +105,13 @@ const ScheduledJobsTable: React.FC = () => {
         {
             title: () => <Input placeholder='Name' onChange={searchNameDebounced}></Input>,
             dataIndex: 'name',
+            width: '20%',
             key: 'name',
             render: (name?: string) => name || 'N/A'
         },
         {
             title: 'Payload',
+            width: '40%',
             dataIndex: 'payload',
             key: 'payload',
             render: (_, record) => {
