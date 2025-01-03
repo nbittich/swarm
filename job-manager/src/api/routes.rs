@@ -17,7 +17,7 @@ use swarm_common::{
     debug,
     domain::{Job, JobDefinition, ScheduledJob, SubTask, Task, User},
     info,
-    mongo::{doc, FindOptions, Repository},
+    mongo::{doc, FindOptions, Page, Pageable, Repository},
     TryFutureExt,
 };
 use tokio_util::io::ReaderStream;
@@ -45,7 +45,7 @@ pub async fn serve(
         .route("/login", post(authorize))
         .route("/scheduled-jobs/new", post(new_scheduled_job))
         .route("/scheduled-jobs/{id}", delete(delete_scheduled_job))
-        .route("/scheduled-jobs", get(all_scheduled_jobs))
+        .route("/scheduled-jobs", post(all_scheduled_jobs))
         .route("/jobs/{job_id}", delete(delete_job))
         .route("/jobs/{job_id}/download", get(download))
         .route("/jobs/{job_id}/tasks/{task_id}/subtasks", get(all_subtasks))
@@ -133,20 +133,15 @@ async fn all_jobs(
     Ok(Json(jobs))
 }
 
+#[axum::debug_handler]
 async fn all_scheduled_jobs(
     State(manager): State<JobManagerState>,
     _: Claims,
-) -> Result<Json<Vec<ScheduledJob>>, ApiError> {
+    Json(pageable): Json<Pageable>,
+) -> Result<Json<Page<ScheduledJob>>, ApiError> {
     let scheduled_jobs = manager
         .scheduled_job_repository
-        .find_by_query(
-            doc! {},
-            Some(
-                FindOptions::builder()
-                    .sort(Some(doc! { "creationDate": -1 }))
-                    .build(),
-            ),
-        )
+        .find_page(pageable)
         .await
         .map_err(|e| ApiError::AllScheduledJobs(e.to_string()))?;
     Ok(Json(scheduled_jobs))

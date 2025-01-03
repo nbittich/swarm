@@ -1,7 +1,7 @@
 use futures::TryStreamExt;
 use mongodb::bson::{self, doc, Document};
-pub use mongodb::options::{FindOneAndReplaceOptions, FindOptions};
 use mongodb::options::ReplaceOneModel;
+pub use mongodb::options::{FindOneAndReplaceOptions, FindOptions};
 use mongodb::results::{DeleteResult, InsertManyResult, InsertOneResult};
 use mongodb::Collection;
 use serde::de::DeserializeOwned;
@@ -11,8 +11,9 @@ use super::client::StoreClient;
 use super::StoreError;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Pageable {
-    pub page: i64,
-    pub limit: i64,
+    pub page: Option<i64>,
+    pub limit: Option<i64>,
+    pub filter: Option<Document>,
     pub sort: Option<Document>,
 }
 #[derive(Serialize, Debug)]
@@ -169,32 +170,29 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
             .map_err(|e| StoreError { msg: e.to_string() })?;
         Ok(collection)
     }
-    async fn find_page(
-        &self,
-        query: Option<Document>,
-        pageable: Pageable,
-    ) -> Result<Option<Page<T>>, StoreError> {
+    async fn find_page(&self, pageable: Pageable) -> Result<Page<T>, StoreError> {
+        let (limit, page) = (pageable.limit.unwrap_or(10), pageable.page.unwrap_or(0));
         let collection = self.get_collection();
-        let count = self.count(query.clone()).await? as i64;
-        let query = if let Some(q) = query {
+        let query = if let Some(q) = pageable.filter {
             q
         } else {
             doc! {}
         };
-        let skip = pageable.limit * pageable.page; // start at page 0
+        let count = self.count(Some(query.clone())).await? as i64;
+        let skip = limit * page; // start at page 0
         if count <= skip {
-            return Ok(Some(Page {
+            return Ok(Page {
                 total_elements: 0,
                 current_page: 0,
                 next_page: None,
                 page_size: 0,
                 content: vec![],
-            }));
+            });
         }
         let options = FindOptions::builder()
             .skip(Some(skip as u64))
             .sort(pageable.sort)
-            .limit(Some(pageable.limit))
+            .limit(Some(limit))
             .build();
         let cursor = collection
             .find(query)
@@ -205,8 +203,8 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
             .try_collect()
             .await
             .map_err(|e| StoreError { msg: e.to_string() })?;
-        let next_page = if count > (pageable.limit * (pageable.page + 1)) {
-            Some(pageable.page + 1)
+        let next_page = if count > (limit * (page + 1)) {
+            Some(page + 1)
         } else {
             None
         };
@@ -214,11 +212,11 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
         let page = Page {
             total_elements: count,
             content: collection,
-            current_page: pageable.page,
+            current_page: page,
             next_page,
             page_size,
         };
-        Ok(Some(page))
+        Ok(page)
     }
 
     async fn delete_many(&self, query: Option<Document>) -> Result<DeleteResult, StoreError> {
