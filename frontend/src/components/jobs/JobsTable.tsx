@@ -1,23 +1,31 @@
 
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, message, Flex, Select, TableProps, Tag, Popconfirm, } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, Flex, Select, TableProps, Tag, Popconfirm, PaginationProps, } from 'antd';
 import { DeleteOutlined, PlusOutlined, RightSquareOutlined, SyncOutlined } from '@ant-design/icons';
-import axios from 'axios';
-import { colorForStatus, Job, Status, statusOptions, TaskDefinition } from '@swarm/models/domain';
+import { colorForStatus, Job, statusOptions, TaskDefinition } from '@swarm/models/domain';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { fetchJobDefinitions } from '@swarm/states/JobDefinitionSlice';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@swarm/states/Store';
+import { SorterResult } from 'antd/es/table/interface';
+import { addJob, deleteJob, fetchJobs, setPageable } from '@swarm/states/JobSlice';
+import { useDebouncedCallback } from 'use-debounce';
 const { Option } = Select;
 const JobsTable: React.FC = () => {
     const navigate = useNavigate();
     const dispatch = useDispatch<AppDispatch>();
-    const [jobs, setJobs] = useState<Job[]>([]);
+    const [searchName, setSearchName] = useState<undefined | string>();
+    const searchNameDebounced = useDebouncedCallback(
+        (e) => {
+            setSearchName(e?.target?.value);
+        },
+        500
+    );
     const [taskDefinition, setTaskDefinition] = useState<TaskDefinition | null>(null);
-    const [loading, setLoading] = useState<boolean>(false);
     const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
     const { jobDefinitions, loading: jobDefLoading } = useSelector((state: RootState) => state.jobDefinitions);
+    const { jobs, pagination, loading: jobLoading, pageable } = useSelector((state: RootState) => state.jobs);
     const [form] = Form.useForm();
     const toggleModal = (value: boolean) => {
         form.resetFields();
@@ -35,87 +43,62 @@ const JobsTable: React.FC = () => {
         }
     };
 
-    const fetchJobs = async () => {
-        setLoading(true);
-        try {
-            const responseJobs = await axios.get('/api/jobs');
-            setJobs(responseJobs.data);
-        } catch (error) {
-            console.error(error);
-            message.error('Failed to fetch jobs');
-        } finally {
-            setLoading(false);
+    const handleTableChange = (newPagination: PaginationProps, _filters: Record<string, (React.Key | boolean)[] | null>,
+        sorter: SorterResult<Job> | SorterResult<Job>[]) => {
+        const sortParams: Record<string, 1 | -1> = {};
+
+        if (Array.isArray(sorter)) {
+            sorter.forEach(srt => {
+                if (srt.order) {
+                    sortParams[srt.field as string] = srt.order === 'ascend' ? 1 : -1;
+                }
+            });
+        } else if (sorter.order) {
+            sortParams[sorter.field as string] = sorter.order === 'ascend' ? 1 : -1;
         }
+
+        dispatch(setPageable({ page: newPagination.current, limit: newPagination.pageSize, sort: sortParams }));
     };
+
     useEffect(() => {
-        fetchJobs();
-    }, []);
+        dispatch(fetchJobs(pageable));
+    }, [pageable, dispatch]);
     useEffect(() => {
         dispatch(fetchJobDefinitions());
     }, [dispatch,]);
+    useEffect(() => {
+        if (searchName !== undefined)
+            dispatch(setPageable({
+                page: 1, filter: {
+                    "name": {
+                        "$regex": `${searchName}`,
+                        "$options": "i"
+                    }
+                }
+            }))
+    }, [dispatch, searchName]);
     const handleAddJob = async (values: {
         definitionId: string,
         jobName?: string,
         targetUrl?: string,
         status?: string,
     }) => {
-        try {
-            setLoading(true);
-            const payload = {
-                definitionId: values.definitionId,
-                jobName: values.jobName?.length ? values.jobName : undefined,
-                taskDefinition,
-            };
-            if (taskDefinition && taskDefinition.payload.type === "scrapeUrl" && values.targetUrl) {
-                payload.taskDefinition = {
-                    ...taskDefinition,
-                    payload: {
-                        type: "scrapeUrl",
-                        value: values.targetUrl
-                    },
 
-                };
-            } else if (taskDefinition && taskDefinition.payload.type === "cleanup" && values.status && statusOptions.some(s => s.type === values.status)) {
-                payload.taskDefinition = {
-                    ...taskDefinition,
-                    payload: {
-                        type: "cleanup",
-                        value: statusOptions.find(s => s.type === values.status)!
-                    },
+        const payload = {
+            ...values,
+            taskDefinition: taskDefinition
+        };
+        dispatch(addJob(payload));
+        toggleModal(false);
 
-                };
-            } else {
-                throw Error("invalid payload");
-            }
-            const response = await axios.post('/api/jobs/new', payload);
-            message.success('Job added successfully');
-            toggleModal(false);
-            setJobs([response.data, ...jobs]);
-        } catch (error) {
-            console.error(error);
-            message.error('Failed to add job. Check the console');
-        } finally {
-            setLoading(false);
-        }
+    }
+    const handleDeleteJob = async (job: Job) => {
+        dispatch(deleteJob(job._id));
     };
 
-    const deleteJob = async (job: Job) => {
-        try {
-            setLoading(true);
-            await axios.delete('/api/jobs/' + job._id);
-            message.success('Job deleted successfully');
-            setJobs(jobs.filter((j) => job._id !== j._id));
-        } catch (error) {
-            console.error(error);
-            message.error('Failed to delete job. Check the console');
-        } finally {
-            setLoading(false);
-        }
-    };
-    // Columns for the Ant Design table
     const columns: TableProps<Job>['columns'] = [
         {
-            title: 'Job Name',
+            title: () => <Input placeholder='Name' onChange={searchNameDebounced}></Input>,
             dataIndex: 'name',
             key: 'name',
             render: (name: string) => {
@@ -147,22 +130,25 @@ const JobsTable: React.FC = () => {
             title: 'Creation Date',
             dataIndex: 'creationDate',
             key: 'creationDate',
+            sorter: true,
             render: (date: string) => dayjs(new Date(date)).format('DD/MM/YYYY HH:mm:ss'),
         },
         {
             title: 'Modified Date',
             dataIndex: 'modifiedDate',
             key: 'modifiedDate',
+            sorter: true,
             render: (date?: string) => date ? dayjs(new Date(date)).format('DD/MM/YYYY HH:mm:ss') : 'N/A',
         },
         {
-            title: 'Status',
+            title: "Status",
             dataIndex: 'status',
-            key: 'status',
-            render: (status: Status) => {
+            key: 'status.type',
+            sorter: true,
+            render: (_, record) => {
                 return <>
-                    <Tag title={status.type === "failed" ? status.value.join(", ") : undefined} color={colorForStatus(status)}>
-                        {status.type}
+                    <Tag title={record.status.type === "failed" ? record.status.value.join(", ") : undefined} color={colorForStatus(record.status)}>
+                        {record.status.type}
                     </Tag>
                 </>
             },
@@ -184,7 +170,7 @@ const JobsTable: React.FC = () => {
                     placement='left'
                     title="Delete the job"
                     description="Are you sure to delete this job?"
-                    onConfirm={() => deleteJob(record)}
+                    onConfirm={() => handleDeleteJob(record)}
                     okText="Yes"
                     cancelText="No"
                 >
@@ -212,12 +198,14 @@ const JobsTable: React.FC = () => {
 
                 </Flex>
                 <Table
-                    loading={loading || jobDefLoading}
+                    loading={jobLoading || jobDefLoading}
                     bordered
                     dataSource={jobs}
                     columns={columns}
+                    pagination={pagination}
                     rowKey="_id"
-                    pagination={{ pageSize: 10 }}
+                    onChange={handleTableChange}
+
                 />
             </Flex>
             <Modal

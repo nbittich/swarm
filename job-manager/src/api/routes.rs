@@ -51,7 +51,7 @@ pub async fn serve(
         .route("/jobs/{job_id}/tasks/{task_id}/subtasks", get(all_subtasks))
         .route("/jobs/{job_id}/tasks", get(all_tasks))
         .route("/jobs/new", post(new_job))
-        .route("/jobs", get(all_jobs))
+        .route("/jobs", post(all_jobs))
         .route("/job-definitions", get(all_job_definitions))
         .layer(DefaultBodyLimit::max(body_size_limit))
         .with_state(manager_state)
@@ -117,23 +117,16 @@ async fn authorize(
 async fn all_jobs(
     State(manager): State<JobManagerState>,
     _: Claims,
-) -> Result<Json<Vec<Job>>, ApiError> {
+    Json(pageable): Json<Pageable>,
+) -> Result<Json<Page<Job>>, ApiError> {
     let jobs = manager
         .job_repository
-        .find_by_query(
-            doc! {},
-            Some(
-                FindOptions::builder()
-                    .sort(Some(doc! { "creationDate": -1 }))
-                    .build(),
-            ),
-        )
+        .find_page(pageable)
         .await
         .map_err(|e| ApiError::AllJobs(e.to_string()))?;
     Ok(Json(jobs))
 }
 
-#[axum::debug_handler]
 async fn all_scheduled_jobs(
     State(manager): State<JobManagerState>,
     _: Claims,

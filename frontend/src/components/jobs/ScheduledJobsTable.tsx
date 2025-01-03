@@ -13,7 +13,7 @@ import { SorterResult } from 'antd/es/table/interface';
 const { Option } = Select;
 const ScheduledJobsTable: React.FC = () => {
     const dispatch = useDispatch<AppDispatch>();
-    const [searchName, setSearchName] = useState("");
+    const [searchName, setSearchName] = useState();
     const searchNameDebounced = useDebouncedCallback(
         (e) => {
             setSearchName(e?.target?.value);
@@ -81,14 +81,15 @@ const ScheduledJobsTable: React.FC = () => {
 
 
     useEffect(() => {
-        dispatch(setPageable({
-            page: 1, filter: {
-                "name": {
-                    "$regex": `${searchName}`,
-                    "$options": "i"
+        if (searchName !== undefined)
+            dispatch(setPageable({
+                page: 1, filter: {
+                    "name": {
+                        "$regex": `${searchName}`,
+                        "$options": "i"
+                    }
                 }
-            }
-        }))
+            }))
     }, [dispatch, searchName]);
 
 
