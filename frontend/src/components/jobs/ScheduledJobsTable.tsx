@@ -6,11 +6,11 @@ import cron from 'cron-validate';
 import dayjs from 'dayjs';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@swarm/states/Store';
-import { addScheduledJob, deleteScheduledJob, fetchScheduledJobs } from '@swarm/states/ScheduledJobSlice';
+import { addScheduledJob, deleteScheduledJob, fetchScheduledJobs, setPageable } from '@swarm/states/ScheduledJobSlice';
 import { fetchJobDefinitions } from '@swarm/states/JobDefinitionSlice';
 import { useDebouncedCallback } from 'use-debounce';
+import { SorterResult } from 'antd/es/table/interface';
 const { Option } = Select;
-const PAGE_SIZE = 10;
 const ScheduledJobsTable: React.FC = () => {
     const dispatch = useDispatch<AppDispatch>();
     const [searchName, setSearchName] = useState("");
@@ -21,7 +21,7 @@ const ScheduledJobsTable: React.FC = () => {
         500
     );
     const { jobDefinitions, loading: jobDefLoading } = useSelector((state: RootState) => state.jobDefinitions);
-    const { scheduledJobs, pagination, loading: scheduledJobLoading, refresh } = useSelector((state: RootState) => state.scheduledJobs);
+    const { scheduledJobs, pagination, loading: scheduledJobLoading, pageable } = useSelector((state: RootState) => state.scheduledJobs);
     const [taskDefinition, setTaskDefinition] = useState<TaskDefinition | null>(null);
     const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
     const [form] = Form.useForm();
@@ -62,31 +62,43 @@ const ScheduledJobsTable: React.FC = () => {
     };
 
 
-    const handleTableChange = (newPagination: PaginationProps) => {
-        dispatch(fetchScheduledJobs({ page: newPagination.current!, limit: newPagination.pageSize! }));
+    const handleTableChange = (newPagination: PaginationProps, _filters: Record<string, (React.Key | boolean)[] | null>,
+        sorter: SorterResult<ScheduledJob> | SorterResult<ScheduledJob>[]) => {
+        const sortParams: Record<string, 1 | -1> = {};
+
+        if (Array.isArray(sorter)) {
+            sorter.forEach(srt => {
+                if (srt.order) {
+                    sortParams[srt.field as string] = srt.order === 'ascend' ? 1 : -1;
+                }
+            });
+        } else if (sorter.order) {
+            sortParams[sorter.field as string] = sorter.order === 'ascend' ? 1 : -1;
+        }
+
+        dispatch(setPageable({ page: newPagination.current, limit: newPagination.pageSize, sort: sortParams }));
     };
 
 
     useEffect(() => {
-        dispatch(fetchScheduledJobs({
-            page: 1, limit: PAGE_SIZE, filter: {
+        dispatch(setPageable({
+            page: 1, filter: {
                 "name": {
                     "$regex": `${searchName}`,
                     "$options": "i"
                 }
             }
-        }));
+        }))
+    }, [dispatch, searchName]);
 
-    }, [searchName, dispatch]);
 
     useEffect(() => {
         dispatch(fetchJobDefinitions());
     }, [dispatch,]);
 
     useEffect(() => {
-        if (refresh)
-            dispatch(fetchScheduledJobs());
-    }, [dispatch, refresh]);
+        dispatch(fetchScheduledJobs(pageable));
+    }, [pageable, dispatch]);
 
     const columns: TableProps<ScheduledJob>['columns'] = [
         {
@@ -113,12 +125,14 @@ const ScheduledJobsTable: React.FC = () => {
             title: 'Creation Date',
             dataIndex: 'creationDate',
             key: 'creationDate',
+            sorter: true,
             render: (date: string) => dayjs(new Date(date)).format('DD/MM/YYYY HH:mm:ss'),
         },
         {
             title: 'Next execution',
             dataIndex: 'nextExecution',
             key: 'nextExecution',
+            sorter: true,
             render: (date?: string) => date ? dayjs(new Date(date)).format('DD/MM/YYYY HH:mm:ss') : 'N/A',
         },
         {
@@ -154,7 +168,10 @@ const ScheduledJobsTable: React.FC = () => {
                         <Button onClick={() => toggleModal(true)} size="large" color="default" variant="dashed" icon={<PlusOutlined />}>
                             New Scheduled Job
                         </Button>
-                        <Button onClick={() => handleTableChange({ pageSize: PAGE_SIZE, current: 1 })} size="large" color="default" variant="dashed" icon={<SyncOutlined />}>
+                        <Button onClick={() => handleTableChange({ current: 1 }, {}, {
+                            field: "creationDate",
+                            order: "descend",
+                        })} size="large" color="default" variant="dashed" icon={<SyncOutlined />}>
                             Refresh
                         </Button>
                     </Space>

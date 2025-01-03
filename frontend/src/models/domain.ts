@@ -12,7 +12,8 @@ export interface JSONObject {
 export interface Pageable {
     page: number,
     limit: number,
-    filter?: JSONObject
+    filter?: object,
+    sort?: object
 }
 
 export interface Page<T> {

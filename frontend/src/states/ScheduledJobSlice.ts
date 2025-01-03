@@ -3,6 +3,14 @@ import { ScheduledJob, Page, TaskDefinition, statusOptions, Pageable, } from '@s
 import { message } from 'antd';
 import axios from 'axios';
 
+const DEFAULT_PAGEABLE = {
+    page: 1,
+    limit: 10,
+    filter: {},
+    sort: {
+        creationDate: -1
+    }
+} as Pageable
 export const addScheduledJob = createAsyncThunk(
     'scheduledJobs/addScheduledJob',
     async (payload: {
@@ -67,7 +75,8 @@ export const fetchScheduledJobs = createAsyncThunk(
         const response = await axios.post('/api/scheduled-jobs', {
             page: (pagination?.page || 1) - 1,
             limit: pagination?.limit || 10,
-            filter: pagination?.filter || {}
+            filter: pagination?.filter || {},
+            sort: pagination?.sort || {},
 
         });
         return response.data;
@@ -77,9 +86,9 @@ export const fetchScheduledJobs = createAsyncThunk(
 const scheduledJobsSlice = createSlice({
     name: 'scheduledJobs',
     initialState: {
-        refresh: true,
         scheduledJobs: [] as ScheduledJob[],
         loading: false,
+        pageable: DEFAULT_PAGEABLE,
         pagination: {
             current: 1,
             pageSize: 10,
@@ -92,19 +101,18 @@ const scheduledJobsSlice = createSlice({
         error: null as string | null,
     },
     reducers: {
-        refreshScheduledJobs: (state) => {
-            state.refresh = true;
-        },
         setPagination: (state, action) => {
             state.pagination = { ...state.pagination, ...action.payload };
         },
+        setPageable: (state, action) => {
+            state.pageable = { ...state.pageable, ...action.payload };
+        }
     },
     extraReducers: (builder) => {
         builder
             .addCase(fetchScheduledJobs.pending, (state) => {
                 state.loading = true;
                 state.error = null;
-                state.refresh = false;;
             })
             .addCase(fetchScheduledJobs.fulfilled, (state, action) => {
                 state.loading = false;
@@ -126,7 +134,7 @@ const scheduledJobsSlice = createSlice({
             .addCase(addScheduledJob.fulfilled, (state, _) => {
                 state.loading = false;
                 state.pagination = { pageSize: state.pagination.pageSize, current: 1 };
-                state.refresh = true;
+                state.pageable = { ...DEFAULT_PAGEABLE }; // trick; do not change unless you know what you do
                 message.success("Scheduled job added");
             })
             .addCase(addScheduledJob.rejected, (state, action) => {
@@ -140,7 +148,7 @@ const scheduledJobsSlice = createSlice({
             .addCase(deleteScheduledJob.fulfilled, (state, _) => {
                 state.loading = false;
                 state.pagination = { pageSize: state.pagination.pageSize, current: 1 };
-                state.refresh = true;
+                state.pageable = { ...DEFAULT_PAGEABLE }; // trick; do not change unless you know what you do
                 message.success("Scheduled job deleted");
             })
             .addCase(deleteScheduledJob.rejected, (state, action) => {
@@ -151,7 +159,7 @@ const scheduledJobsSlice = createSlice({
     },
 });
 
-export const { setPagination } = scheduledJobsSlice.actions;
+export const { setPagination, setPageable } = scheduledJobsSlice.actions;
 
 export default scheduledJobsSlice.reducer;
 
