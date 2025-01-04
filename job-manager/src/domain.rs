@@ -40,6 +40,7 @@ pub enum ApiError {
     AllJobs(String),
     AllScheduledJobs(String),
     SparqlError(String),
+    GetLastPublications(String),
     DeleteJob(String),
     DeleteScheduledJob(String),
     AllTasks(String),
@@ -179,6 +180,7 @@ impl IntoResponse for ApiError {
             | ApiError::DeleteScheduledJob(e)
             | ApiError::AllSubTasks(e)
             | ApiError::Download(e)
+            | ApiError::GetLastPublications(e)
             | ApiError::SparqlError(e)
             | ApiError::NewJob(e)
             | ApiError::NewScheduledJob(e)

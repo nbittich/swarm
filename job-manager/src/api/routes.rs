@@ -56,6 +56,7 @@ pub async fn serve(
         .route("/jobs/new", post(new_job))
         .route("/jobs", post(all_jobs))
         .route("/job-definitions", get(all_job_definitions))
+        .route("/publications", post(get_last_publications))
         .layer(DefaultBodyLimit::max(body_size_limit))
         .with_state(manager_state)
         .fallback(fallback);
@@ -344,5 +345,39 @@ async fn get_last_publications(
     _: Claims,
     Json(payload): Json<GetPublicationsPayload>,
 ) -> Result<Json<Vec<Task>>, ApiError> {
-    todo!()
+    let job_filter = if let Some(since) = payload.since {
+        doc! {
+            "status.type": "success",
+            "modifiedDate": {
+                "$gt": serde_json::to_string(&since).map_err(|e| ApiError::GetLastPublications(e.to_string()))?
+            }
+        }
+    } else {
+        doc! {
+            "status.type": "success"
+        }
+    };
+    // could be a projection tbh
+    // or add a discriminant to jobs so that we don't fetch cleanup jobs
+    let jobs = manager
+        .job_repository
+        .find_by_query(job_filter, None)
+        .await
+        .map_err(|e| ApiError::GetLastPublications(e.to_string()))?;
+    let job_ids = jobs.into_iter().map(|j| j.id).collect::<Vec<_>>();
+    let tasks = manager
+        .task_repository
+        .find_by_query(
+            doc! {
+                "status.type": "success",
+                "result.type": "publish",
+                "jobId": {
+                    "$in": job_ids
+                }
+            },
+            None,
+        )
+        .await
+        .map_err(|e| ApiError::GetLastPublications(e.to_string()))?;
+    Ok(Json(tasks))
 }
