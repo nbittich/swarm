@@ -12,7 +12,30 @@ pub struct JobDefinition {
     pub allow_concurrent_run: bool, // similar to singleton-job
     pub tasks: Vec<TaskDefinition>,
 }
+#[derive(Debug, Deserialize, Serialize)]
+pub struct AuthBody {
+    pub access_token: String,
+    pub token_type: String,
+}
 
+impl AuthBody {
+    pub fn new(access_token: String) -> Self {
+        Self {
+            access_token,
+            token_type: "Bearer".to_string(),
+        }
+    }
+}
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AuthPayload {
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GetPublicationsPayload {
+    pub since: Option<DateTime<Utc>>,
+}
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskDefinition {
@@ -206,6 +229,7 @@ pub struct User {
     pub first_name: Option<String>,
     pub last_name: Option<String>,
     pub email: Option<String>,
+    pub service_account: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

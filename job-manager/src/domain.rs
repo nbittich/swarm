@@ -10,7 +10,7 @@ use axum_extra::{
     headers::{authorization::Bearer, Authorization},
     TypedHeader,
 };
-use chrono::{Duration, Local};
+use chrono::{DateTime, Duration, Local};
 use jsonwebtoken::{decode, DecodingKey, EncodingKey, Validation};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -26,18 +26,6 @@ pub struct Claims {
     pub last_name: Option<String>,
     pub email: Option<String>,
     pub exp: usize,
-}
-
-#[derive(Debug, Serialize)]
-pub struct AuthBody {
-    pub access_token: String,
-    pub token_type: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct AuthPayload {
-    pub username: String,
-    pub password: String,
 }
 
 #[derive(Debug)]
@@ -105,7 +93,10 @@ pub static ROOT_OUTPUT_DIR_PB: LazyLock<PathBuf> = LazyLock::new(|| {
         .map(PathBuf::from)
         .unwrap_or_else(|_| "/share".into())
 });
-pub fn exp_from_now() -> usize {
+pub fn exp_from_now(service_account: bool) -> usize {
+    if service_account {
+        return DateTime::<Local>::MAX_UTC.timestamp() as usize;
+    }
     std::env::var(JWT_EXPIRATION_TIME_SEC)
         .unwrap_or_else(|_| "30".into())
         .parse::<i64>()
@@ -123,15 +114,6 @@ impl Keys {
         Self {
             encoding: EncodingKey::from_secret(secret),
             decoding: DecodingKey::from_secret(secret),
-        }
-    }
-}
-
-impl AuthBody {
-    pub fn new(access_token: String) -> Self {
-        Self {
-            access_token,
-            token_type: "Bearer".to_string(),
         }
     }
 }
