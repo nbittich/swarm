@@ -31,13 +31,3 @@ The application can be configured through the following environment variables:
 | `ROOT_OUTPUT_DIR`            | Directory for output files.                | `/share`                      | No           |
 
 ---
-
-## Setup Instructions
-
-1. Clone the repository.
-2. Ensure the required environment variables are set (see the table above).
-3. Build and run the application:
-   ```bash
-   cargo build --release
-   ./swarm-sync-consumer
-   ```
