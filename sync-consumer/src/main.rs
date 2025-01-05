@@ -332,7 +332,7 @@ async fn consume(
                         .swarm_client
                         .post(&config.delta_endpoint)
                         .json(&json! ([
-                            {"deletes": delta}
+                            {"deletes": delta, "inserts":[]}
                         ]))
                         .send()
                         .await?;
@@ -374,7 +374,7 @@ async fn consume(
                     .swarm_client
                     .post(&config.delta_endpoint)
                     .json(&json! ([
-                        {"inserts": delta}
+                        {"inserts": delta, "deletes": []}
                     ]))
                     .send()
                     .await?;
@@ -416,7 +416,7 @@ async fn consume(
                         .swarm_client
                         .post(&config.delta_endpoint)
                         .json(&json! ([
-                            {"inserts": delta}
+                            {"inserts": delta, "deletes": []}
                         ]))
                         .send()
                         .await?;
