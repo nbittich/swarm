@@ -1,7 +1,7 @@
 services:
-  virtuoso:
-    ports:
-      - "8890:8890"
+  # virtuoso:
+  #   ports:
+  #     - "8890:8890"
   nats:
     ports:
       - "4222:4222"
@@ -28,8 +28,8 @@ services:
     env_file:
       - ./config/env-files/dev/mongo_cli.env
   job-manager:
-    ports:
-      - "8080:80"
+    # ports:
+    #   - "8080:80"
     env_file:
       - ./config/env-files/dev/nats.env
       - ./config/env-files/dev/mongo_cli.env
@@ -82,4 +82,4 @@ services:
     env_file:
       - ./config/env-files/dev/download.env
     ports:
-      - "80:80"
+      - "8080:80"

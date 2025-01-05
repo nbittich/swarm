@@ -471,7 +471,11 @@ async fn download_task(
             swarm_client,
             &url,
             inserted_triple_file_path,
-            &new_inserts_dir.join(inserted_triple_file_path),
+            &new_inserts_dir.join(
+                inserted_triple_file_path
+                    .file_name()
+                    .context("no filename!")?,
+            ),
         )
         .await?;
 
@@ -480,7 +484,11 @@ async fn download_task(
                 swarm_client,
                 &url,
                 removed_triple_file_path,
-                &to_remove_dir.join(removed_triple_file_path),
+                &to_remove_dir.join(
+                    removed_triple_file_path
+                        .file_name()
+                        .context("no filename!")?,
+                ),
             )
             .await?;
         }
@@ -489,7 +497,11 @@ async fn download_task(
                 swarm_client,
                 &url,
                 intersect_triple_file_path,
-                &intersect_dir.join(intersect_triple_file_path),
+                &intersect_dir.join(
+                    intersect_triple_file_path
+                        .file_name()
+                        .context("no filename!")?,
+                ),
             )
             .await?;
         }
