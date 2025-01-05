@@ -236,8 +236,8 @@ pub struct User {
 #[serde(rename_all = "camelCase")]
 pub struct UuidSubject {
     #[serde(rename = "_id")]
-    pub id: String,
     pub subject_hash: String,
+    pub id: String,
 }
 
 pub trait JsonMapper: Serialize + DeserializeOwned + Unpin + Send + Sync {

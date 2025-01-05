@@ -244,7 +244,7 @@ async fn consume(
     let mut to_remove_dir = if is_initial_sync {
         None
     } else {
-        let trd = consumer_root_dir.join("new-inserts");
+        let trd = consumer_root_dir.join("to-remove");
         tokio::fs::create_dir(&trd).await?;
         Some(trd)
     };

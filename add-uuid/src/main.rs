@@ -230,7 +230,7 @@ async fn get_ids_from_cache_or_insert<'a>(
     let mut result = HashMap::with_capacity(subject_nodes.len());
     let mut to_check_in_db = HashMap::with_capacity(subject_nodes.len());
     while let Some(subject) = subject_nodes.pop() {
-        let subject_hash = xxhash_rust::xxh3::xxh3_128(subject.to_string().as_bytes()).to_string();
+        let subject_hash = xxhash_rust::xxh3::xxh3_64(subject.to_string().as_bytes()).to_string();
         if let Some(id) = cache.get(&subject_hash).await {
             result.insert(id, subject);
         } else {
@@ -241,7 +241,7 @@ async fn get_ids_from_cache_or_insert<'a>(
         let in_db = repository
             .find_by_query(
                 doc! {
-                    "subjectHash": {
+                    "_id": {
                       "$in": &to_check_in_db.keys()
                         .collect::<Vec<_>>()
                     }
@@ -264,7 +264,7 @@ async fn get_ids_from_cache_or_insert<'a>(
             .iter()
             .map(|(id, node)| UuidSubject {
                 id: id.clone(),
-                subject_hash: xxhash_rust::xxh3::xxh3_128(node.to_string().as_bytes()).to_string(),
+                subject_hash: xxhash_rust::xxh3::xxh3_64(node.to_string().as_bytes()).to_string(),
             })
             .collect::<Vec<_>>();
         if !to_add_in_cache.is_empty() {
