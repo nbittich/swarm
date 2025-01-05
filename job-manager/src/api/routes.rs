@@ -360,7 +360,6 @@ async fn get_last_publications(
         }
     };
     // could be a projection tbh
-    // or add a discriminant to jobs so that we don't fetch cleanup jobs
     let jobs = manager
         .job_repository
         .find_by_query(job_filter, None)
