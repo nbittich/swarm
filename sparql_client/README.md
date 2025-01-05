@@ -15,10 +15,10 @@ It provides functionalities to send SPARQL queries and updates with support for 
 
 The following environment variables are used by the library:
 
-| Variable Name               | Description                                       | Default Value | Example                     |
-| --------------------------- | ------------------------------------------------- | ------------- | --------------------------- |
-| `SPARQL_ENDPOINT`           | The SPARQL endpoint URL(required)                 | None          | `http://example.org/sparql` |
-| `TARGET_GRAPH`              | The target graph for the SPARQL queries(required) | None          | `http://example.org/graph`  |
-| `SPARQL_MAX_RETRY`          | Maximum number of retries for failed queries      | `5`           | `3`                         |
-| `REQUEST_TIMEOUT_SEC`       | Timeout for HTTP requests in seconds              | `30`          | `60`                        |
-| `SPARQL_RETRY_DELAY_MILLIS` | Delay before next retry                           | `5000`        | `5000`                      |
+| Variable Name               | Description                                  | Default Value | Example                     |
+| --------------------------- | -------------------------------------------- | ------------- | --------------------------- |
+| `SPARQL_ENDPOINT`           | The SPARQL endpoint URL(required)            | None          | `http://example.org/sparql` |
+| `TARGET_GRAPH`              | The target graph for the SPARQL queries      | None          | `http://example.org/graph`  |
+| `SPARQL_MAX_RETRY`          | Maximum number of retries for failed queries | `5`           | `3`                         |
+| `REQUEST_TIMEOUT_SEC`       | Timeout for HTTP requests in seconds         | `30`          | `60`                        |
+| `SPARQL_RETRY_DELAY_MILLIS` | Delay before next retry                      | `5000`        | `5000`                      |

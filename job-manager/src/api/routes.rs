@@ -15,7 +15,10 @@ use mime_guess::mime::APPLICATION_OCTET_STREAM;
 use sparql_client::{Head, SparqlResponse, SparqlResult};
 use swarm_common::{
     debug,
-    domain::{Job, JobDefinition, ScheduledJob, SubTask, Task, User},
+    domain::{
+        AuthBody, AuthPayload, GetPublicationsPayload, Job, JobDefinition, ScheduledJob, SubTask,
+        Task, User,
+    },
     info,
     mongo::{doc, FindOptions, Page, Pageable, Repository},
     TryFutureExt,
@@ -24,8 +27,8 @@ use tokio_util::io::ReaderStream;
 
 use crate::{
     domain::{
-        exp_from_now, ApiError, AuthBody, AuthError, AuthPayload, Claims, DownloadPayload,
-        GetSubTasksPayload, NewJobPayload, NewScheduledJobPayload, SparqlQueryPayload, KEYS,
+        exp_from_now, ApiError, AuthError, Claims, DownloadPayload, GetSubTasksPayload,
+        NewJobPayload, NewScheduledJobPayload, SparqlQueryPayload, KEYS,
     },
     manager::JobManagerState,
 };
@@ -53,6 +56,7 @@ pub async fn serve(
         .route("/jobs/new", post(new_job))
         .route("/jobs", post(all_jobs))
         .route("/job-definitions", get(all_job_definitions))
+        .route("/publications", post(get_last_publications))
         .layer(DefaultBodyLimit::max(body_size_limit))
         .with_state(manager_state)
         .fallback(fallback);
@@ -76,6 +80,7 @@ async fn authorize(
         password,
         first_name,
         last_name,
+        service_account,
         email,
         ..
     } = match manager
@@ -104,7 +109,7 @@ async fn authorize(
         email,
         first_name,
         last_name,
-        exp: exp_from_now(),
+        exp: exp_from_now(service_account),
     };
     // Create the authorization token
     let token = jsonwebtoken::encode(&Header::default(), &claims, &KEYS.encoding)
@@ -332,5 +337,48 @@ async fn all_tasks(
         )
         .await
         .map_err(|e| ApiError::AllTasks(e.to_string()))?;
+    Ok(Json(tasks))
+}
+
+async fn get_last_publications(
+    State(manager): State<JobManagerState>,
+    _: Claims,
+    Json(payload): Json<GetPublicationsPayload>,
+) -> Result<Json<Vec<Task>>, ApiError> {
+    let job_filter = if let Some(since) = payload.since {
+        doc! {
+            "targetUrl" :{ "$ne" : null },
+            "status.type": "success",
+            "modifiedDate": {
+                "$gt": serde_json::to_string(&since).map_err(|e| ApiError::GetLastPublications(e.to_string()))?
+            }
+        }
+    } else {
+        doc! {
+            "targetUrl" :{ "$ne" : null },
+            "status.type": "success"
+        }
+    };
+    // could be a projection tbh
+    let jobs = manager
+        .job_repository
+        .find_by_query(job_filter, None)
+        .await
+        .map_err(|e| ApiError::GetLastPublications(e.to_string()))?;
+    let job_ids = jobs.into_iter().map(|j| j.id).collect::<Vec<_>>();
+    let tasks = manager
+        .task_repository
+        .find_by_query(
+            doc! {
+                "status.type": "success",
+                "result.type": "publish",
+                "jobId": {
+                    "$in": job_ids
+                }
+            },
+            None,
+        )
+        .await
+        .map_err(|e| ApiError::GetLastPublications(e.to_string()))?;
     Ok(Json(tasks))
 }

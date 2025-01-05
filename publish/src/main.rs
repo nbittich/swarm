@@ -21,7 +21,7 @@ use swarm_common::{
     setup_tracing, IdGenerator, StreamExt,
 };
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt},
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     task::JoinSet,
 };
 use tortank::turtle::turtle_doc::TurtleDoc;
@@ -150,18 +150,12 @@ pub async fn gzip(path: &Path) -> anyhow::Result<PathBuf> {
     let extension = path.extension().and_then(|ex| ex.to_str()).unwrap_or("");
 
     let gzip_path = path.with_extension(format!("{extension}.gz"));
-    let mut input_file = tokio::fs::File::open(path).await?;
+    let input_file = tokio::fs::File::open(path).await?;
     let output_file = tokio::fs::File::create(&gzip_path).await?;
     let mut encoder = GzipEncoder::new(output_file);
-    let mut buffer = vec![0; 8 * 1024]; // 8 KB buffer
-    loop {
-        let bytes_read = input_file.read(&mut buffer).await?;
+    let mut buf = BufReader::new(input_file);
+    tokio::io::copy_buf(&mut buf, &mut encoder).await?;
 
-        if bytes_read == 0 {
-            break;
-        }
-        encoder.write_all(&buffer[..bytes_read]).await?;
-    }
     encoder.shutdown().await?;
     tokio::fs::remove_file(&path).await?;
     Ok(gzip_path)
