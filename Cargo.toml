@@ -59,6 +59,7 @@ mime_guess = "2.0.5"
 spargebra ="0.3.3"
 xxhash-rust="0.8.15"
 bson="2.13.0"
+oxttl="0.1.4"
 swarm_common={version="0.1.0",path="./common"}
 sparql_client={version="0.1.0",path="./sparql_client"}
 

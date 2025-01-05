@@ -2087,6 +2087,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "oxttl"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "31b818f1b4303ed67685ff113d0814d00ef4b06c80a5d59828b16495b27461ad"
+dependencies = [
+ "memchr",
+ "oxilangtag",
+ "oxiri",
+ "oxrdf",
+ "thiserror",
+]
+
+[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3184,6 +3197,7 @@ dependencies = [
  "async-compression",
  "chrono",
  "cron",
+ "oxttl",
  "reqwest",
  "serde",
  "sparql_client",

@@ -389,12 +389,46 @@ async fn consume(
             let path = entry.path();
             info!("processing intersects for {path:?}");
             read_ttl_file(&path, buffer).await?;
-            let doc =
-                TurtleDoc::try_from((buffer.as_str(), None)).map_err(|e| anyhow::anyhow!("{e}"))?;
-            for stmts in doc
-                .list_statements(None, None, None)
-                .chunks(config.chunk_size)
-            {
+            let mut stmts = Vec::with_capacity(config.chunk_size);
+            for triple in oxttl::ntriples::NTriplesParser::new().for_reader(buffer.as_bytes()) {
+                stmts.push(format!("{}.", triple?));
+                if stmts.len() == config.chunk_size {
+                    let chunk = stmts.drain(..).collect::<Vec<_>>().join("\n");
+                    let doc = TurtleDoc::try_from((chunk.as_ref(), None))
+                        .map_err(|e| anyhow::anyhow!("{e}"))?;
+                    config
+                        .sparql_client
+                        .bulk_update(
+                            &config.target_graph,
+                            &stmts
+                                .iter()
+                                .map(|stmt| stmt.to_string())
+                                .collect::<Vec<_>>(),
+                            sparql_client::SparqlUpdateType::Insert,
+                        )
+                        .await?;
+                    if !is_initial_sync && config.enable_delta_push {
+                        let delta = doc
+                            .list_statements(None, None, None)
+                            .iter()
+                            .cloned()
+                            .map(Into::<RdfJsonTriple>::into)
+                            .collect::<Vec<_>>();
+                        config
+                            .swarm_client
+                            .post(&config.delta_endpoint)
+                            .json(&json! ([
+                                {"inserts": delta}
+                            ]))
+                            .send()
+                            .await?;
+                    }
+                }
+            }
+            if !stmts.is_empty() {
+                let chunk = stmts.drain(..).collect::<Vec<_>>().join("\n");
+                let doc = TurtleDoc::try_from((chunk.as_ref(), None))
+                    .map_err(|e| anyhow::anyhow!("{e}"))?;
                 config
                     .sparql_client
                     .bulk_update(
@@ -407,7 +441,8 @@ async fn consume(
                     )
                     .await?;
                 if !is_initial_sync && config.enable_delta_push {
-                    let delta = stmts
+                    let delta = doc
+                        .list_statements(None, None, None)
                         .iter()
                         .cloned()
                         .map(Into::<RdfJsonTriple>::into)
