@@ -355,13 +355,24 @@ async fn consume(
                     stmts.push(stmt);
                     rest = remaining;
                     if stmts.len() == config.chunk_size {
-                        flush_triple_buffer(config, is_initial_sync, stmts.drain(..).collect())
-                            .await?;
+                        flush_triple_buffer(
+                            config,
+                            is_initial_sync,
+                            stmts.drain(..).collect(),
+                            sparql_client::SparqlUpdateType::Delete,
+                        )
+                        .await?;
                     }
                 }
             }
             if !stmts.is_empty() {
-                flush_triple_buffer(config, is_initial_sync, stmts).await?;
+                flush_triple_buffer(
+                    config,
+                    is_initial_sync,
+                    stmts,
+                    sparql_client::SparqlUpdateType::Delete,
+                )
+                .await?;
             }
         }
     }
@@ -381,12 +392,24 @@ async fn consume(
                 stmts.push(stmt);
                 rest = remaining;
                 if stmts.len() == config.chunk_size {
-                    flush_triple_buffer(config, is_initial_sync, stmts.drain(..).collect()).await?;
+                    flush_triple_buffer(
+                        config,
+                        is_initial_sync,
+                        stmts.drain(..).collect(),
+                        sparql_client::SparqlUpdateType::Insert,
+                    )
+                    .await?;
                 }
             }
         }
         if !stmts.is_empty() {
-            flush_triple_buffer(config, is_initial_sync, stmts).await?;
+            flush_triple_buffer(
+                config,
+                is_initial_sync,
+                stmts,
+                sparql_client::SparqlUpdateType::Insert,
+            )
+            .await?;
         }
     }
 
@@ -406,13 +429,24 @@ async fn consume(
                     stmts.push(stmt);
                     rest = remaining;
                     if stmts.len() == config.chunk_size {
-                        flush_triple_buffer(config, is_initial_sync, stmts.drain(..).collect())
-                            .await?;
+                        flush_triple_buffer(
+                            config,
+                            is_initial_sync,
+                            stmts.drain(..).collect(),
+                            sparql_client::SparqlUpdateType::Insert,
+                        )
+                        .await?;
                     }
                 }
             }
             if !stmts.is_empty() {
-                flush_triple_buffer(config, is_initial_sync, stmts).await?;
+                flush_triple_buffer(
+                    config,
+                    is_initial_sync,
+                    stmts,
+                    sparql_client::SparqlUpdateType::Insert,
+                )
+                .await?;
             }
         }
     }
