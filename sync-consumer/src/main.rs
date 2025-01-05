@@ -202,9 +202,9 @@ async fn main() -> anyhow::Result<()> {
             }
             Err(e) => {
                 error!("could not run delta sync! {e}. will try again during the next run...");
-                if consumer_root_dir.exists() {
-                    tokio::fs::remove_dir_all(&consumer_root_dir).await?;
-                }
+                // if consumer_root_dir.exists() {
+                //     tokio::fs::remove_dir_all(&consumer_root_dir).await?;
+                // }
             }
         }
     }
@@ -505,6 +505,7 @@ async fn download(
     download_path: &Path,
     local_path: &Path,
 ) -> anyhow::Result<()> {
+    info!("download {download_path:?} in {local_path:?}");
     let mut resp = swarm_client
         .get(url)
         .query(&[("path", download_path)])
