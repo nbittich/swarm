@@ -347,6 +347,7 @@ async fn get_last_publications(
 ) -> Result<Json<Vec<Task>>, ApiError> {
     let job_filter = if let Some(since) = payload.since {
         doc! {
+            "targetUrl" :{ "$ne" : null },
             "status.type": "success",
             "modifiedDate": {
                 "$gt": serde_json::to_string(&since).map_err(|e| ApiError::GetLastPublications(e.to_string()))?

@@ -1,7 +1,8 @@
 /* CUSTOM ALLOC, disabled as it consumes more memory */
 //pub use swarm_common::alloc;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
+use async_compression::tokio::bufread::GzipDecoder;
 use chrono::{DateTime, Local, Utc};
 use cron::Schedule;
 use reqwest::{
@@ -14,13 +15,16 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
+    time::Duration,
 };
 use swarm_common::{
-    constant::{APPLICATION_NAME, ROOT_OUTPUT_DIR},
+    constant::{APPLICATION_NAME, CHUNK_SIZE, ROOT_OUTPUT_DIR},
     domain::{AuthBody, AuthPayload, GetPublicationsPayload, Task, TaskResult},
-    error, info, setup_tracing, warn, IdGenerator,
+    error, info, json, setup_tracing, warn, IdGenerator,
 };
-use tokio::task::JoinSet;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::{io::BufReader, task::JoinSet};
+use tortank::turtle::turtle_doc::{RdfJsonTriple, TurtleDoc};
 
 const ENABLE_INITIAL_SYNC: &str = "ENABLE_INITIAL_SYNC";
 const CRON_EXPRESSION: &str = "CRON_EXPRESSION";
@@ -38,8 +42,9 @@ struct Config {
     schedule: Schedule,
     sparql_client: SparqlClient,
     swarm_base_url: Arc<String>,
+    chunk_size: usize,
     swarm_client: Client,
-    start_from_delta_timestamp: DateTime<Utc>,
+    start_from_delta_timestamp: Option<DateTime<Utc>>,
     delta_endpoint: String,
     target_graph: String,
     enable_delta_push: bool,
@@ -56,22 +61,34 @@ async fn get_config() -> anyhow::Result<Config> {
         .ok()
         .and_then(|s| s.parse::<bool>().ok())
         .unwrap_or(true);
+    let chunk_size = var(CHUNK_SIZE)
+        .unwrap_or_else(|_| "1024".into())
+        .parse::<usize>()?;
     let schedule = var(CRON_EXPRESSION)
         .map(|c| cron::Schedule::from_str(&c))
-        .unwrap_or_else(|_| cron::Schedule::from_str("0 * * * * * * *"))?;
+        .unwrap_or_else(|_| cron::Schedule::from_str("0 * * * * * *"))?;
     let target_graph = var(TARGET_GRAPH)?;
-    let start_from_delta_timestamp: DateTime<Utc> = var(START_FROM_DELTA_TIMESTAMP)
+    let start_from_delta_timestamp = var(START_FROM_DELTA_TIMESTAMP)
         .map(|d| {
             let d: DateTime<Local> = DateTime::from_str(&d).unwrap();
             d.to_utc()
         })
-        .unwrap_or(Local::now().to_utc());
-    let delta_endpoint = var(DELTA_ENDPOINT).unwrap_or("https://swarm.bittich.be".into());
+        .ok();
+    let delta_endpoint = var(DELTA_ENDPOINT)
+        .map(|s| s.trim().to_string())
+        .ok()
+        .filter(|s| !s.is_empty());
     let enable_delta_push = var(ENABLE_DELTA_PUSH)
         .ok()
         .and_then(|s| s.parse::<bool>().ok())
         .unwrap_or(false);
-    let swarm_base_url = Arc::new(var(SWARM_BASE_URL)?);
+    let swarm_base_url = Arc::new(
+        var(SWARM_BASE_URL)
+            .map(|s| s.trim().to_string())
+            .ok()
+            .filter(|s| !s.is_empty())
+            .context("swarm base url empty or not present")?,
+    );
     let swarm_username = var(SWARM_USERNAME)?;
     let swarm_password = var(SWARM_PASSWORD)?;
 
@@ -109,10 +126,19 @@ async fn get_config() -> anyhow::Result<Config> {
         swarm_base_url,
         delete_files,
         root_output_dir,
+        chunk_size,
         target_graph,
         swarm_client,
         start_from_delta_timestamp,
-        delta_endpoint,
+        delta_endpoint: if enable_delta_push {
+            if let Some(delta_endpoint) = delta_endpoint {
+                delta_endpoint
+            } else {
+                return Err(anyhow!("missing delta endpoint"));
+            }
+        } else {
+            "".into()
+        },
         enable_delta_push,
     })
 }
@@ -129,20 +155,58 @@ async fn main() -> anyhow::Result<()> {
 
     info!("app {app_name} started and ready.");
 
+    // allocate a large chunk of memory to reduce allocations
+    // when reading ttl files
+    let mut buffer = String::with_capacity(200 * 1024 * 1024); // 300mb
+
     if config.enable_initial_sync {
+        config.start_from_delta_timestamp.take();
+
         let consumer_root_dir = config.root_output_dir.join(IdGenerator.get());
-        tokio::fs::create_dir(&consumer_root_dir).await?;
-        match consume(&consumer_root_dir, &config, None, true).await {
-            Ok(_) => info!("initial sync done."),
+        match consume(&consumer_root_dir, &config, &mut buffer, true).await {
+            Ok(_) => {
+                info!("initial sync done. sleeping for a while before starting cron schedule.");
+                config.start_from_delta_timestamp = Some(Local::now().to_utc());
+                tokio::time::sleep(Duration::from_secs(60)).await;
+            }
             Err(e) => {
-                error!("could not run initial sync! {e}. cleanup then shutdown...");
-                tokio::fs::remove_dir_all(&consumer_root_dir).await?;
-                std::process::exit(1);
+                error!("could not run initial sync! {e}. shutdown...");
+                return Err(e);
             }
         }
     }
+    info!("starting cron schedule");
+    config.start_from_delta_timestamp = if config.start_from_delta_timestamp.is_none() {
+        Some(Local::now().to_utc())
+    } else {
+        config.start_from_delta_timestamp.take()
+    };
     for next_schedule in config.schedule.upcoming(chrono::Local) {
+        let now = Local::now();
+        if now < next_schedule {
+            let duration = next_schedule - now;
+            info!(
+                "sleeping {} hour(s) {} minute(s) {} second(s) before next run...",
+                duration.num_hours(),
+                duration.num_minutes() % 60,
+                duration.num_seconds() % 3600 % 60
+            );
+            tokio::time::sleep(Duration::from_millis(duration.num_milliseconds() as u64)).await;
+        }
         info!("running consumer sync at {next_schedule}");
+
+        let consumer_root_dir = config.root_output_dir.join(IdGenerator.get());
+        match consume(&consumer_root_dir, &config, &mut buffer, false).await {
+            Ok(_) => {
+                config.start_from_delta_timestamp = Some(Local::now().to_utc());
+            }
+            Err(e) => {
+                error!("could not run delta sync! {e}. will try again during the next run...");
+                if consumer_root_dir.exists() {
+                    tokio::fs::remove_dir_all(&consumer_root_dir).await?;
+                }
+            }
+        }
     }
 
     info!("closing service...BYE");
@@ -152,36 +216,39 @@ async fn main() -> anyhow::Result<()> {
 async fn consume(
     consumer_root_dir: &Path,
     config: &Config,
-    since: Option<DateTime<Utc>>,
+    buffer: &mut String,
     is_initial_sync: bool,
 ) -> anyhow::Result<()> {
     let tasks: Vec<Task> = config
         .swarm_client
         .post(&format!("{}/publications", config.swarm_base_url))
-        .json(&GetPublicationsPayload { since })
+        .json(&GetPublicationsPayload {
+            since: config.start_from_delta_timestamp,
+        })
         .send()
         .await?
         .json()
         .await?;
 
     if tasks.is_empty() {
-        info!("no new publications.");
+        info!("no new publication.");
         return Ok(());
     }
+    tokio::fs::create_dir(&consumer_root_dir).await?;
 
     // now the interesting bits. we can download the files in parallel
-    // but we will insert triples one by one
+    // but we willpath insert/remove triple files one by one
     let new_inserts_dir = consumer_root_dir.join("new-inserts");
     tokio::fs::create_dir(&new_inserts_dir).await?;
 
-    let to_remove_dir = if is_initial_sync {
+    let mut to_remove_dir = if is_initial_sync {
         None
     } else {
         let trd = consumer_root_dir.join("new-inserts");
         tokio::fs::create_dir(&trd).await?;
         Some(trd)
     };
-    let intersect_dir = if !is_initial_sync {
+    let mut intersect_dir = if !is_initial_sync {
         None
     } else {
         let trd = consumer_root_dir.join("intersects");
@@ -189,7 +256,7 @@ async fn consume(
         Some(trd)
     };
 
-    // each tasks has a maximum of 2 download.
+    // each tasks has a maximum of 2 downloads.
     // To avoid spamming the download service,  we chunk the tasks by 5
 
     let mut download_tasks = JoinSet::new();
@@ -230,9 +297,160 @@ async fn consume(
         }
     }
 
+    // we start with the delete ones.
+    if let Some(to_remove_dir) = to_remove_dir.take() {
+        let mut read_dir = tokio::fs::read_dir(to_remove_dir).await?;
+        while let Some(entry) = read_dir.next_entry().await? {
+            let path = entry.path();
+            info!("processing deletes for {path:?}");
+            read_ttl_file(&path, buffer).await?;
+            let doc =
+                TurtleDoc::try_from((buffer.as_str(), None)).map_err(|e| anyhow::anyhow!("{e}"))?;
+            for stmts in doc
+                .list_statements(None, None, None)
+                .chunks(config.chunk_size)
+            {
+                config
+                    .sparql_client
+                    .bulk_update(
+                        &config.target_graph,
+                        &stmts
+                            .iter()
+                            .map(|stmt| stmt.to_string())
+                            .collect::<Vec<_>>(),
+                        sparql_client::SparqlUpdateType::Delete,
+                    )
+                    .await?;
+
+                if !is_initial_sync && config.enable_delta_push {
+                    let delta = stmts
+                        .iter()
+                        .cloned()
+                        .map(Into::<RdfJsonTriple>::into)
+                        .collect::<Vec<_>>();
+                    config
+                        .swarm_client
+                        .post(&config.delta_endpoint)
+                        .json(&json! ([
+                            {"deletes": delta}
+                        ]))
+                        .send()
+                        .await?;
+                }
+            }
+        }
+    }
+
+    // we then process the new inserts
+    let mut read_dir = tokio::fs::read_dir(new_inserts_dir).await?;
+    while let Some(entry) = read_dir.next_entry().await? {
+        let path = entry.path();
+        info!("processing inserts for {path:?}");
+        read_ttl_file(&path, buffer).await?;
+        let doc =
+            TurtleDoc::try_from((buffer.as_str(), None)).map_err(|e| anyhow::anyhow!("{e}"))?;
+        for stmts in doc
+            .list_statements(None, None, None)
+            .chunks(config.chunk_size)
+        {
+            config
+                .sparql_client
+                .bulk_update(
+                    &config.target_graph,
+                    &stmts
+                        .iter()
+                        .map(|stmt| stmt.to_string())
+                        .collect::<Vec<_>>(),
+                    sparql_client::SparqlUpdateType::Insert,
+                )
+                .await?;
+            if !is_initial_sync && config.enable_delta_push {
+                let delta = stmts
+                    .iter()
+                    .cloned()
+                    .map(Into::<RdfJsonTriple>::into)
+                    .collect::<Vec<_>>();
+                config
+                    .swarm_client
+                    .post(&config.delta_endpoint)
+                    .json(&json! ([
+                        {"inserts": delta}
+                    ]))
+                    .send()
+                    .await?;
+            }
+        }
+    }
+
+    // finally, the intersects if present
+    if let Some(intersect_dir) = intersect_dir.take() {
+        let mut read_dir = tokio::fs::read_dir(intersect_dir).await?;
+        while let Some(entry) = read_dir.next_entry().await? {
+            let path = entry.path();
+            info!("processing intersects for {path:?}");
+            read_ttl_file(&path, buffer).await?;
+            let doc =
+                TurtleDoc::try_from((buffer.as_str(), None)).map_err(|e| anyhow::anyhow!("{e}"))?;
+            for stmts in doc
+                .list_statements(None, None, None)
+                .chunks(config.chunk_size)
+            {
+                config
+                    .sparql_client
+                    .bulk_update(
+                        &config.target_graph,
+                        &stmts
+                            .iter()
+                            .map(|stmt| stmt.to_string())
+                            .collect::<Vec<_>>(),
+                        sparql_client::SparqlUpdateType::Insert,
+                    )
+                    .await?;
+                if !is_initial_sync && config.enable_delta_push {
+                    let delta = stmts
+                        .iter()
+                        .cloned()
+                        .map(Into::<RdfJsonTriple>::into)
+                        .collect::<Vec<_>>();
+                    config
+                        .swarm_client
+                        .post(&config.delta_endpoint)
+                        .json(&json! ([
+                            {"inserts": delta}
+                        ]))
+                        .send()
+                        .await?;
+                }
+            }
+        }
+    }
+    // cleanup
+    if config.delete_files {
+        tokio::fs::remove_dir_all(consumer_root_dir).await?;
+    }
     Ok(())
 }
 
+async fn read_ttl_file(path: &Path, buffer: &mut String) -> anyhow::Result<()> {
+    buffer.clear();
+    let f = tokio::fs::File::open(&path).await?;
+    let mut reader = BufReader::new(f);
+
+    if path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .filter(|ext| *ext == "gz")
+        .is_some()
+    {
+        let mut decoder = GzipDecoder::new(reader);
+        decoder.read_to_string(buffer).await?;
+        decoder.shutdown().await?;
+    } else {
+        reader.read_to_string(buffer).await?;
+        reader.shutdown().await?;
+    }
+    Ok(())
+}
 async fn download_task(
     task: &Task,
     base_url: &str,

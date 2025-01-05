@@ -3181,6 +3181,7 @@ name = "sync-consumer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-compression",
  "chrono",
  "cron",
  "reqwest",

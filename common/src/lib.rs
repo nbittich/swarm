@@ -14,6 +14,7 @@ pub use futures::*;
 // pub mod alloc;
 pub mod mongo;
 
+pub use serde_json::json;
 impl FormatTime for LocalTime {
     fn format_time(&self, w: &mut tracing_subscriber::fmt::format::Writer<'_>) -> std::fmt::Result {
         write!(w, "{}", Local::now().format("%Y-%m-%d %H:%M:%S"))
