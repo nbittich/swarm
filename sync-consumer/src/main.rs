@@ -217,6 +217,7 @@ async fn flush_triple_buffer(
     config: &Config,
     is_initial_sync: bool,
     stmts: Vec<Statement<'_>>,
+    operation: sparql_client::SparqlUpdateType,
 ) -> anyhow::Result<()> {
     config
         .sparql_client
@@ -226,7 +227,7 @@ async fn flush_triple_buffer(
                 .iter()
                 .map(|stmt| stmt.to_string())
                 .collect::<Vec<_>>(),
-            sparql_client::SparqlUpdateType::Delete,
+            operation,
         )
         .await?;
 
@@ -235,12 +236,19 @@ async fn flush_triple_buffer(
             .iter()
             .map(Into::<RdfJsonTriple>::into)
             .collect::<Vec<_>>();
+        let payload = match operation {
+            sparql_client::SparqlUpdateType::Insert => json! ([
+                {"deletes": [], "inserts":delta}
+            ]),
+            sparql_client::SparqlUpdateType::Delete => json! ([
+                {"deletes": delta, "inserts":[]}
+            ]),
+            sparql_client::SparqlUpdateType::NoOp => return Ok(()),
+        };
         config
             .swarm_client
             .post(&config.delta_endpoint)
-            .json(&json! ([
-                {"deletes": delta, "inserts":[]}
-            ]))
+            .json(&payload)
             .send()
             .await?;
     }
