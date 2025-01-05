@@ -18,6 +18,7 @@ jobs:
           - diff
           - publish
           - archive
+          - sync-consumer
           - cleanup
     steps:
       - name: Set up QEMU
