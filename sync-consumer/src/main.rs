@@ -157,7 +157,7 @@ async fn main() -> anyhow::Result<()> {
 
     // allocate a large chunk of memory to reduce allocations
     // when reading ttl files
-    let mut buffer = String::with_capacity(200 * 1024 * 1024); // 300mb
+    let mut buffer = String::with_capacity(300 * 1024 * 1024); // 300mb
 
     if config.enable_initial_sync {
         config.start_from_delta_timestamp.take();
