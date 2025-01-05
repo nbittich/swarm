@@ -11,6 +11,7 @@ use reqwest::{
 };
 use sparql_client::{SparqlClient, TARGET_GRAPH};
 use std::{
+    borrow::Cow,
     env::var,
     path::{Path, PathBuf},
     str::FromStr,
@@ -18,13 +19,13 @@ use std::{
     time::Duration,
 };
 use swarm_common::{
-    constant::{APPLICATION_NAME, CHUNK_SIZE, ROOT_OUTPUT_DIR},
+    constant::{APPLICATION_NAME, CHUNK_SIZE, ROOT_OUTPUT_DIR, XSD},
     domain::{AuthBody, AuthPayload, GetPublicationsPayload, Task, TaskResult},
     error, info, json, setup_tracing, warn, IdGenerator,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::{io::BufReader, task::JoinSet};
-use tortank::turtle::turtle_doc::{RdfJsonTriple, Statement, TurtleDoc};
+use tortank::turtle::turtle_doc::{Node, RdfJsonTriple, Statement, TurtleDoc};
 
 const ENABLE_INITIAL_SYNC: &str = "ENABLE_INITIAL_SYNC";
 const CRON_EXPRESSION: &str = "CRON_EXPRESSION";
@@ -164,9 +165,9 @@ async fn main() -> anyhow::Result<()> {
 
         let consumer_root_dir = config.root_output_dir.join(IdGenerator.get());
         match consume(&consumer_root_dir, &config, &mut buffer, true).await {
-            Ok(_) => {
+            Ok(last_ts) => {
                 info!("initial sync done. sleeping for a while before starting cron schedule.");
-                config.start_from_delta_timestamp = Some(Local::now().to_utc());
+                config.start_from_delta_timestamp = last_ts;
                 tokio::time::sleep(Duration::from_secs(60)).await;
             }
             Err(e) => {
@@ -197,14 +198,14 @@ async fn main() -> anyhow::Result<()> {
 
         let consumer_root_dir = config.root_output_dir.join(IdGenerator.get());
         match consume(&consumer_root_dir, &config, &mut buffer, false).await {
-            Ok(_) => {
-                config.start_from_delta_timestamp = Some(Local::now().to_utc());
+            Ok(last_ts) => {
+                config.start_from_delta_timestamp = last_ts;
             }
             Err(e) => {
                 error!("could not run delta sync! {e}. will try again during the next run...");
-                // if consumer_root_dir.exists() {
-                //     tokio::fs::remove_dir_all(&consumer_root_dir).await?;
-                // }
+                if consumer_root_dir.exists() {
+                    tokio::fs::remove_dir_all(&consumer_root_dir).await?;
+                }
             }
         }
     }
@@ -219,6 +220,14 @@ async fn flush_triple_buffer(
     stmts: Vec<Statement<'_>>,
     operation: sparql_client::SparqlUpdateType,
 ) -> anyhow::Result<()> {
+    let stmts = stmts
+        .into_iter()
+        .map(|s| Statement {
+            subject: s.subject,
+            predicate: s.predicate,
+            object: remove_datatype_xsd_string(s.object),
+        })
+        .collect::<Vec<_>>();
     config
         .sparql_client
         .bulk_update(
@@ -259,7 +268,7 @@ async fn consume(
     config: &Config,
     buffer: &mut String,
     is_initial_sync: bool,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Option<DateTime<Utc>>> {
     let tasks: Vec<Task> = config
         .swarm_client
         .post(format!("{}/publications", config.swarm_base_url))
@@ -273,8 +282,13 @@ async fn consume(
 
     if tasks.is_empty() {
         info!("no new publication.");
-        return Ok(());
+        return Ok(Some(Local::now().to_utc()));
     }
+    let last_ts = tasks
+        .iter()
+        .filter_map(|task| task.modified_date)
+        .max()
+        .map(|dt| dt + Duration::from_millis(60));
     tokio::fs::create_dir(&consumer_root_dir).await?;
 
     // now the interesting bits. we can download the files in parallel
@@ -358,7 +372,7 @@ async fn consume(
                         flush_triple_buffer(
                             config,
                             is_initial_sync,
-                            stmts.drain(..).collect(),
+                            std::mem::take(&mut stmts),
                             sparql_client::SparqlUpdateType::Delete,
                         )
                         .await?;
@@ -395,7 +409,7 @@ async fn consume(
                     flush_triple_buffer(
                         config,
                         is_initial_sync,
-                        stmts.drain(..).collect(),
+                        std::mem::take(&mut stmts),
                         sparql_client::SparqlUpdateType::Insert,
                     )
                     .await?;
@@ -432,7 +446,7 @@ async fn consume(
                         flush_triple_buffer(
                             config,
                             is_initial_sync,
-                            stmts.drain(..).collect(),
+                            std::mem::take(&mut stmts),
                             sparql_client::SparqlUpdateType::Insert,
                         )
                         .await?;
@@ -454,7 +468,7 @@ async fn consume(
     if config.delete_files {
         tokio::fs::remove_dir_all(consumer_root_dir).await?;
     }
-    Ok(())
+    Ok(last_ts)
 }
 
 async fn read_ttl_file(path: &Path, buffer: &mut String) -> anyhow::Result<()> {
@@ -558,4 +572,25 @@ async fn download(
         tokio::io::copy(&mut chunk.as_ref(), &mut f).await?;
     }
     Ok(())
+}
+
+fn remove_datatype_xsd_string(mut term: Node<'_>) -> Node<'_> {
+    match term {
+        Node::Literal(tortank::turtle::turtle_doc::Literal::Quoted {
+            ref mut datatype, ..
+        }) => match datatype {
+            Some(iri) => {
+                if iri.as_ref() == &Node::Iri(Cow::Owned(XSD("string"))) {
+                    *datatype = None;
+                }
+                term
+            }
+            _ => term,
+        },
+        Node::Ref(node) => {
+            let node = &*node;
+            remove_datatype_xsd_string(node.clone())
+        }
+        _ => term,
+    }
 }
