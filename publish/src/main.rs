@@ -21,7 +21,7 @@ use swarm_common::{
     setup_tracing, IdGenerator, StreamExt,
 };
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     task::JoinSet,
 };
 use tortank::turtle::turtle_doc::TurtleDoc;

@@ -221,7 +221,7 @@ async fn consume(
 ) -> anyhow::Result<()> {
     let tasks: Vec<Task> = config
         .swarm_client
-        .post(&format!("{}/publications", config.swarm_base_url))
+        .post(format!("{}/publications", config.swarm_base_url))
         .json(&GetPublicationsPayload {
             since: config.start_from_delta_timestamp,
         })
@@ -468,28 +468,28 @@ async fn download_task(
     {
         let url = format!("{base_url}/jobs/{}/download", &task.job_id);
         download(
-            &swarm_client,
+            swarm_client,
             &url,
-            &inserted_triple_file_path,
-            &new_inserts_dir.join(&inserted_triple_file_path),
+            inserted_triple_file_path,
+            &new_inserts_dir.join(inserted_triple_file_path),
         )
         .await?;
 
         if let Some(to_remove_dir) = to_remove_dir {
             download(
-                &swarm_client,
+                swarm_client,
                 &url,
-                &removed_triple_file_path,
-                &to_remove_dir.join(&removed_triple_file_path),
+                removed_triple_file_path,
+                &to_remove_dir.join(removed_triple_file_path),
             )
             .await?;
         }
         if let Some(intersect_dir) = intersect_dir {
             download(
-                &swarm_client,
+                swarm_client,
                 &url,
-                &intersect_triple_file_path,
-                &intersect_dir.join(&intersect_triple_file_path),
+                intersect_triple_file_path,
+                &intersect_dir.join(intersect_triple_file_path),
             )
             .await?;
         }
@@ -512,7 +512,7 @@ async fn download(
         .await?;
     let mut f = tokio::fs::OpenOptions::new()
         .write(true)
-        .create(true)
+        .create_new(true)
         .open(local_path)
         .await?;
     while let Some(chunk) = resp.chunk().await? {
