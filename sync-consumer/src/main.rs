@@ -364,38 +364,21 @@ async fn consume(
         let path = entry.path();
         info!("processing inserts for {path:?}");
         read_ttl_file(&path, buffer).await?;
-        let doc =
-            TurtleDoc::try_from((buffer.as_str(), None)).map_err(|e| anyhow::anyhow!("{e}"))?;
-        for stmts in doc
-            .list_statements(None, None, None)
-            .chunks(config.chunk_size)
-        {
-            config
-                .sparql_client
-                .bulk_update(
-                    &config.target_graph,
-                    &stmts
-                        .iter()
-                        .map(|stmt| stmt.to_string())
-                        .collect::<Vec<_>>(),
-                    sparql_client::SparqlUpdateType::Insert,
-                )
-                .await?;
-            if !is_initial_sync && config.enable_delta_push {
-                let delta = stmts
-                    .iter()
-                    .cloned()
-                    .map(Into::<RdfJsonTriple>::into)
-                    .collect::<Vec<_>>();
-                config
-                    .swarm_client
-                    .post(&config.delta_endpoint)
-                    .json(&json! ([
-                        {"inserts": delta, "deletes": []}
-                    ]))
-                    .send()
-                    .await?;
+        let mut stmts = Vec::with_capacity(config.chunk_size);
+        let mut rest = buffer.as_str();
+        while !rest.trim().is_empty() {
+            if let Some((remaining, stmt)) =
+                TurtleDoc::parse_ntriples_statement(rest).map_err(|e| anyhow!("{e}"))?
+            {
+                stmts.push(stmt);
+                rest = remaining;
+                if stmts.len() == config.chunk_size {
+                    flush_triple_buffer(config, is_initial_sync, stmts.drain(..).collect()).await?;
+                }
             }
+        }
+        if !stmts.is_empty() {
+            flush_triple_buffer(config, is_initial_sync, stmts).await?;
         }
     }
 
@@ -406,38 +389,22 @@ async fn consume(
             let path = entry.path();
             info!("processing intersects for {path:?}");
             read_ttl_file(&path, buffer).await?;
-            let doc =
-                TurtleDoc::try_from((buffer.as_str(), None)).map_err(|e| anyhow::anyhow!("{e}"))?;
-            for stmts in doc
-                .list_statements(None, None, None)
-                .chunks(config.chunk_size)
-            {
-                config
-                    .sparql_client
-                    .bulk_update(
-                        &config.target_graph,
-                        &stmts
-                            .iter()
-                            .map(|stmt| stmt.to_string())
-                            .collect::<Vec<_>>(),
-                        sparql_client::SparqlUpdateType::Insert,
-                    )
-                    .await?;
-                if !is_initial_sync && config.enable_delta_push {
-                    let delta = stmts
-                        .iter()
-                        .cloned()
-                        .map(Into::<RdfJsonTriple>::into)
-                        .collect::<Vec<_>>();
-                    config
-                        .swarm_client
-                        .post(&config.delta_endpoint)
-                        .json(&json! ([
-                            {"inserts": delta, "deletes": []}
-                        ]))
-                        .send()
-                        .await?;
+            let mut stmts = Vec::with_capacity(config.chunk_size);
+            let mut rest = buffer.as_str();
+            while !rest.trim().is_empty() {
+                if let Some((remaining, stmt)) =
+                    TurtleDoc::parse_ntriples_statement(rest).map_err(|e| anyhow!("{e}"))?
+                {
+                    stmts.push(stmt);
+                    rest = remaining;
+                    if stmts.len() == config.chunk_size {
+                        flush_triple_buffer(config, is_initial_sync, stmts.drain(..).collect())
+                            .await?;
+                    }
                 }
+            }
+            if !stmts.is_empty() {
+                flush_triple_buffer(config, is_initial_sync, stmts).await?;
             }
         }
     }
