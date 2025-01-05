@@ -94,7 +94,7 @@ async fn get_config() -> anyhow::Result<Config> {
 
     let client = Client::builder().build()?;
     let response = client
-        .post(format!("{swarm_base_url}/authorize"))
+        .post(format!("{swarm_base_url}/login"))
         .json(&AuthPayload {
             username: swarm_username,
             password: swarm_password,

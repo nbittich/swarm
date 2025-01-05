@@ -11,6 +11,30 @@ ensure you remove them once the consumer finishes and restart the service.
 
 ---
 
+## Setup
+
+```yml
+  swarm-consumer:
+    image: nbittich/sync-consumer
+    environment:
+      SWARM_BASE_URL: http://job-manager
+      SWARM_USERNAME: bnb
+      SWARM_PASSWORD: bnb
+      START_FROM_DELTA_TIMESTAMP: "2025-01-01T20:40:21.384141291Z"
+      DELTA_ENDPOINT: http://search/update
+      ENABLE_DELTA_PUSH: "true"
+      CHUNK_SIZE: 100
+      TARGET_GRAPH: http://mu.semte.ch/graphs/public
+      ROOT_OUTPUT_DIR: /consumer-files
+      SPARQL_ENDPOINT: http://triplestore:8890/sparql
+    volumes:
+      - ./data/files/consumer-files/besluiten:/consumer-files/
+    restart: always
+    logging: *default-logging
+    labels:
+      - "logging=true"
+```
+
 ## Configuration
 
 The application can be configured through the following environment variables:
