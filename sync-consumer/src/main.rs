@@ -237,7 +237,7 @@ async fn consume(
     tokio::fs::create_dir(&consumer_root_dir).await?;
 
     // now the interesting bits. we can download the files in parallel
-    // but we willpath insert/remove triple files one by one
+    // but we will insert/remove triple files one by one
     let new_inserts_dir = consumer_root_dir.join("new-inserts");
     tokio::fs::create_dir(&new_inserts_dir).await?;
 
