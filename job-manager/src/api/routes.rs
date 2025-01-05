@@ -355,6 +355,7 @@ async fn get_last_publications(
         }
     } else {
         doc! {
+            "targetUrl" :{ "$ne" : null },
             "status.type": "success"
         }
     };
