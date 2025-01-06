@@ -12,6 +12,7 @@ use reqwest::{
 use sparql_client::{SparqlClient, TARGET_GRAPH};
 use std::{
     borrow::Cow,
+    collections::HashMap,
     env::var,
     path::{Path, PathBuf},
     str::FromStr,
@@ -249,10 +250,16 @@ async fn flush_triple_buffer(
         .await?;
 
     if !is_initial_sync && config.enable_delta_push {
-        let delta = stmts
-            .iter()
-            .map(Into::<RdfJsonTriple>::into)
-            .collect::<Vec<_>>();
+        let mut delta = HashMap::with_capacity(stmts.len());
+        for stmt in stmts.iter() {
+            let Node::Iri(subject) = &stmt.subject else {
+                unreachable!("subject is always an iri.");
+            };
+            if !delta.contains_key(&subject) {
+                delta.insert(subject, RdfJsonTriple::from(stmt));
+            }
+        }
+        let delta = delta.values().collect::<Vec<_>>();
         let payload = match operation {
             sparql_client::SparqlUpdateType::Insert => json! ([
                 {"deletes": [], "inserts":delta}
