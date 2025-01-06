@@ -263,7 +263,7 @@ async fn flush_delta(
     if delta.is_empty() {
         return Ok(());
     }
-    let (_, delta): (Vec<u64>, Vec<RdfJsonTriple>) = delta.drain().into_iter().unzip();
+    let (_, delta): (Vec<u64>, Vec<RdfJsonTriple>) = delta.drain().unzip();
 
     info!(
         "sending delta message for operation {operation:?}. Len: {}",
@@ -324,9 +324,9 @@ async fn flush_triple_buffer(
                 unreachable!("subject is always an iri. {stmt}");
             };
             let subject = xxh3_64(subject.as_bytes());
-            if !delta_buffer.contains_key(&subject) {
-                delta_buffer.insert(subject, RdfJsonTriple::from(&stmt));
-            }
+            delta_buffer
+                .entry(subject)
+                .or_insert_with(|| RdfJsonTriple::from(&stmt));
         }
     }
     Ok(())

@@ -56,9 +56,7 @@ const JobsTable: React.FC = () => {
         } else if (sorter.order) {
             sortParams[sorter.field as string] = sorter.order === 'ascend' ? 1 : -1;
         } else {
-
             sortParams["creationDate"] = -1;
-
         }
 
         dispatch(setPageable({ page: newPagination.current, limit: newPagination.pageSize, sort: sortParams }));
