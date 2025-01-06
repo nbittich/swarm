@@ -195,7 +195,10 @@ const JobsTable: React.FC = () => {
                         <Button onClick={() => toggleModal(true)} size="large" color="default" variant="dashed" icon={<PlusOutlined />}>
                             New Job
                         </Button>
-                        <Button onClick={() => fetchJobs()} size="large" color="default" variant="dashed" icon={<SyncOutlined />}>
+                        <Button onClick={() => handleTableChange({ current: 1 }, {}, {
+                            field: "creationDate",
+                            order: "descend",
+                        })} size="large" color="default" variant="dashed" icon={<SyncOutlined />}>
                             Refresh
                         </Button>
                     </Space>
@@ -211,7 +214,7 @@ const JobsTable: React.FC = () => {
                     onChange={handleTableChange}
 
                 />
-            </Flex>
+            </Flex >
             <Modal
                 title="New Job"
                 open={isModalVisible}
