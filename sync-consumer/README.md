@@ -39,19 +39,20 @@ ensure you remove them once the consumer finishes and restart the service.
 
 The application can be configured through the following environment variables:
 
-| **Environment Variable**     | **Description**                            | **Default Value**             | **Required** |
-| ---------------------------- | ------------------------------------------ | ----------------------------- | ------------ |
-| `ENABLE_INITIAL_SYNC`        | Enables initial synchronization.           | `false`                       | No           |
-| `CRON_EXPRESSION`            | Cron expression to schedule tasks.         | `0 * * * * * * ` (Every hour) | No           |
-| `SWARM_BASE_URL`             | Base URL for Swarm API.                    | N/A                           | Yes          |
-| `SWARM_USERNAME`             | Username for Swarm authentication.         | N/A                           | Yes          |
-| `SWARM_PASSWORD`             | Password for Swarm authentication.         | N/A                           | Yes          |
-| `START_FROM_DELTA_TIMESTAMP` | Timestamp to start consuming delta from.   | N/A                           | No           |
-| `DELTA_ENDPOINT`             | Endpoint for pushing delta changes.        | N/A                           | No           |
-| `ENABLE_DELTA_PUSH`          | Enables delta push functionality.          | `false`                       | No           |
-| `DELETE_FILES`               | Enables deletion of files post-processing. | `true`                        | No           |
-| `CHUNK_SIZE`                 | Number of items to process in one batch.   | `1024`                        | No           |
-| `TARGET_GRAPH`               | Target graph for SPARQL operations.        | N/A                           | Yes          |
-| `ROOT_OUTPUT_DIR`            | Directory for output files.                | `/share`                      | No           |
+| **Environment Variable**     | **Description**                                      | **Default Value**             | **Required** |
+| ---------------------------- | ---------------------------------------------------- | ----------------------------- | ------------ |
+| `ENABLE_INITIAL_SYNC`        | Enables initial synchronization.                     | `false`                       | No           |
+| `CRON_EXPRESSION`            | Cron expression to schedule tasks.                   | `0 * * * * * * ` (Every hour) | No           |
+| `SWARM_BASE_URL`             | Base URL for Swarm API.                              | N/A                           | Yes          |
+| `SWARM_USERNAME`             | Username for Swarm authentication.                   | N/A                           | Yes          |
+| `SWARM_PASSWORD`             | Password for Swarm authentication.                   | N/A                           | Yes          |
+| `START_FROM_DELTA_TIMESTAMP` | Timestamp to start consuming delta from.             | N/A                           | No           |
+| `DELTA_ENDPOINT`             | Endpoint for pushing delta changes.                  | N/A                           | No           |
+| `ENABLE_DELTA_PUSH`          | Enables delta push functionality.                    | `false`                       | No           |
+| `DELETE_FILES`               | Enables deletion of files post-processing.           | `true`                        | No           |
+| `CHUNK_SIZE`                 | Number of items to process in one batch.             | `1024`                        | No           |
+| `TARGET_GRAPH`               | Target graph for SPARQL operations.                  | N/A                           | Yes          |
+| `ROOT_OUTPUT_DIR`            | Directory for output files.                          | `/share`                      | No           |
+| `HEAP_SIZE_MB`               | Heap size to limit allocation when reading ttl files | 500                           | No           |
 
 ---

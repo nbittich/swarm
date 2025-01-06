@@ -36,6 +36,7 @@ const START_FROM_DELTA_TIMESTAMP: &str = "START_FROM_DELTA_TIMESTAMP";
 const DELTA_ENDPOINT: &str = "DELTA_ENDPOINT";
 const ENABLE_DELTA_PUSH: &str = "ENABLE_DELTA_PUSH";
 const DELETE_FILES: &str = "DELETE_FILES";
+const HEAP_SIZE_MB: &str = "HEAP_SIZE_MB";
 
 #[derive(Debug, Clone)]
 struct Config {
@@ -158,7 +159,14 @@ async fn main() -> anyhow::Result<()> {
 
     // allocate a large chunk of memory to reduce allocations
     // when reading ttl files
-    let mut buffer = String::with_capacity(500 * 1024 * 1024); // 500mb
+    let mut buffer = String::with_capacity(
+        var(HEAP_SIZE_MB)
+            .ok()
+            .and_then(|h| h.parse::<usize>().ok())
+            .unwrap_or(500)
+            * 1024
+            * 1024,
+    ); // 500mb
 
     if config.enable_initial_sync {
         config.start_from_delta_timestamp.take();
