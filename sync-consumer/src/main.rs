@@ -320,9 +320,8 @@ async fn flush_triple_buffer(
 
     if config.enable_delta_push {
         for stmt in stmts {
-            let Node::Iri(subject) = &stmt.subject else {
-                unreachable!("subject is always an iri. {stmt}");
-            };
+            let subject = stmt.subject.get_iri().map_err(|e| anyhow!("{e}"))?;
+
             let subject = xxh3_64(subject.as_bytes());
             delta_buffer
                 .entry(subject)

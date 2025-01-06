@@ -230,9 +230,7 @@ async fn get_ids_from_cache_or_insert<'a>(
     let mut result = HashMap::with_capacity(subject_nodes.len());
     let mut to_check_in_db = HashMap::with_capacity(subject_nodes.len());
     while let Some(subject) = subject_nodes.pop() {
-        let Node::Iri(subject_iri) = &subject else {
-            unreachable!("subject is always an iri. {subject}");
-        };
+        let subject_iri = subject.get_iri().map_err(|e| anyhow!("{e}"))?;
         let subject_hash = xxhash_rust::xxh3::xxh3_64(subject_iri.as_bytes()).to_string();
         if let Some(id) = cache.get(&subject_hash).await {
             result.insert(id, subject);
@@ -265,16 +263,17 @@ async fn get_ids_from_cache_or_insert<'a>(
 
         let to_add_in_cache = to_inserts
             .iter()
-            .map(|(id, node)| {
-                let Node::Iri(subject_iri) = &node else {
-                    unreachable!("subject is always an iri. {node}");
-                };
-                UuidSubject {
-                    id: id.clone(),
-                    subject_hash: xxhash_rust::xxh3::xxh3_64(subject_iri.as_bytes()).to_string(),
-                }
-            })
-            .collect::<Vec<_>>();
+            .map(
+                |(id, node)| match node.get_iri().map_err(|e| anyhow!("{e}")) {
+                    Ok(subject_iri) => Ok(UuidSubject {
+                        id: id.clone(),
+                        subject_hash: xxhash_rust::xxh3::xxh3_64(subject_iri.as_bytes())
+                            .to_string(),
+                    }),
+                    Err(e) => Err(e),
+                },
+            )
+            .collect::<Result<Vec<_>, _>>()?;
         if !to_add_in_cache.is_empty() {
             repository.insert_many(&to_add_in_cache).await?;
             // now we add to cache
