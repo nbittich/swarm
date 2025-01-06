@@ -20,3 +20,4 @@ sparql_client.workspace=true
 cron.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
+xxhash-rust = { workspace = true, features = ["xxh3"] }

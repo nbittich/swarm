@@ -54,5 +54,6 @@ The application can be configured through the following environment variables:
 | `TARGET_GRAPH`               | Target graph for SPARQL operations.                  | N/A                           | Yes          |
 | `ROOT_OUTPUT_DIR`            | Directory for output files.                          | `/share`                      | No           |
 | `HEAP_SIZE_MB`               | Heap size to limit allocation when reading ttl files | 500                           | No           |
+| `DELTA_BUFFER_SLOT_CAP`      | Size of the buffer allocated for accumulating delta. | 32768 (default)               | No           |
 
 ---

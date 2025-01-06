@@ -27,6 +27,7 @@ use swarm_common::{
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::{io::BufReader, task::JoinSet};
 use tortank::turtle::turtle_doc::{Node, RdfJsonTriple, Statement, TurtleDoc};
+use xxhash_rust::xxh3::xxh3_64;
 
 const ENABLE_INITIAL_SYNC: &str = "ENABLE_INITIAL_SYNC";
 const CRON_EXPRESSION: &str = "CRON_EXPRESSION";
@@ -38,6 +39,7 @@ const DELTA_ENDPOINT: &str = "DELTA_ENDPOINT";
 const ENABLE_DELTA_PUSH: &str = "ENABLE_DELTA_PUSH";
 const DELETE_FILES: &str = "DELETE_FILES";
 const HEAP_SIZE_MB: &str = "HEAP_SIZE_MB";
+const DELTA_BUFFER_SLOT_CAP: &str = "DELTA_BUFFER_SLOT_CAP";
 
 #[derive(Debug, Clone)]
 struct Config {
@@ -169,11 +171,32 @@ async fn main() -> anyhow::Result<()> {
             * 1024,
     ); // 500mb
 
+    // allocate a large chunk of memory to reduce allocation
+    // when accumulating delta
+    let mut delta_buffer: HashMap<u64, RdfJsonTriple> = if config.enable_delta_push {
+        HashMap::with_capacity(
+            var(DELTA_BUFFER_SLOT_CAP)
+                .ok()
+                .and_then(|h| h.parse::<usize>().ok())
+                .unwrap_or(32_768),
+        )
+    } else {
+        HashMap::with_capacity(0)
+    };
+
     if config.enable_initial_sync {
         config.start_from_delta_timestamp.take();
 
         let consumer_root_dir = config.root_output_dir.join(IdGenerator.get());
-        match consume(&consumer_root_dir, &config, &mut buffer, true).await {
+        match consume(
+            &consumer_root_dir,
+            &config,
+            &mut buffer,
+            &mut delta_buffer,
+            true,
+        )
+        .await
+        {
             Ok(last_ts) => {
                 info!("initial sync done. sleeping for a while before starting cron schedule.");
                 config.start_from_delta_timestamp = last_ts;
@@ -206,7 +229,15 @@ async fn main() -> anyhow::Result<()> {
         info!("running consumer sync at {next_schedule}");
 
         let consumer_root_dir = config.root_output_dir.join(IdGenerator.get());
-        match consume(&consumer_root_dir, &config, &mut buffer, false).await {
+        match consume(
+            &consumer_root_dir,
+            &config,
+            &mut buffer,
+            &mut delta_buffer,
+            false,
+        )
+        .await
+        {
             Ok(last_ts) => {
                 config.start_from_delta_timestamp = last_ts;
             }
@@ -223,11 +254,49 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+// optimization for mu-search
+async fn flush_delta(
+    config: &Config,
+    operation: sparql_client::SparqlUpdateType,
+    delta: &mut HashMap<u64, RdfJsonTriple>,
+) -> anyhow::Result<()> {
+    if delta.is_empty() {
+        return Ok(());
+    }
+    let (_, delta): (Vec<u64>, Vec<RdfJsonTriple>) = delta.drain().into_iter().unzip();
+
+    info!(
+        "sending delta message for operation {operation:?}. Len: {}",
+        delta.len()
+    );
+    for chunk in delta.chunks(config.chunk_size) {
+        let delta = chunk.to_vec();
+        let payload = match operation {
+            sparql_client::SparqlUpdateType::Insert => json! ([
+                {"deletes": [], "inserts":delta}
+            ]),
+            sparql_client::SparqlUpdateType::Delete => json! ([
+                {"deletes": delta, "inserts":[]}
+            ]),
+            sparql_client::SparqlUpdateType::NoOp => return Ok(()),
+        };
+        config
+            .swarm_client
+            .post(&config.delta_endpoint)
+            .json(&payload)
+            .send()
+            .await?;
+        info!("delta push: sleep before sending next chunk");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    Ok(())
+}
 async fn flush_triple_buffer(
     config: &Config,
-    is_initial_sync: bool,
     stmts: Vec<Statement<'_>>,
     operation: sparql_client::SparqlUpdateType,
+    delta_buffer: &mut HashMap<u64, RdfJsonTriple>,
 ) -> anyhow::Result<()> {
     let stmts = stmts
         .into_iter()
@@ -249,32 +318,16 @@ async fn flush_triple_buffer(
         )
         .await?;
 
-    if !is_initial_sync && config.enable_delta_push {
-        let mut delta = HashMap::with_capacity(stmts.len());
-        for stmt in stmts.iter() {
+    if config.enable_delta_push {
+        for stmt in stmts {
             let Node::Iri(subject) = &stmt.subject else {
-                unreachable!("subject is always an iri.");
+                unreachable!("subject is always an iri. {stmt}");
             };
-            if !delta.contains_key(&subject) {
-                delta.insert(subject, RdfJsonTriple::from(stmt));
+            let subject = xxh3_64(subject.as_bytes());
+            if !delta_buffer.contains_key(&subject) {
+                delta_buffer.insert(subject, RdfJsonTriple::from(&stmt));
             }
         }
-        let delta = delta.values().collect::<Vec<_>>();
-        let payload = match operation {
-            sparql_client::SparqlUpdateType::Insert => json! ([
-                {"deletes": [], "inserts":delta}
-            ]),
-            sparql_client::SparqlUpdateType::Delete => json! ([
-                {"deletes": delta, "inserts":[]}
-            ]),
-            sparql_client::SparqlUpdateType::NoOp => return Ok(()),
-        };
-        config
-            .swarm_client
-            .post(&config.delta_endpoint)
-            .json(&payload)
-            .send()
-            .await?;
     }
     Ok(())
 }
@@ -282,6 +335,7 @@ async fn consume(
     consumer_root_dir: &Path,
     config: &Config,
     buffer: &mut String,
+    delta_buffer: &mut HashMap<u64, RdfJsonTriple>,
     is_initial_sync: bool,
 ) -> anyhow::Result<Option<DateTime<Utc>>> {
     let tasks: Vec<Task> = config
@@ -370,6 +424,7 @@ async fn consume(
     // we start with the delete ones.
     if let Some(to_remove_dir) = to_remove_dir.take() {
         let mut read_dir = tokio::fs::read_dir(to_remove_dir).await?;
+
         while let Some(entry) = read_dir.next_entry().await? {
             let path = entry.path();
             info!("processing deletes for {path:?}");
@@ -386,9 +441,9 @@ async fn consume(
                     if stmts.len() == config.chunk_size {
                         flush_triple_buffer(
                             config,
-                            is_initial_sync,
                             std::mem::take(&mut stmts),
                             sparql_client::SparqlUpdateType::Delete,
+                            delta_buffer,
                         )
                         .await?;
                     }
@@ -397,12 +452,18 @@ async fn consume(
             if !stmts.is_empty() {
                 flush_triple_buffer(
                     config,
-                    is_initial_sync,
                     stmts,
                     sparql_client::SparqlUpdateType::Delete,
+                    delta_buffer,
                 )
                 .await?;
             }
+            flush_delta(
+                config,
+                sparql_client::SparqlUpdateType::Delete,
+                delta_buffer,
+            )
+            .await?;
         }
     }
 
@@ -423,9 +484,9 @@ async fn consume(
                 if stmts.len() == config.chunk_size {
                     flush_triple_buffer(
                         config,
-                        is_initial_sync,
                         std::mem::take(&mut stmts),
                         sparql_client::SparqlUpdateType::Insert,
+                        delta_buffer,
                     )
                     .await?;
                 }
@@ -434,12 +495,19 @@ async fn consume(
         if !stmts.is_empty() {
             flush_triple_buffer(
                 config,
-                is_initial_sync,
                 stmts,
                 sparql_client::SparqlUpdateType::Insert,
+                delta_buffer,
             )
             .await?;
         }
+
+        flush_delta(
+            config,
+            sparql_client::SparqlUpdateType::Insert,
+            delta_buffer,
+        )
+        .await?;
     }
 
     // finally, the intersects if present
@@ -460,9 +528,9 @@ async fn consume(
                     if stmts.len() == config.chunk_size {
                         flush_triple_buffer(
                             config,
-                            is_initial_sync,
                             std::mem::take(&mut stmts),
                             sparql_client::SparqlUpdateType::Insert,
+                            delta_buffer,
                         )
                         .await?;
                     }
@@ -471,12 +539,18 @@ async fn consume(
             if !stmts.is_empty() {
                 flush_triple_buffer(
                     config,
-                    is_initial_sync,
                     stmts,
                     sparql_client::SparqlUpdateType::Insert,
+                    delta_buffer,
                 )
                 .await?;
             }
+            flush_delta(
+                config,
+                sparql_client::SparqlUpdateType::Insert,
+                delta_buffer,
+            )
+            .await?;
         }
     }
     // cleanup

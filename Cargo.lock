@@ -3190,6 +3190,7 @@ dependencies = [
  "swarm_common",
  "tokio",
  "tortank",
+ "xxhash-rust",
 ]
 
 [[package]]

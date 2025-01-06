@@ -231,7 +231,7 @@ async fn get_ids_from_cache_or_insert<'a>(
     let mut to_check_in_db = HashMap::with_capacity(subject_nodes.len());
     while let Some(subject) = subject_nodes.pop() {
         let Node::Iri(subject_iri) = &subject else {
-            unreachable!("subject is always an iri.");
+            unreachable!("subject is always an iri. {subject}");
         };
         let subject_hash = xxhash_rust::xxh3::xxh3_64(subject_iri.as_bytes()).to_string();
         if let Some(id) = cache.get(&subject_hash).await {
@@ -267,7 +267,7 @@ async fn get_ids_from_cache_or_insert<'a>(
             .iter()
             .map(|(id, node)| {
                 let Node::Iri(subject_iri) = &node else {
-                    unreachable!("subject is always an iri.");
+                    unreachable!("subject is always an iri. {node}");
                 };
                 UuidSubject {
                     id: id.clone(),
