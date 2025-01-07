@@ -34,6 +34,7 @@ const CRON_EXPRESSION: &str = "CRON_EXPRESSION";
 const SWARM_BASE_URL: &str = "SWARM_BASE_URL";
 const SWARM_USERNAME: &str = "SWARM_USERNAME";
 const SWARM_PASSWORD: &str = "SWARM_PASSWORD";
+const SWARM_GRAPH: &str = "SWARM_GRAPH";
 const START_FROM_DELTA_TIMESTAMP: &str = "START_FROM_DELTA_TIMESTAMP";
 const DELTA_ENDPOINT: &str = "DELTA_ENDPOINT";
 const ENABLE_DELTA_PUSH: &str = "ENABLE_DELTA_PUSH";
@@ -49,9 +50,10 @@ struct Config {
     swarm_base_url: Arc<String>,
     chunk_size: usize,
     swarm_client: Client,
+    swarm_graph: Arc<String>,
     start_from_delta_timestamp: Option<DateTime<Utc>>,
-    delta_endpoint: String,
-    target_graph: String,
+    delta_endpoint: Arc<String>,
+    target_graph: Arc<String>,
     enable_delta_push: bool,
     root_output_dir: PathBuf,
     delete_files: bool,
@@ -72,7 +74,7 @@ async fn get_config() -> anyhow::Result<Config> {
     let schedule = var(CRON_EXPRESSION)
         .map(|c| cron::Schedule::from_str(&c))
         .unwrap_or_else(|_| cron::Schedule::from_str("0 * * * * * *"))?;
-    let target_graph = var(TARGET_GRAPH)?;
+    let target_graph = Arc::new(var(TARGET_GRAPH)?);
     let start_from_delta_timestamp = var(START_FROM_DELTA_TIMESTAMP)
         .map(|d| {
             let d: DateTime<Local> = DateTime::from_str(&d).unwrap();
@@ -93,6 +95,14 @@ async fn get_config() -> anyhow::Result<Config> {
             .ok()
             .filter(|s| !s.is_empty())
             .context("swarm base url empty or not present")?,
+    );
+
+    let swarm_graph = Arc::new(
+        var(SWARM_GRAPH)
+            .map(|s| s.trim().to_string())
+            .ok()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "http://bittich.be/graphs/swarm-consumer".into()),
     );
     let swarm_username = var(SWARM_USERNAME)?;
     let swarm_password = var(SWARM_PASSWORD)?;
@@ -133,16 +143,17 @@ async fn get_config() -> anyhow::Result<Config> {
         root_output_dir,
         chunk_size,
         target_graph,
+        swarm_graph,
         swarm_client,
         start_from_delta_timestamp,
         delta_endpoint: if enable_delta_push {
             if let Some(delta_endpoint) = delta_endpoint {
-                delta_endpoint
+                Arc::new(delta_endpoint)
             } else {
                 return Err(anyhow!("missing delta endpoint"));
             }
         } else {
-            "".into()
+            Arc::new("".into())
         },
         enable_delta_push,
     })
@@ -184,7 +195,8 @@ async fn main() -> anyhow::Result<()> {
         HashMap::with_capacity(0)
     };
 
-    if config.enable_initial_sync {
+    let current_state = get_state(&config).await?;
+    if config.enable_initial_sync && !current_state.initial_sync_ran {
         config.start_from_delta_timestamp.take();
 
         let consumer_root_dir = config.root_output_dir.join(IdGenerator.get());
@@ -199,6 +211,10 @@ async fn main() -> anyhow::Result<()> {
         {
             Ok(last_ts) => {
                 info!("initial sync done. sleeping for a while before starting cron schedule.");
+                update_initial_sync(&config, true).await?;
+                if let Some(last_ts) = &last_ts {
+                    update_last_run(&config, last_ts).await?;
+                }
                 config.start_from_delta_timestamp = last_ts;
                 tokio::time::sleep(Duration::from_secs(60)).await;
             }
@@ -210,7 +226,11 @@ async fn main() -> anyhow::Result<()> {
     }
     info!("starting cron schedule");
     config.start_from_delta_timestamp = if config.start_from_delta_timestamp.is_none() {
-        Some(Local::now().to_utc())
+        if current_state.last_run.is_some() {
+            current_state.last_run
+        } else {
+            Some(Local::now().to_utc())
+        }
     } else {
         config.start_from_delta_timestamp.take()
     };
@@ -239,6 +259,9 @@ async fn main() -> anyhow::Result<()> {
         .await
         {
             Ok(last_ts) => {
+                if let Some(ts) = &last_ts {
+                    update_last_run(&config, ts).await?;
+                }
                 config.start_from_delta_timestamp = last_ts;
             }
             Err(e) => {
@@ -282,7 +305,7 @@ async fn flush_delta(
         };
         config
             .swarm_client
-            .post(&config.delta_endpoint)
+            .post(config.delta_endpoint.as_str())
             .json(&payload)
             .send()
             .await?;
@@ -681,4 +704,108 @@ fn remove_datatype_xsd_string(mut term: Node<'_>) -> Node<'_> {
         }
         _ => term,
     }
+}
+
+#[derive(Debug)]
+struct SyncConsumerState {
+    initial_sync_ran: bool,
+    last_run: Option<DateTime<Utc>>,
+}
+
+async fn update_last_run(config: &Config, date: &DateTime<Utc>) -> anyhow::Result<()> {
+    let graph = &config.swarm_graph;
+    let date = date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    let q = format!(
+        r#"
+        PREFIX ex: <http://example.org/schema#>
+        PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>   
+        DELETE {{
+            GRAPH <{graph}> {{
+              ex:SwarmState a ex:State.
+              ex:SwarmState ex:lastRun ?lastRun.
+            }}
+            
+        }}
+        INSERT {{
+            GRAPH <{graph}> {{
+              ex:SwarmState a ex:State.
+              ex:SwarmState ex:lastRun "{date}"^^xsd:dateTime.
+            }}
+            
+        }}
+        WHERE {{
+            GRAPH <{graph}> {{
+              optional {{ex:SwarmState a ex:State}}.
+              optional {{ex:SwarmState ex:lastRun ?lastRun}}.
+            }}
+            
+        }}
+    "#
+    );
+
+    config.sparql_client.update(&q).await
+}
+async fn update_initial_sync(config: &Config, initial_sync: bool) -> anyhow::Result<()> {
+    let graph = &config.swarm_graph;
+    let q = format!(
+        r#"
+        PREFIX ex: <http://example.org/schema#>
+        DELETE {{
+            GRAPH <{graph}> {{
+              ex:SwarmState a ex:State.
+              ex:SwarmState ex:initialSync ?initialSync.
+            }}
+            
+        }}
+        INSERT {{
+            GRAPH <{graph}> {{
+              ex:SwarmState a ex:State.
+              ex:SwarmState ex:initialSync {initial_sync}.
+            }}
+            
+        }}
+        WHERE {{
+            GRAPH <{graph}> {{
+              optional {{ex:SwarmState a ex:State}}.
+              optional {{ex:SwarmState ex:initialSync ?initialSync}}.
+            }}
+            
+        }}
+    "#
+    );
+
+    config.sparql_client.update(&q).await
+}
+async fn get_state(config: &Config) -> anyhow::Result<SyncConsumerState> {
+    let q = format!(
+        r#"
+        PREFIX ex: <http://example.org/schema#>
+        SELECT distinct ?initialSync ?lastRun WHERE {{
+            GRAPH <{}> {{
+                ?state a  ex:State;
+                    ex:lastRun ?lastRun.
+                optional {{?state ex:initialSync ?initialSync}}
+                    
+            }}
+      }}
+   "#,
+        config.swarm_graph
+    );
+    let mut res = config.sparql_client.query(&q).await?;
+
+    if !res.results.bindings.is_empty() {
+        let bindings = res.results.bindings.remove(0);
+        bindings
+            .get("initialSync")
+            .and_then(|b| b.value.parse::<bool>().ok())
+            .unwrap_or(false);
+        bindings["lastRun"]
+            .value
+            .parse::<chrono::DateTime<Utc>>()
+            .ok();
+    }
+    Ok(SyncConsumerState {
+        initial_sync_ran: false,
+        last_run: None,
+    })
 }
