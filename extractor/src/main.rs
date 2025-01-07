@@ -172,7 +172,7 @@ async fn handle_task(nc: &NatsClient, task: &mut Task) -> anyhow::Result<Option<
                 }
             }));
             // sleep just a little to avoid using all the cpu
-            tokio::time::sleep(Duration::from_millis(1)).await;
+            tokio::time::sleep(Duration::from_millis(20)).await;
         }
         while let Some(handle) = tasks.join_next().await {
             let mut sub_task = match handle?? {
