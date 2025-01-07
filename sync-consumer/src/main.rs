@@ -782,8 +782,8 @@ async fn get_state(config: &Config) -> anyhow::Result<SyncConsumerState> {
         PREFIX ex: <http://example.org/schema#>
         SELECT distinct ?initialSync ?lastRun WHERE {{
             GRAPH <{}> {{
-                ?state a  ex:State;
-                    ex:lastRun ?lastRun.
+                ?state a  ex:State.
+                optional {{ ?state ex:lastRun ?lastRun }}.
                 optional {{?state ex:initialSync ?initialSync}}
                     
             }}
@@ -795,17 +795,21 @@ async fn get_state(config: &Config) -> anyhow::Result<SyncConsumerState> {
 
     if !res.results.bindings.is_empty() {
         let bindings = res.results.bindings.remove(0);
-        bindings
+        let initial_sync_ran = bindings
             .get("initialSync")
             .and_then(|b| b.value.parse::<bool>().ok())
             .unwrap_or(false);
-        bindings["lastRun"]
-            .value
-            .parse::<chrono::DateTime<Utc>>()
-            .ok();
+        let last_run = bindings
+            .get("lastRun")
+            .and_then(|r| r.value.parse::<chrono::DateTime<Utc>>().ok());
+        Ok(SyncConsumerState {
+            initial_sync_ran,
+            last_run,
+        })
+    } else {
+        Ok(SyncConsumerState {
+            initial_sync_ran: false,
+            last_run: None,
+        })
     }
-    Ok(SyncConsumerState {
-        initial_sync_ran: false,
-        last_run: None,
-    })
 }
