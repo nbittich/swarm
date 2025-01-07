@@ -719,24 +719,17 @@ async fn update_last_run(config: &Config, date: &DateTime<Utc>) -> anyhow::Resul
         r#"
         PREFIX ex: <http://example.org/schema#>
         PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>   
-        DELETE {{
+        DELETE WHERE {{
             GRAPH <{graph}> {{
-              ex:SwarmState a ex:State.
-              ex:SwarmState ex:lastRun ?lastRun.
+              ex:SwarmState ?p ?o.
             }}
             
         }}
-        INSERT {{
+        ;
+        INSERT DATA {{
             GRAPH <{graph}> {{
               ex:SwarmState a ex:State.
               ex:SwarmState ex:lastRun "{date}"^^xsd:dateTime.
-            }}
-            
-        }}
-        WHERE {{
-            GRAPH <{graph}> {{
-              optional {{ex:SwarmState a ex:State}}.
-              optional {{ex:SwarmState ex:lastRun ?lastRun}}.
             }}
             
         }}
@@ -750,24 +743,17 @@ async fn update_initial_sync(config: &Config, initial_sync: bool) -> anyhow::Res
     let q = format!(
         r#"
         PREFIX ex: <http://example.org/schema#>
-        DELETE {{
+        DELETE WHERE{{
             GRAPH <{graph}> {{
-              ex:SwarmState a ex:State.
-              ex:SwarmState ex:initialSync ?initialSync.
+              ex:SwarmState ?p ?o.
             }}
             
         }}
-        INSERT {{
+        ;
+        INSERT DATA{{
             GRAPH <{graph}> {{
               ex:SwarmState a ex:State.
               ex:SwarmState ex:initialSync {initial_sync}.
-            }}
-            
-        }}
-        WHERE {{
-            GRAPH <{graph}> {{
-              optional {{ex:SwarmState a ex:State}}.
-              optional {{ex:SwarmState ex:initialSync ?initialSync}}.
             }}
             
         }}
