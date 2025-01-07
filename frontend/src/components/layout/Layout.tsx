@@ -91,7 +91,7 @@ export default function MainLayout() {
                         headerPadding: 0,
                     },
                     Menu: {
-                        // darkItemBg: darkToken.colorBgMask,
+                        darkItemBg: darkToken.colorBgMask,
                     },
 
                 }

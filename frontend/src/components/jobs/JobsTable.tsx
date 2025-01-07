@@ -235,14 +235,7 @@ const JobsTable: React.FC = () => {
 
                     <Form.Item
                         name="jobName"
-                        label="Job Name"
-                        rules={[
-                            {
-                                pattern: /^[A-Za-z][A-Za-z0-9]*$/,
-                                message: 'Job name must be alphanumeric and start with a letter',
-                            },
-                        ]}
-                    >
+                        label="Job Name">
                         <Input />
                     </Form.Item>
                     <Form.Item

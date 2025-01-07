@@ -74,7 +74,7 @@ const ScheduledJobsTable: React.FC = () => {
             });
         } else if (sorter.order) {
             sortParams[sorter.field as string] = sorter.order === 'ascend' ? 1 : -1;
-        }else {
+        } else {
             sortParams["creationDate"] = -1;
         }
 
@@ -213,12 +213,6 @@ const ScheduledJobsTable: React.FC = () => {
                     <Form.Item
                         name="jobName"
                         label="Job Name"
-                        rules={[
-                            {
-                                pattern: /^[A-Za-z][A-Za-z0-9]*$/,
-                                message: 'Job name must be alphanumeric and start with a letter',
-                            },
-                        ]}
                     >
                         <Input />
                     </Form.Item>
