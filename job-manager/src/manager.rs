@@ -142,13 +142,13 @@ impl JobManagerState {
         loop {
             interval.tick().await;
             let scheduled_jobs = self.scheduled_job_repository.find_all().await?;
-            let now = Local::now().to_utc();
+            let now = Local::now();
             for mut sj in scheduled_jobs {
                 let schedule = Schedule::from_str(&sj.cron_expr)?;
                 let mut upcomings = schedule.upcoming(chrono::Local);
                 if sj.next_execution.is_none() {
                     sj = ScheduledJob {
-                        next_execution: upcomings.next().map(|e| e.to_utc()),
+                        next_execution: upcomings.next().map(|e| e),
                         ..sj
                     };
                     self.scheduled_job_repository.upsert(&sj.id, &sj).await?;
@@ -159,7 +159,7 @@ impl JobManagerState {
                 };
                 if upcoming <= now {
                     sj = ScheduledJob {
-                        next_execution: upcomings.next().map(|ne| ne.to_utc()),
+                        next_execution: upcomings.next().map(|ne| ne),
                         ..sj
                     };
                     self.scheduled_job_repository.upsert(&sj.id, &sj).await?;
@@ -188,7 +188,7 @@ impl JobManagerState {
                                 if let Ok(Some(mut job)) =
                                     self.job_repository.find_by_id(&task.job_id).await
                                 {
-                                    job.modified_date = Some(Local::now().to_utc());
+                                    job.modified_date = Some(Local::now());
                                     let mut allow_running_job = true;
                                     if !job.definition.allow_concurrent_run {
                                         if let Ok(result) = self
@@ -236,7 +236,7 @@ impl JobManagerState {
                                                         order: td.order,
                                                         job_id: job.id.clone(),
                                                         name: td.name.clone(),
-                                                        creation_date: Local::now().to_utc(),
+                                                        creation_date: Local::now(),
                                                         modified_date: None,
                                                         output_dir,
                                                         payload: match &td.payload {
@@ -318,14 +318,11 @@ impl JobManagerState {
         };
         let schedule = cron::Schedule::from_str(&cron_expr)
             .map_err(|e| ApiError::CronExpression(e.to_string()))?;
-        let next_execution = schedule
-            .upcoming(chrono::Local)
-            .next()
-            .map(|ne| ne.to_utc());
+        let next_execution = schedule.upcoming(chrono::Local).next().map(|ne| ne);
 
         let scheduled_job = ScheduledJob {
             id: IdGenerator.get(),
-            creation_date: Local::now().to_utc(),
+            creation_date: Local::now(),
             task_definition,
             name,
             definition_id,
@@ -399,7 +396,7 @@ impl JobManagerState {
                 jd.name.to_owned()
             },
             root_dir: job_root_dir,
-            creation_date: Local::now().to_utc(),
+            creation_date: Local::now(),
             modified_date: None,
             status: Status::Pending,
             definition: jd,
@@ -415,7 +412,7 @@ impl JobManagerState {
             order: td.order,
             job_id: job.id.clone(),
             name: td.name,
-            creation_date: Local::now().to_utc(),
+            creation_date: Local::now(),
             modified_date: None,
             payload: td.payload,
             result: None,

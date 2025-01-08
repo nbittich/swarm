@@ -95,7 +95,7 @@ async fn main() -> anyhow::Result<()> {
                         }
                         task.has_sub_task = true;
                         task.status = Status::Busy;
-                        task.modified_date = Some(Local::now().to_utc());
+                        task.modified_date = Some(Local::now());
                         let _ = config
                             .nc
                             .publish(TASK_STATUS_CHANGE_EVENT(&task.id), &task)
@@ -111,7 +111,7 @@ async fn main() -> anyhow::Result<()> {
                             Err(e) => {
                                 task.status =
                                     Status::Failed(vec![format!("unexpected error: {e}")]);
-                                task.modified_date = Some(Local::now().to_utc());
+                                task.modified_date = Some(Local::now());
                                 let _ = config
                                     .nc
                                     .publish(TASK_STATUS_CHANGE_EVENT(&task.id), &task)
@@ -199,7 +199,7 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
                 let sub_task = SubTask {
                     id: IdGenerator.get(),
                     task_id: task.id.clone(),
-                    creation_date: Local::now().to_utc(),
+                    creation_date: Local::now(),
                     modified_date: None,
                     status: Status::Success,
                     result: Some(SubTaskResult::Diff(diff_result)),
@@ -209,7 +209,7 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
                     .publish(SUB_TASK_STATUS_CHANGE_EVENT(&sub_task.id), &sub_task)
                     .await;
             }
-            task.modified_date = Some(Local::now().to_utc());
+            task.modified_date = Some(Local::now());
             task.result = Some(TaskResult::Diff {
                 success_count: *previous_success_count,
                 failure_count: *previous_failure_count,
@@ -238,7 +238,7 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
             let sub_task = SubTask {
                 id: IdGenerator.get(),
                 task_id: task.id.clone(),
-                creation_date: Local::now().to_utc(),
+                creation_date: Local::now(),
                 modified_date: None,
                 status: Status::Busy,
                 result: None,
@@ -275,14 +275,14 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
                     sub_task
                 }
             };
-            sub_task.modified_date = Some(Local::now().to_utc());
+            sub_task.modified_date = Some(Local::now());
             let _ = config
                 .nc
                 .publish(SUB_TASK_STATUS_CHANGE_EVENT(&sub_task.id), &sub_task)
                 .await;
         }
 
-        task.modified_date = Some(Local::now().to_utc());
+        task.modified_date = Some(Local::now());
         if success_count == 0 && failure_count > 0 {
             task.status = Status::Failed(vec![format!(
                 "task did not succeed: success: {success_count}, failure: {failure_count}"
@@ -417,6 +417,6 @@ async fn diff(
         new_insert_path,
         to_remove_path,
         intersect_path,
-        creation_date: Local::now().to_utc(),
+        creation_date: Local::now(),
     })
 }

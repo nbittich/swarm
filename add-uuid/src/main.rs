@@ -81,7 +81,7 @@ async fn main() -> anyhow::Result<()> {
                         }
                         task.has_sub_task = true;
                         task.status = Status::Busy;
-                        task.modified_date = Some(Local::now().to_utc());
+                        task.modified_date = Some(Local::now());
                         let _ = nc.publish(TASK_STATUS_CHANGE_EVENT(&task.id), &task).await;
                         match handle_task(&nc, &cache, &uuid_repository, &predicate, &mut task)
                             .await
@@ -93,7 +93,7 @@ async fn main() -> anyhow::Result<()> {
                             Err(e) => {
                                 task.status =
                                     Status::Failed(vec![format!("unexpected error: {e}")]);
-                                task.modified_date = Some(Local::now().to_utc());
+                                task.modified_date = Some(Local::now());
                                 let _ = nc.publish(TASK_STATUS_CHANGE_EVENT(&task.id), &task).await;
                             }
                         }
@@ -164,7 +164,7 @@ async fn handle_task(
             let mut sub_task = SubTask {
                 id: IdGenerator.get(),
                 task_id: task.id.clone(),
-                creation_date: Local::now().to_utc(),
+                creation_date: Local::now(),
                 modified_date: None,
                 status: Status::Busy,
                 result: None,
@@ -192,13 +192,13 @@ async fn handle_task(
                     sub_task.status = Status::Failed(vec![format!("error during add uuid! {e:?}")])
                 }
             }
-            sub_task.modified_date = Some(Local::now().to_utc());
+            sub_task.modified_date = Some(Local::now());
             let _ = nc
                 .publish(SUB_TASK_STATUS_CHANGE_EVENT(&sub_task.id), &sub_task)
                 .await;
         }
 
-        task.modified_date = Some(Local::now().to_utc());
+        task.modified_date = Some(Local::now());
         if success_count == 0 && failure_count > 0 {
             task.status = Status::Failed(vec![format!(
                 "task did not succeed: success: {success_count}, failure: {failure_count}"
@@ -329,6 +329,6 @@ async fn complement(
         base_url: payload.base_url,
         len: triples.len(),
         path,
-        creation_date: Local::now().to_utc(),
+        creation_date: Local::now(),
     })
 }

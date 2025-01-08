@@ -65,7 +65,7 @@ async fn main() -> anyhow::Result<()> {
                         }
                         task.has_sub_task = true;
                         task.status = Status::Busy;
-                        task.modified_date = Some(Local::now().to_utc());
+                        task.modified_date = Some(Local::now());
                         let _ = nc.publish(TASK_STATUS_CHANGE_EVENT(&task.id), &task).await;
                         if handle_task(&nc, client, &mut task).await.is_some() {
                             let _ = nc.publish(TASK_STATUS_CHANGE_EVENT(&task.id), &task).await;
@@ -90,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
 pub async fn handle_task(nc: &NatsClient, client: Client, task: &mut Task) -> Option<()> {
     if let Payload::ScrapeUrl(url) = &task.payload {
         let res = crawl_website(&task.id, url, &task.output_dir, nc, client).await;
-        task.modified_date = Some(Local::now().to_utc());
+        task.modified_date = Some(Local::now());
         match res {
             Ok(
                 r @ TaskResult::ScrapeWebsite {
@@ -185,7 +185,7 @@ pub async fn crawl_website(
                         let st = SubTask {
                             id: IdGenerator.get(),
                             task_id: task_id.into(),
-                            creation_date: Local::now().to_utc(),
+                            creation_date: Local::now(),
                             status: Status::Success,
                             result: Some(SubTaskResult::ScrapeUrl(page_res)),
                             ..Default::default()
@@ -209,7 +209,7 @@ pub async fn crawl_website(
                     let st = SubTask {
                         id: IdGenerator.get(),
                         task_id: task_id.into(),
-                        creation_date: Local::now().to_utc(),
+                        creation_date: Local::now(),
                         status: Status::Failed(vec![format!("could not be visited: {e}")]),
                         ..Default::default()
                     };
@@ -339,7 +339,7 @@ async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlPro
                     ScrapeResult {
                         base_url: task_url,
                         path,
-                        creation_date: Local::now().to_utc(),
+                        creation_date: Local::now(),
                     },
                     next_urls,
                 )));

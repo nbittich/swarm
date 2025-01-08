@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 
@@ -34,7 +34,7 @@ pub struct AuthPayload {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GetPublicationsPayload {
-    pub since: Option<DateTime<Utc>>,
+    pub since: Option<DateTime<Local>>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -52,8 +52,8 @@ pub struct Job {
     pub name: String,
     pub target_url: Option<String>, // initial url
     pub root_dir: PathBuf,
-    pub creation_date: DateTime<Utc>,
-    pub modified_date: Option<DateTime<Utc>>,
+    pub creation_date: DateTime<Local>,
+    pub modified_date: Option<DateTime<Local>>,
     pub status: Status,
     pub definition: JobDefinition,
 }
@@ -63,8 +63,8 @@ pub struct ScheduledJob {
     #[serde(rename = "_id")]
     pub id: String,
     pub name: Option<String>,
-    pub creation_date: DateTime<Utc>,
-    pub next_execution: Option<DateTime<Utc>>,
+    pub creation_date: DateTime<Local>,
+    pub next_execution: Option<DateTime<Local>>,
     pub task_definition: TaskDefinition,
     pub definition_id: String,
     pub cron_expr: String,
@@ -78,8 +78,8 @@ pub struct Task {
     pub order: usize,
     pub job_id: String,
     pub name: String,
-    pub creation_date: DateTime<Utc>,
-    pub modified_date: Option<DateTime<Utc>>,
+    pub creation_date: DateTime<Local>,
+    pub modified_date: Option<DateTime<Local>>,
     pub payload: Payload,
     pub result: Option<TaskResult>,
     pub has_sub_task: bool,
@@ -93,8 +93,8 @@ pub struct SubTask {
     #[serde(rename = "_id")]
     pub id: String,
     pub task_id: String,
-    pub creation_date: DateTime<Utc>,
-    pub modified_date: Option<DateTime<Utc>>,
+    pub creation_date: DateTime<Local>,
+    pub modified_date: Option<DateTime<Local>>,
     pub status: Status,
     pub result: Option<SubTaskResult>,
 }
@@ -174,7 +174,7 @@ pub enum SubTaskResult {
 pub struct ScrapeResult {
     pub base_url: String,
     pub path: PathBuf,
-    pub creation_date: DateTime<Utc>,
+    pub creation_date: DateTime<Local>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -184,7 +184,7 @@ pub struct DiffResult {
     pub new_insert_path: Option<PathBuf>,
     pub intersect_path: Option<PathBuf>,
     pub to_remove_path: Option<PathBuf>,
-    pub creation_date: DateTime<Utc>,
+    pub creation_date: DateTime<Local>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -192,7 +192,7 @@ pub struct NTripleResult {
     pub base_url: String,
     pub len: usize,
     pub path: PathBuf,
-    pub creation_date: DateTime<Utc>,
+    pub creation_date: DateTime<Local>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]

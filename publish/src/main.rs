@@ -90,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
                             return;
                         }
                         task.status = Status::Busy;
-                        task.modified_date = Some(Local::now().to_utc());
+                        task.modified_date = Some(Local::now());
                         let _ = config
                             .nc
                             .publish(TASK_STATUS_CHANGE_EVENT(&task.id), &task)
@@ -106,7 +106,7 @@ async fn main() -> anyhow::Result<()> {
                             Err(e) => {
                                 task.status =
                                     Status::Failed(vec![format!("unexpected error: {e}")]);
-                                task.modified_date = Some(Local::now().to_utc());
+                                task.modified_date = Some(Local::now());
                                 let _ = config
                                     .nc
                                     .publish(TASK_STATUS_CHANGE_EVENT(&task.id), &task)
@@ -235,7 +235,7 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
             }
         }
 
-        task.modified_date = Some(Local::now().to_utc());
+        task.modified_date = Some(Local::now());
         task.result = Some(TaskResult::Publish {
             removed_triple_file_path: gzip(&removed_triple_file_path).await?,
             intersect_triple_file_path: gzip(&intersect_triple_file_path).await?,

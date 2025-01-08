@@ -3,7 +3,7 @@
 
 use anyhow::{anyhow, Context};
 use async_compression::tokio::bufread::GzipDecoder;
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime, Local};
 use cron::Schedule;
 use reqwest::{
     header::{HeaderMap, HeaderValue, AUTHORIZATION},
@@ -51,7 +51,7 @@ struct Config {
     chunk_size: usize,
     swarm_client: Client,
     swarm_graph: Arc<String>,
-    start_from_delta_timestamp: Option<DateTime<Utc>>,
+    start_from_delta_timestamp: Option<DateTime<Local>>,
     delta_endpoint: Arc<String>,
     target_graph: Arc<String>,
     enable_delta_push: bool,
@@ -78,7 +78,7 @@ async fn get_config() -> anyhow::Result<Config> {
     let start_from_delta_timestamp = var(START_FROM_DELTA_TIMESTAMP)
         .map(|d| {
             let d: DateTime<Local> = DateTime::from_str(&d).unwrap();
-            d.to_utc()
+            d
         })
         .ok();
     let delta_endpoint = var(DELTA_ENDPOINT)
@@ -229,7 +229,7 @@ async fn main() -> anyhow::Result<()> {
         if current_state.last_run.is_some() {
             current_state.last_run
         } else {
-            Some(Local::now().to_utc())
+            Some(Local::now())
         }
     } else {
         config.start_from_delta_timestamp.take()
@@ -365,7 +365,7 @@ async fn consume(
     buffer: &mut String,
     delta_buffer: &mut HashMap<u64, RdfJsonTriple>,
     is_initial_sync: bool,
-) -> anyhow::Result<Option<DateTime<Utc>>> {
+) -> anyhow::Result<Option<DateTime<Local>>> {
     let tasks: Vec<Task> = config
         .swarm_client
         .post(format!("{}/publications", config.swarm_base_url))
@@ -715,10 +715,10 @@ fn remove_datatype_xsd_string(mut term: Node<'_>) -> Node<'_> {
 #[derive(Debug)]
 struct SyncConsumerState {
     initial_sync_ran: bool,
-    last_run: Option<DateTime<Utc>>,
+    last_run: Option<DateTime<Local>>,
 }
 
-async fn update_last_run(config: &Config, date: &DateTime<Utc>) -> anyhow::Result<()> {
+async fn update_last_run(config: &Config, date: &DateTime<Local>) -> anyhow::Result<()> {
     let graph = &config.swarm_graph;
     let date = date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
     let q = format!(
@@ -793,7 +793,7 @@ async fn get_state(config: &Config) -> anyhow::Result<SyncConsumerState> {
             .unwrap_or(false);
         let last_run = bindings
             .get("lastRun")
-            .and_then(|r| r.value.parse::<chrono::DateTime<Utc>>().ok());
+            .and_then(|r| r.value.parse::<chrono::DateTime<Local>>().ok());
         Ok(SyncConsumerState {
             initial_sync_ran,
             last_run,

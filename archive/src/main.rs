@@ -79,7 +79,7 @@ async fn main() -> anyhow::Result<()> {
                             error!("{e}");
                         }
                         task.status = Status::Busy;
-                        task.modified_date = Some(Local::now().to_utc());
+                        task.modified_date = Some(Local::now());
                         let _ = config
                             .nc
                             .publish(TASK_STATUS_CHANGE_EVENT(&task.id), &task)
@@ -95,7 +95,7 @@ async fn main() -> anyhow::Result<()> {
                             Err(e) => {
                                 task.status =
                                     Status::Failed(vec![format!("unexpected error: {e}")]);
-                                task.modified_date = Some(Local::now().to_utc());
+                                task.modified_date = Some(Local::now());
                                 let _ = config
                                     .nc
                                     .publish(TASK_STATUS_CHANGE_EVENT(&task.id), &task)
@@ -169,7 +169,7 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<()> {
         config.job_repository.upsert(&old_job.id, &old_job).await?;
     }
 
-    task.modified_date = Some(Local::now().to_utc());
+    task.modified_date = Some(Local::now());
 
     task.status = Status::Success;
     Ok(())

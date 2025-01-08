@@ -101,7 +101,7 @@ pub fn exp_from_now(service_account: bool) -> usize {
     std::env::var(JWT_EXPIRATION_TIME_SEC)
         .unwrap_or_else(|_| "30".into())
         .parse::<i64>()
-        .map(|sec| (Local::now().to_utc() + Duration::seconds(sec)).timestamp() as usize)
+        .map(|sec| (Local::now() + Duration::seconds(sec)).timestamp() as usize)
         .expect("could not create exp time")
 }
 
