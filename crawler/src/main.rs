@@ -293,7 +293,19 @@ async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlPro
                 let path = configuration.folder_path.join(file_name);
                 tokio::fs::write(&path, &html).await?;
                 let document = scraper::Html::parse_document(&html);
+
                 let mut next_urls = Vec::with_capacity(configuration.buffer);
+                // html redirect using meta refresh
+                if let Some(element) = document.select(&configuration.redirect_selector).next() {
+                    if let Some(content) = element.value().attr("content") {
+                        if let Some(url_part) = content.split("url=").nth(1) {
+                            let redirect_url = url_part.trim();
+                            debug!("Redirect URL found: {}", redirect_url);
+                            next_urls.push(redirect_url.to_string());
+                        }
+                    }
+                }
+
                 for a_property in document.select(&configuration.href_selector) {
                     if let Some(interesting_properties) =
                         configuration.interesting_properties.as_ref()

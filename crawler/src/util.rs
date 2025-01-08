@@ -25,6 +25,7 @@ pub struct Configuration {
     pub ignore_extensions: [&'static str; 8],
     pub allowed_content_types: [&'static str; 1],
     pub href_selector: scraper::Selector,
+    pub redirect_selector: scraper::Selector,
     // pub job_timeout: Duration,
     pub buffer: usize,
     pub min_delay_millis: u64,
@@ -90,6 +91,9 @@ pub async fn make_config(client: Client, folder_path: PathBuf) -> anyhow::Result
         min_delay_millis = 30; // cannot be 0
     }
 
+    let redirect_selector =
+        scraper::Selector::parse(r#"meta[http-equiv="refresh"]"#).map_err(|e| anyhow!("{e}"))?;
+
     let href_selector = scraper::Selector::parse("a").map_err(|e| anyhow!("{e}"))?;
     if folder_path.exists() {
         tokio::fs::remove_dir_all(&folder_path).await?;
@@ -114,6 +118,7 @@ pub async fn make_config(client: Client, folder_path: PathBuf) -> anyhow::Result
         allowed_content_types,
         min_delay_millis,
         max_delay_millis,
+        redirect_selector,
         min_delay_before_next_retry_millis,
         max_delay_before_next_retry_millis,
         interesting_properties,
