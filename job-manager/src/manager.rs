@@ -1,9 +1,4 @@
-use std::{
-    mem::discriminant,
-    str::FromStr,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{mem::discriminant, str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::anyhow;
 use chrono::Local;
@@ -23,10 +18,9 @@ use swarm_common::{
     },
     error,
     mongo::{doc, Repository, StoreClient, StoreRepository},
-    nats_client::{self, Message, NatsClient, PullConsumer, Stream},
+    nats_client::{self, NatsClient, PullConsumer, Stream},
     warn, IdGenerator, StreamExt, REGEX_CLEAN_URL,
 };
-use tokio::time::interval;
 
 use crate::domain::{ApiError, ROOT_OUTPUT_DIR_PB};
 
@@ -290,23 +284,17 @@ impl JobManagerState {
         Ok(())
     }
     pub async fn start_consuming_sub_task(&self) -> anyhow::Result<()> {
-        let mut buffer = Vec::with_capacity(100);
-        let mut last_flush = Instant::now();
         let mut messages = self.sub_task_event_consumer.messages().await?;
         while let Some(message) = messages.next().await {
             match message {
                 Ok(message) => {
                     if let Ok(sub_task) = SubTask::deserialize_bytes(&message.payload) {
-                        buffer.push(sub_task);
-                        message.ack().await.map_err(|e| anyhow!("{e}"))?;
-                    }
-                    if !buffer.is_empty()
-                        && (buffer.len() == 100 || last_flush.elapsed() >= Duration::from_secs(5))
-                    {
-                        let sub_tasks = buffer.drain(..).collect::<Vec<SubTask>>();
-                        self.sub_task_repository.upsert_many(&sub_tasks).await?;
+                        debug!("receiving {sub_task:?}");
+                        self.sub_task_repository
+                            .upsert(&sub_task.id, &sub_task)
+                            .await?;
 
-                        last_flush = Instant::now();
+                        message.ack().await.map_err(|e| anyhow!("{e}"))?;
                     }
                 }
                 Err(e) => error!("could not get message {e}"),
