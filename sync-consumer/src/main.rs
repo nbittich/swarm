@@ -258,6 +258,9 @@ async fn main() -> anyhow::Result<()> {
         )
         .await
         {
+            Ok(None) => {
+                // no op
+            }
             Ok(last_ts) => {
                 if let Some(ts) = &last_ts {
                     update_last_run(&config, ts).await?;
@@ -373,7 +376,7 @@ async fn consume(
 
     if tasks.is_empty() {
         info!("no new publication.");
-        return Ok(Some(Local::now().to_utc()));
+        return Ok(None);
     }
     let last_ts = tasks
         .iter()
