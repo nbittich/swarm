@@ -246,7 +246,10 @@ async fn main() -> anyhow::Result<()> {
             );
             tokio::time::sleep(Duration::from_millis(duration.num_milliseconds() as u64)).await;
         }
-        info!("running consumer sync at {next_schedule}");
+        info!(
+            "running consumer sync at {next_schedule} with timestamp {:?}",
+            config.start_from_delta_timestamp
+        );
 
         let consumer_root_dir = config.root_output_dir.join(IdGenerator.get());
         match consume(
