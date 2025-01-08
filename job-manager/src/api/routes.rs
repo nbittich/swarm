@@ -10,6 +10,7 @@ use axum::{
     routing::{delete, get, post},
     Json, Router,
 };
+use chrono::Local;
 use jsonwebtoken::Header;
 use mime_guess::mime::APPLICATION_OCTET_STREAM;
 use sparql_client::{Head, SparqlResponse, SparqlResult};
@@ -350,7 +351,7 @@ async fn get_last_publications(
             "targetUrl" :{ "$ne" : null },
             "status.type": "success",
             "modifiedDate": {
-                "$gt": serde_json::to_string(&since).map_err(|e| ApiError::GetLastPublications(e.to_string()))?
+                "$gt": since.with_timezone(&Local).to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
             }
         }
     } else {

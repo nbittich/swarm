@@ -789,11 +789,11 @@ async fn get_state(config: &Config) -> anyhow::Result<SyncConsumerState> {
             .unwrap_or(false);
         let last_run = bindings
             .get("lastRun")
-            .and_then(|r| r.value.parse::<chrono::DateTime<Utc>>().ok())
-            .map(|d| d.with_timezone(&Local));
+            .and_then(|r| r.value.parse::<chrono::DateTime<Local>>().ok())
+            .map(|d| d.to_utc());
         Ok(SyncConsumerState {
             initial_sync_ran,
-            last_run: last_run.map(|l| l.to_utc()),
+            last_run,
         })
     } else {
         Ok(SyncConsumerState {
