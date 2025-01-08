@@ -714,9 +714,7 @@ struct SyncConsumerState {
 
 async fn update_last_run(config: &Config, date: &DateTime<Utc>) -> anyhow::Result<()> {
     let graph = &config.swarm_graph;
-    let date = date
-        .with_timezone(&Local)
-        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    let date = date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
     let q = format!(
         r#"
         PREFIX ex: <http://example.org/schema#>
@@ -789,8 +787,7 @@ async fn get_state(config: &Config) -> anyhow::Result<SyncConsumerState> {
             .unwrap_or(false);
         let last_run = bindings
             .get("lastRun")
-            .and_then(|r| r.value.parse::<chrono::DateTime<Local>>().ok())
-            .map(|d| d.to_utc());
+            .and_then(|r| r.value.parse::<chrono::DateTime<Utc>>().ok());
         Ok(SyncConsumerState {
             initial_sync_ran,
             last_run,
