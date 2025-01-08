@@ -293,9 +293,8 @@ impl JobManagerState {
                         self.sub_task_repository
                             .upsert(&sub_task.id, &sub_task)
                             .await?;
-
-                        message.ack().await.map_err(|e| anyhow!("{e}"))?;
                     }
+                    message.ack().await.map_err(|e| anyhow!("{e}"))?;
                 }
                 Err(e) => error!("could not get message {e}"),
             }
