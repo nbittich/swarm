@@ -1,4 +1,9 @@
-use std::{mem::discriminant, str::FromStr, sync::Arc, time::Duration};
+use std::{
+    mem::discriminant,
+    str::FromStr,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use anyhow::anyhow;
 use chrono::Local;
@@ -21,6 +26,7 @@ use swarm_common::{
     nats_client::{self, Message, NatsClient, PullConsumer, Stream},
     warn, IdGenerator, StreamExt, REGEX_CLEAN_URL,
 };
+use tokio::time::interval;
 
 use crate::domain::{ApiError, ROOT_OUTPUT_DIR_PB};
 
@@ -285,32 +291,28 @@ impl JobManagerState {
     }
     pub async fn start_consuming_sub_task(&self) -> anyhow::Result<()> {
         let mut buffer = Vec::with_capacity(100);
-        let mut last_flush = tokio::time::Instant::now();
+        let mut last_flush = Instant::now();
         let mut messages = self.sub_task_event_consumer.messages().await?;
-        loop {
-            // buffer insert sub tasks
-            if !buffer.is_empty()
-                && (buffer.len() == 100 || last_flush.elapsed() >= Duration::from_secs(5))
-            {
-                let (sub_tasks, messages) =
-                    buffer.drain(..).collect::<(Vec<SubTask>, Vec<Message>)>();
-                self.sub_task_repository.upsert_many(&sub_tasks).await?;
-                for message in messages {
-                    message.ack().await.map_err(|e| anyhow!("{e}"))?;
-                }
-                last_flush = tokio::time::Instant::now();
-            }
-            if let Some(message) = messages.next().await {
-                match message {
-                    Ok(message) => {
-                        if let Ok(sub_task) = SubTask::deserialize_bytes(&message.payload) {
-                            buffer.push((sub_task, message));
-                        }
+        while let Some(message) = messages.next().await {
+            match message {
+                Ok(message) => {
+                    if let Ok(sub_task) = SubTask::deserialize_bytes(&message.payload) {
+                        buffer.push(sub_task);
+                        message.ack().await.map_err(|e| anyhow!("{e}"))?;
                     }
-                    Err(e) => error!("could not get message {e}"),
+                    if !buffer.is_empty()
+                        && (buffer.len() == 100 || last_flush.elapsed() >= Duration::from_secs(5))
+                    {
+                        let sub_tasks = buffer.drain(..).collect::<Vec<SubTask>>();
+                        self.sub_task_repository.upsert_many(&sub_tasks).await?;
+
+                        last_flush = Instant::now();
+                    }
                 }
+                Err(e) => error!("could not get message {e}"),
             }
         }
+        Ok(())
     }
     pub async fn new_scheduled_job(
         &self,
