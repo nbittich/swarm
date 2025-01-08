@@ -4,7 +4,7 @@ Consumer implementation for Swarm.
 
 **Important Note**:
 
-If you use features like `START_FROM_DELTA_TIMESTAMP` or `ENABLE_INITIAL_SYNC`,
+If you use features like `ENABLE_INITIAL_SYNC`,
 ensure you remove them once the consumer finishes and restart the service.
 
 ---
@@ -18,7 +18,6 @@ ensure you remove them once the consumer finishes and restart the service.
       SWARM_BASE_URL: http://job-manager
       SWARM_USERNAME: bnb
       SWARM_PASSWORD: bnb
-      START_FROM_DELTA_TIMESTAMP: "2025-01-01T20:40:21.384141291Z"
       DELTA_ENDPOINT: http://search/update
       ENABLE_DELTA_PUSH: "true"
       CHUNK_SIZE: 100
@@ -37,22 +36,21 @@ ensure you remove them once the consumer finishes and restart the service.
 
 The application can be configured through the following environment variables:
 
-| **Environment Variable**     | **Description**                                      | **Default Value**                       | **Required** |
-| ---------------------------- | ---------------------------------------------------- | --------------------------------------- | ------------ |
-| `ENABLE_INITIAL_SYNC`        | Enables initial synchronization.                     | `false`                                 | No           |
-| `CRON_EXPRESSION`            | Cron expression to schedule tasks.                   | `0 * * * * * * ` (Every hour)           | No           |
-| `SWARM_BASE_URL`             | Base URL for Swarm API.                              | N/A                                     | Yes          |
-| `SWARM_USERNAME`             | Username for Swarm authentication.                   | N/A                                     | Yes          |
-| `SWARM_PASSWORD`             | Password for Swarm authentication.                   | N/A                                     | Yes          |
-| `START_FROM_DELTA_TIMESTAMP` | Timestamp to start consuming delta from.             | N/A                                     | No           |
-| `DELTA_ENDPOINT`             | Endpoint for pushing delta changes.                  | N/A                                     | No           |
-| `ENABLE_DELTA_PUSH`          | Enables delta push functionality.                    | `false`                                 | No           |
-| `DELETE_FILES`               | Enables deletion of files post-processing.           | `true`                                  | No           |
-| `CHUNK_SIZE`                 | Number of items to process in one batch.             | `1024`                                  | No           |
-| `TARGET_GRAPH`               | Target graph for SPARQL operations.                  | http://bittich.be/graphs/swarm-consumer | No           |
-| `SWARM_GRAPH`                | Swarm graph to store sync state                      | N/A                                     | Yes          |
-| `ROOT_OUTPUT_DIR`            | Directory for output files.                          | `/share`                                | No           |
-| `HEAP_SIZE_MB`               | Heap size to limit allocation when reading ttl files | 500                                     | No           |
-| `DELTA_BUFFER_SLOT_CAP`      | Size of the buffer allocated for accumulating delta. | 32768 (default)                         | No           |
+| **Environment Variable** | **Description**                                      | **Default Value**                       | **Required** |
+| ------------------------ | ---------------------------------------------------- | --------------------------------------- | ------------ |
+| `ENABLE_INITIAL_SYNC`    | Enables initial synchronization.                     | `false`                                 | No           |
+| `CRON_EXPRESSION`        | Cron expression to schedule tasks.                   | `0 * * * * * * ` (Every hour)           | No           |
+| `SWARM_BASE_URL`         | Base URL for Swarm API.                              | N/A                                     | Yes          |
+| `SWARM_USERNAME`         | Username for Swarm authentication.                   | N/A                                     | Yes          |
+| `SWARM_PASSWORD`         | Password for Swarm authentication.                   | N/A                                     | Yes          |
+| `DELTA_ENDPOINT`         | Endpoint for pushing delta changes.                  | N/A                                     | No           |
+| `ENABLE_DELTA_PUSH`      | Enables delta push functionality.                    | `false`                                 | No           |
+| `DELETE_FILES`           | Enables deletion of files post-processing.           | `true`                                  | No           |
+| `CHUNK_SIZE`             | Number of items to process in one batch.             | `1024`                                  | No           |
+| `TARGET_GRAPH`           | Target graph for SPARQL operations.                  | http://bittich.be/graphs/swarm-consumer | No           |
+| `SWARM_GRAPH`            | Swarm graph to store sync state                      | N/A                                     | Yes          |
+| `ROOT_OUTPUT_DIR`        | Directory for output files.                          | `/share`                                | No           |
+| `HEAP_SIZE_MB`           | Heap size to limit allocation when reading ttl files | 500                                     | No           |
+| `DELTA_BUFFER_SLOT_CAP`  | Size of the buffer allocated for accumulating delta. | 32768 (default)                         | No           |
 
 ---

@@ -10,16 +10,12 @@ use axum::{
     routing::{delete, get, post},
     Json, Router,
 };
-use chrono::Local;
 use jsonwebtoken::Header;
 use mime_guess::mime::APPLICATION_OCTET_STREAM;
 use sparql_client::{Head, SparqlResponse, SparqlResult};
 use swarm_common::{
     debug,
-    domain::{
-        AuthBody, AuthPayload, GetPublicationsPayload, Job, JobDefinition, ScheduledJob, SubTask,
-        Task, User,
-    },
+    domain::{AuthBody, AuthPayload, Job, JobDefinition, ScheduledJob, SubTask, Task, User},
     info,
     mongo::{doc, FindOptions, Page, Pageable, Repository},
     TryFutureExt,
@@ -344,21 +340,10 @@ async fn all_tasks(
 async fn get_last_publications(
     State(manager): State<JobManagerState>,
     _: Claims,
-    Json(payload): Json<GetPublicationsPayload>,
 ) -> Result<Json<Vec<Task>>, ApiError> {
-    let job_filter = if let Some(since) = payload.since {
-        doc! {
-            "targetUrl" :{ "$ne" : null },
-            "status.type": "success",
-            "modifiedDate": {
-                "$gt": since.with_timezone(&Local).to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
-            }
-        }
-    } else {
-        doc! {
-            "targetUrl" :{ "$ne" : null },
-            "status.type": "success"
-        }
+    let job_filter = doc! {
+        "targetUrl" :{ "$ne" : null },
+        "status.type": "success"
     };
     // could be a projection tbh
     let jobs = manager

@@ -3,7 +3,7 @@
 
 use anyhow::{anyhow, Context};
 use async_compression::tokio::bufread::GzipDecoder;
-use chrono::{DateTime, Local};
+use chrono::Local;
 use cron::Schedule;
 use reqwest::{
     header::{HeaderMap, HeaderValue, AUTHORIZATION},
@@ -21,7 +21,7 @@ use std::{
 };
 use swarm_common::{
     constant::{APPLICATION_NAME, CHUNK_SIZE, ROOT_OUTPUT_DIR, XSD},
-    domain::{AuthBody, AuthPayload, GetPublicationsPayload, Task, TaskResult},
+    domain::{AuthBody, AuthPayload, Task, TaskResult},
     error, info, json, setup_tracing, warn, IdGenerator,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -35,7 +35,6 @@ const SWARM_BASE_URL: &str = "SWARM_BASE_URL";
 const SWARM_USERNAME: &str = "SWARM_USERNAME";
 const SWARM_PASSWORD: &str = "SWARM_PASSWORD";
 const SWARM_GRAPH: &str = "SWARM_GRAPH";
-const START_FROM_DELTA_TIMESTAMP: &str = "START_FROM_DELTA_TIMESTAMP";
 const DELTA_ENDPOINT: &str = "DELTA_ENDPOINT";
 const ENABLE_DELTA_PUSH: &str = "ENABLE_DELTA_PUSH";
 const DELETE_FILES: &str = "DELETE_FILES";
@@ -51,7 +50,6 @@ struct Config {
     chunk_size: usize,
     swarm_client: Client,
     swarm_graph: Arc<String>,
-    start_from_delta_timestamp: Option<DateTime<Local>>,
     delta_endpoint: Arc<String>,
     target_graph: Arc<String>,
     enable_delta_push: bool,
@@ -75,12 +73,7 @@ async fn get_config() -> anyhow::Result<Config> {
         .map(|c| cron::Schedule::from_str(&c))
         .unwrap_or_else(|_| cron::Schedule::from_str("0 * * * * * *"))?;
     let target_graph = Arc::new(var(TARGET_GRAPH)?);
-    let start_from_delta_timestamp = var(START_FROM_DELTA_TIMESTAMP)
-        .map(|d| {
-            let d: DateTime<Local> = DateTime::from_str(&d).unwrap();
-            d
-        })
-        .ok();
+
     let delta_endpoint = var(DELTA_ENDPOINT)
         .map(|s| s.trim().to_string())
         .ok()
@@ -145,7 +138,6 @@ async fn get_config() -> anyhow::Result<Config> {
         target_graph,
         swarm_graph,
         swarm_client,
-        start_from_delta_timestamp,
         delta_endpoint: if enable_delta_push {
             if let Some(delta_endpoint) = delta_endpoint {
                 Arc::new(delta_endpoint)
@@ -165,7 +157,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app_name = var(APPLICATION_NAME).unwrap_or_else(|_| "sync-consumer".into());
 
-    let mut config = get_config().await?;
+    let config = get_config().await?;
 
     info!("config:\n{config:?}");
 
@@ -195,10 +187,8 @@ async fn main() -> anyhow::Result<()> {
         HashMap::with_capacity(0)
     };
 
-    let current_state = get_state(&config).await?;
+    let mut current_state = get_state(&config).await?;
     if config.enable_initial_sync && !current_state.initial_sync_ran {
-        config.start_from_delta_timestamp.take();
-
         let consumer_root_dir = config.root_output_dir.join(IdGenerator.get());
         match consume(
             &consumer_root_dir,
@@ -206,16 +196,17 @@ async fn main() -> anyhow::Result<()> {
             &mut buffer,
             &mut delta_buffer,
             true,
+            &[],
         )
         .await
         {
-            Ok(last_ts) => {
+            Ok(mut consumed_tasks) => {
                 info!("initial sync done. sleeping for a while before starting cron schedule.");
                 update_initial_sync(&config, true).await?;
-                if let Some(last_ts) = &last_ts {
-                    update_last_run(&config, last_ts).await?;
+                for ct in consumed_tasks.iter() {
+                    add_consumed_task(&config, ct).await?;
                 }
-                config.start_from_delta_timestamp = last_ts;
+                current_state.consumed_task_ids.append(&mut consumed_tasks);
                 tokio::time::sleep(Duration::from_secs(60)).await;
             }
             Err(e) => {
@@ -225,15 +216,7 @@ async fn main() -> anyhow::Result<()> {
         }
     }
     info!("starting cron schedule");
-    config.start_from_delta_timestamp = if config.start_from_delta_timestamp.is_none() {
-        if current_state.last_run.is_some() {
-            current_state.last_run
-        } else {
-            Some(Local::now())
-        }
-    } else {
-        config.start_from_delta_timestamp.take()
-    };
+
     for next_schedule in config.schedule.upcoming(chrono::Local) {
         let now = Local::now();
         if now < next_schedule {
@@ -246,10 +229,6 @@ async fn main() -> anyhow::Result<()> {
             );
             tokio::time::sleep(Duration::from_millis(duration.num_milliseconds() as u64)).await;
         }
-        info!(
-            "running consumer sync at {next_schedule} with timestamp {:?}",
-            config.start_from_delta_timestamp
-        );
 
         let consumer_root_dir = config.root_output_dir.join(IdGenerator.get());
         match consume(
@@ -258,17 +237,15 @@ async fn main() -> anyhow::Result<()> {
             &mut buffer,
             &mut delta_buffer,
             false,
+            &current_state.consumed_task_ids,
         )
         .await
         {
-            Ok(None) => {
-                // no op
-            }
-            Ok(last_ts) => {
-                if let Some(ts) = &last_ts {
-                    update_last_run(&config, ts).await?;
+            Ok(mut consumed_tasks) => {
+                for ct in consumed_tasks.iter() {
+                    add_consumed_task(&config, ct).await?;
                 }
-                config.start_from_delta_timestamp = last_ts;
+                current_state.consumed_task_ids.append(&mut consumed_tasks);
             }
             Err(e) => {
                 error!("could not run delta sync! {e}. will try again during the next run...");
@@ -365,27 +342,23 @@ async fn consume(
     buffer: &mut String,
     delta_buffer: &mut HashMap<u64, RdfJsonTriple>,
     is_initial_sync: bool,
-) -> anyhow::Result<Option<DateTime<Local>>> {
+    consumed_tasks: &[String],
+) -> anyhow::Result<Vec<String>> {
     let tasks: Vec<Task> = config
         .swarm_client
         .post(format!("{}/publications", config.swarm_base_url))
-        .json(&GetPublicationsPayload {
-            since: config.start_from_delta_timestamp,
-        })
         .send()
         .await?
-        .json()
-        .await?;
-
+        .json::<Vec<Task>>()
+        .await?
+        .into_iter()
+        .filter(|t| !consumed_tasks.contains(&t.id))
+        .collect::<Vec<_>>();
     if tasks.is_empty() {
         info!("no new publication.");
-        return Ok(None);
+        return Ok(vec![]);
     }
-    let last_ts = tasks
-        .iter()
-        .filter_map(|task| task.modified_date)
-        .max()
-        .map(|dt| dt + Duration::from_millis(60));
+
     tokio::fs::create_dir(&consumer_root_dir).await?;
 
     // now the interesting bits. we can download the files in parallel
@@ -585,7 +558,7 @@ async fn consume(
     if config.delete_files {
         tokio::fs::remove_dir_all(consumer_root_dir).await?;
     }
-    Ok(last_ts)
+    Ok(tasks.into_iter().map(|t| t.id).collect())
 }
 
 async fn read_ttl_file(path: &Path, buffer: &mut String) -> anyhow::Result<()> {
@@ -715,27 +688,19 @@ fn remove_datatype_xsd_string(mut term: Node<'_>) -> Node<'_> {
 #[derive(Debug)]
 struct SyncConsumerState {
     initial_sync_ran: bool,
-    last_run: Option<DateTime<Local>>,
+    consumed_task_ids: Vec<String>,
 }
 
-async fn update_last_run(config: &Config, date: &DateTime<Local>) -> anyhow::Result<()> {
+async fn add_consumed_task(config: &Config, task_id: &str) -> anyhow::Result<()> {
     let graph = &config.swarm_graph;
-    let date = date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
     let q = format!(
         r#"
         PREFIX ex: <http://example.org/schema#>
         PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>   
-        DELETE WHERE {{
-            GRAPH <{graph}> {{
-              ex:SwarmState ?p ?o.
-            }}
-            
-        }}
-        ;
         INSERT DATA {{
             GRAPH <{graph}> {{
               ex:SwarmState a ex:State.
-              ex:SwarmState ex:lastRun "{date}"^^xsd:dateTime.
+              ex:SwarmState ex:consumedTasks "{task_id}".
             }}
             
         }}
@@ -772,36 +737,49 @@ async fn get_state(config: &Config) -> anyhow::Result<SyncConsumerState> {
     let q = format!(
         r#"
         PREFIX ex: <http://example.org/schema#>
-        SELECT distinct ?initialSync ?lastRun WHERE {{
+        SELECT distinct ?consumedTask WHERE {{
             GRAPH <{}> {{
-                ?state a  ex:State.
-                optional {{ ?state ex:lastRun ?lastRun }}.
-                optional {{?state ex:initialSync ?initialSync}}
+                ?state a  ex:State;
+                       ex:consumedTasks ?consumedTask.
                     
             }}
       }}
    "#,
         config.swarm_graph
     );
-    let mut res = config.sparql_client.query(&q).await?;
+    let res = config.sparql_client.query(&q).await?;
 
-    if !res.results.bindings.is_empty() {
-        let bindings = res.results.bindings.remove(0);
-        let initial_sync_ran = bindings
-            .get("initialSync")
-            .and_then(|b| b.value.parse::<bool>().ok())
-            .unwrap_or(false);
-        let last_run = bindings
-            .get("lastRun")
-            .and_then(|r| r.value.parse::<chrono::DateTime<Local>>().ok());
-        Ok(SyncConsumerState {
-            initial_sync_ran,
-            last_run,
-        })
-    } else {
-        Ok(SyncConsumerState {
-            initial_sync_ran: false,
-            last_run: None,
-        })
+    let mut consumed_task_ids = Vec::with_capacity(res.results.bindings.len());
+    for mut binding in res.results.bindings {
+        if let Some(consumer_task_id) = binding.remove("consumedTask").map(|b| b.value) {
+            consumed_task_ids.push(consumer_task_id);
+        }
     }
+    let q = format!(
+        r#"
+        PREFIX ex: <http://example.org/schema#>
+        SELECT distinct ?initialSync WHERE {{
+            GRAPH <{}> {{
+                ?state a  ex:State;
+                       ex:initialSync ?initialSync.
+                    
+            }}
+      }}
+   "#,
+        config.swarm_graph
+    );
+    let res = config.sparql_client.query(&q).await?;
+
+    let initial_sync_ran = if res.results.bindings.is_empty() {
+        false
+    } else {
+        res.results.bindings[0]["initialSync"]
+            .value
+            .parse::<bool>()
+            .unwrap_or(false)
+    };
+    Ok(SyncConsumerState {
+        initial_sync_ran,
+        consumed_task_ids,
+    })
 }

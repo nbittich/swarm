@@ -148,7 +148,7 @@ impl JobManagerState {
                 let mut upcomings = schedule.upcoming(chrono::Local);
                 if sj.next_execution.is_none() {
                     sj = ScheduledJob {
-                        next_execution: upcomings.next().map(|e| e),
+                        next_execution: upcomings.next(),
                         ..sj
                     };
                     self.scheduled_job_repository.upsert(&sj.id, &sj).await?;
@@ -159,7 +159,7 @@ impl JobManagerState {
                 };
                 if upcoming <= now {
                     sj = ScheduledJob {
-                        next_execution: upcomings.next().map(|ne| ne),
+                        next_execution: upcomings.next(),
                         ..sj
                     };
                     self.scheduled_job_repository.upsert(&sj.id, &sj).await?;
@@ -318,7 +318,7 @@ impl JobManagerState {
         };
         let schedule = cron::Schedule::from_str(&cron_expr)
             .map_err(|e| ApiError::CronExpression(e.to_string()))?;
-        let next_execution = schedule.upcoming(chrono::Local).next().map(|ne| ne);
+        let next_execution = schedule.upcoming(chrono::Local).next();
 
         let scheduled_job = ScheduledJob {
             id: IdGenerator.get(),

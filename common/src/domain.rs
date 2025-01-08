@@ -32,10 +32,6 @@ pub struct AuthPayload {
     pub password: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct GetPublicationsPayload {
-    pub since: Option<DateTime<Local>>,
-}
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskDefinition {
