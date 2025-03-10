@@ -7,6 +7,7 @@ use chrono::Local;
 use fix_stmt::fix_triples;
 use graph_rdfa_processor::RdfaGraph;
 use swarm_common::{
+    IdGenerator, StreamExt,
     constant::{
         APPLICATION_NAME, EXTRACTOR_CONSUMER, MANIFEST_FILE_NAME, PROV, SUB_TASK_EVENT_STREAM,
         SUB_TASK_STATUS_CHANGE_EVENT, SUB_TASK_STATUS_CHANGE_SUBJECT, TASK_EVENT_STREAM,
@@ -19,7 +20,7 @@ use swarm_common::{
     },
     error, info,
     nats_client::{self, NatsClient},
-    setup_tracing, IdGenerator, StreamExt,
+    setup_tracing,
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt},

@@ -4,6 +4,7 @@
 use chrono::Local;
 use std::env::var;
 use swarm_common::{
+    StreamExt,
     constant::{
         APPLICATION_NAME, CLEANUP_CONSUMER, JOB_COLLECTION, PUBLIC_TENANT, SUB_TASK_COLLECTION,
         SUB_TASK_EVENT_STREAM, SUB_TASK_STATUS_CHANGE_SUBJECT, TASK_COLLECTION, TASK_EVENT_STREAM,
@@ -12,9 +13,9 @@ use swarm_common::{
     debug,
     domain::{Job, JsonMapper, Payload, Status, SubTask, Task},
     error, info,
-    mongo::{doc, Repository, StoreClient, StoreRepository},
+    mongo::{Repository, StoreClient, StoreRepository, doc},
     nats_client::{self, NatsClient},
-    setup_tracing, StreamExt,
+    setup_tracing,
 };
 
 #[derive(Clone)]

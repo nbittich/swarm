@@ -5,6 +5,7 @@ use chrono::Local;
 use cron::Schedule;
 use sparql_client::SparqlClient;
 use swarm_common::{
+    IdGenerator, REGEX_CLEAN_URL, StreamExt,
     constant::{
         JOB_COLLECTION, JOB_MANAGER_CONSUMER, PUBLIC_TENANT, SCHEDULED_JOB_COLLECTION,
         SUB_TASK_COLLECTION, SUB_TASK_EVENT_STREAM, SUB_TASK_STATUS_CHANGE_SUBJECT,
@@ -17,9 +18,9 @@ use swarm_common::{
         TaskDefinition, User,
     },
     error,
-    mongo::{doc, Repository, StoreClient, StoreRepository},
+    mongo::{Repository, StoreClient, StoreRepository, doc},
     nats_client::{self, NatsClient, PullConsumer, Stream},
-    warn, IdGenerator, StreamExt, REGEX_CLEAN_URL,
+    warn,
 };
 
 use crate::domain::{ApiError, ROOT_OUTPUT_DIR_PB};
@@ -383,7 +384,7 @@ impl JobManagerState {
             other => {
                 return Err(ApiError::NewJob(format!(
                     "kind {other:?} not yet handled as a first task!"
-                )))
+                )));
             }
         };
 

@@ -2,8 +2,8 @@ use std::{path::PathBuf, time::Duration};
 
 use anyhow::anyhow;
 use reqwest::{
-    header::{HeaderMap, HeaderValue, ACCEPT, USER_AGENT},
     Client,
+    header::{ACCEPT, HeaderMap, HeaderValue, USER_AGENT},
 };
 use swarm_common::constant::{
     BUFFER_BACK_PRESSURE, CONNECTION_POOL_MAX_IDLE_PER_HOST, DEFAULT_ACCEPT, DEFAULT_USER_AGENT,

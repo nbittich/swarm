@@ -2,10 +2,11 @@
 // pub use swarm_common::alloc;
 
 use chrono::Local;
-use rand::{distributions::Uniform, prelude::Distribution};
-use reqwest::{header::CONTENT_TYPE, Client, Url};
+use rand::distr::{Distribution, Uniform};
+use reqwest::{Client, Url, header::CONTENT_TYPE};
 use std::{env::var, path::Path, str::FromStr, time::Duration};
 use swarm_common::{
+    IdGenerator, REGEX_CLEAN_URL, StreamExt,
     constant::{
         APPLICATION_NAME, CRAWLER_CONSUMER, MANIFEST_FILE_NAME, SUB_TASK_EVENT_STREAM,
         SUB_TASK_STATUS_CHANGE_EVENT, SUB_TASK_STATUS_CHANGE_SUBJECT, TASK_EVENT_STREAM,
@@ -15,10 +16,10 @@ use swarm_common::{
     domain::{JsonMapper, Payload, ScrapeResult, Status, SubTask, SubTaskResult, Task, TaskResult},
     error, info,
     nats_client::{self, NatsClient},
-    setup_tracing, IdGenerator, StreamExt, REGEX_CLEAN_URL,
+    setup_tracing,
 };
 use tokio::{io::AsyncWriteExt, task::JoinSet};
-use util::{get_reqwest_client, make_config, Configuration};
+use util::{Configuration, get_reqwest_client, make_config};
 
 mod util;
 
@@ -169,7 +170,7 @@ pub async fn crawl_website(
             tokio::time::sleep(random_delay_millis(
                 config.min_delay_millis,
                 config.max_delay_millis,
-            ))
+            )?)
             .await;
             let config = config.clone();
             visited_urls.push(url.clone());
@@ -226,10 +227,10 @@ pub async fn crawl_website(
     })
 }
 
-fn random_delay_millis(min_delay: u64, max_delay: u64) -> Duration {
-    let range = Uniform::from(min_delay..=max_delay);
-    let mut rng = rand::thread_rng();
-    Duration::from_millis(range.sample(&mut rng))
+fn random_delay_millis(min_delay: u64, max_delay: u64) -> anyhow::Result<Duration> {
+    let range = Uniform::new_inclusive(min_delay, max_delay)?;
+    let mut rng = rand::rng();
+    Ok(Duration::from_millis(range.sample(&mut rng)))
 }
 async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlProcessingResult> {
     let task_url = REGEX_CLEAN_URL.replace_all(url, "").trim().to_string();
@@ -336,7 +337,9 @@ async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlPro
                                 debug!("scheme {}", iri.scheme());
                             }
                             Err(e) => {
-                                debug!("could not parse url {url}, attempt to join with base {base_iri} {e}");
+                                debug!(
+                                    "could not parse url {url}, attempt to join with base {base_iri} {e}"
+                                );
                                 if let Ok(iri) = base_iri.join(&url) {
                                     debug!("url could be resolved as {iri:?}");
                                     next_urls.push(iri.to_string());
@@ -374,7 +377,7 @@ async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlPro
         tokio::time::sleep(random_delay_millis(
             configuration.min_delay_before_next_retry_millis,
             configuration.max_delay_before_next_retry_millis,
-        ))
+        )?)
         .await;
     }
     Ok(UrlProcessingResult::Ignored(task_url))

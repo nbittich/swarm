@@ -6,17 +6,16 @@ use crate::{
     },
     domain::JsonMapper,
 };
+pub use async_nats::jetstream::Message;
 pub use async_nats::jetstream::consumer::PullConsumer;
 pub use async_nats::jetstream::stream::Stream;
-pub use async_nats::jetstream::Message;
 use async_nats::{
-    jetstream::{
-        self,
-        consumer::{pull::Config as ConsumerConfig, AckPolicy},
-        stream::{Config, DiscardPolicy},
-        Context,
-    },
     Client,
+    jetstream::{
+        self, Context,
+        consumer::{AckPolicy, pull::Config as ConsumerConfig},
+        stream::{Config, DiscardPolicy},
+    },
 };
 
 pub static NATS_WAIT_BEFORE_REDELIVERY: LazyLock<Duration> = LazyLock::new(|| {

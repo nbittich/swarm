@@ -2,8 +2,8 @@ use std::{collections::BTreeMap, ops::Mul, time::Duration};
 
 use anyhow::anyhow;
 use reqwest::{
-    header::{ACCEPT, CONTENT_TYPE},
     Client,
+    header::{ACCEPT, CONTENT_TYPE},
 };
 use serde::{Deserialize, Serialize};
 use tracing::debug;

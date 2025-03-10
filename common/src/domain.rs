@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use chrono::{DateTime, Local};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -275,7 +275,7 @@ impl JsonMapper for User {}
 #[cfg(test)]
 mod test {
 
-    use crate::{domain::JsonMapper, IdGenerator};
+    use crate::{IdGenerator, domain::JsonMapper};
 
     use super::{JobDefinition, Payload, TaskDefinition};
 

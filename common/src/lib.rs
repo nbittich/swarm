@@ -2,7 +2,7 @@ use std::sync::LazyLock;
 
 use chrono::Local;
 use tracing::Level;
-use tracing_subscriber::{fmt::time::FormatTime, EnvFilter, FmtSubscriber};
+use tracing_subscriber::{EnvFilter, FmtSubscriber, fmt::time::FormatTime};
 
 struct LocalTime;
 

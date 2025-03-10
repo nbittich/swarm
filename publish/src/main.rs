@@ -9,6 +9,7 @@ use std::{
     time::Duration,
 };
 use swarm_common::{
+    IdGenerator, StreamExt,
     constant::{
         APPLICATION_NAME, CHUNK_SIZE, PUBLISH_CONSUMER, SUB_TASK_EVENT_STREAM,
         SUB_TASK_STATUS_CHANGE_SUBJECT, TASK_EVENT_STREAM, TASK_STATUS_CHANGE_EVENT,
@@ -18,7 +19,7 @@ use swarm_common::{
     domain::{DiffResult, JsonMapper, Payload, Status, Task, TaskResult},
     error, info,
     nats_client::{self, NatsClient},
-    setup_tracing, IdGenerator, StreamExt,
+    setup_tracing,
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},

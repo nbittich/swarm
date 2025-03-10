@@ -1,13 +1,13 @@
 /* CUSTOM ALLOC, disabled as it consumes more memory */
 //pub use swarm_common::alloc;
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use async_compression::tokio::bufread::GzipDecoder;
 use chrono::Local;
 use cron::Schedule;
 use reqwest::{
-    header::{HeaderMap, HeaderValue, AUTHORIZATION},
     Client,
+    header::{AUTHORIZATION, HeaderMap, HeaderValue},
 };
 use sparql_client::{SparqlClient, TARGET_GRAPH};
 use std::{
@@ -20,9 +20,10 @@ use std::{
     time::Duration,
 };
 use swarm_common::{
+    IdGenerator,
     constant::{APPLICATION_NAME, CHUNK_SIZE, ROOT_OUTPUT_DIR, XSD},
     domain::{AuthBody, AuthPayload, Task, TaskResult},
-    error, info, json, setup_tracing, warn, IdGenerator,
+    error, info, json, setup_tracing, warn,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::{io::BufReader, task::JoinSet};
@@ -416,7 +417,7 @@ async fn consume(
                 Err((task, e)) => {
                     return Err(anyhow!(
                         "could not download task files. Error: {e}, task:\n {task:?}"
-                    ))
+                    ));
                 }
             }
         }

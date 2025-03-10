@@ -1,17 +1,17 @@
 use std::{path::PathBuf, sync::LazyLock};
 
 use axum::{
-    extract::{FromRequestParts, OptionalFromRequestParts},
-    http::{request::Parts, StatusCode},
-    response::{IntoResponse, Response},
     Json, RequestPartsExt,
+    extract::{FromRequestParts, OptionalFromRequestParts},
+    http::{StatusCode, request::Parts},
+    response::{IntoResponse, Response},
 };
 use axum_extra::{
-    headers::{authorization::Bearer, Authorization},
     TypedHeader,
+    headers::{Authorization, authorization::Bearer},
 };
 use chrono::{DateTime, Duration, Local};
-use jsonwebtoken::{decode, DecodingKey, EncodingKey, Validation};
+use jsonwebtoken::{DecodingKey, EncodingKey, Validation, decode};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use swarm_common::{
