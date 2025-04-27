@@ -1,4 +1,4 @@
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3.9-eclipse-temurin-24 AS build
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ COPY src ./src
 
 RUN mvn package -DskipTests
 
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:24-jre-alpine
 
 RUN apk add --no-cache tzdata
 RUN ln -s /usr/share/zoneinfo/Europe/Brussels /etc/localtime
@@ -21,4 +21,4 @@ COPY --from=build /app/target/filter.jar app.jar
 
 
 
-ENTRYPOINT ["java","-jar","/app/app.jar"]
+ENTRYPOINT ["java","-XX:+UseZGC","-jar","/app/app.jar"]

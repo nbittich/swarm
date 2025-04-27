@@ -36,6 +36,7 @@ import be.bittich.filter.lib.JobModel.TaskResult.ExtractRDFa;
 import be.bittich.filter.lib.JobModel.TaskResult.ExtractRDFa.ExtractRDFaValue;
 import be.bittich.filter.lib.JobModel.TaskResult.FilterSHACL.FilterSHACLValue;
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import be.bittich.filter.lib.Constant;
