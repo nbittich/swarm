@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use futures::TryStreamExt;
 use mongodb::Collection;
 use mongodb::bson::{self, Document, doc};
@@ -80,8 +81,7 @@ where
         &self._client
     }
 }
-
-#[async_trait::async_trait]
+#[async_trait]
 pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std::fmt::Debug> {
     fn get_collection(&self) -> &Collection<T>;
     fn get_client(&self) -> &StoreClient;
