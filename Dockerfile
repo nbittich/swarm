@@ -1,12 +1,12 @@
-FROM public.ecr.aws/docker/library/rust:1.85-alpine3.21 AS chef 
+FROM public.ecr.aws/docker/library/rust:1.86-alpine3.21 AS chef 
 # We only pay the installation cost once, 
 # it will be cached from the second build onwards
 RUN  apk add --no-cache openssl-dev build-base cmake pkgconfig musl-dev  openssl-libs-static perl 
 RUN apk add \
-  --no-cache \
-  --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing \
-  --repository http://dl-cdn.alpinelinux.org/alpine/edge/main \
-  gperftools-dev
+    --no-cache \
+    --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing \
+    --repository http://dl-cdn.alpinelinux.org/alpine/edge/main \
+    gperftools-dev
 RUN cargo install cargo-chef 
 
 WORKDIR /app
@@ -32,10 +32,10 @@ FROM public.ecr.aws/docker/library/alpine:3.21 AS runtime
 RUN apk add --no-cache  ca-certificates 
 
 RUN apk add \
-  --no-cache \
-  --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing \
-  --repository http://dl-cdn.alpinelinux.org/alpine/edge/main \
-  gperftools-dev
+    --no-cache \
+    --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing \
+    --repository http://dl-cdn.alpinelinux.org/alpine/edge/main \
+    gperftools-dev
 
 # set timezone
 RUN apk add --no-cache tzdata
