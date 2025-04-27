@@ -17,3 +17,6 @@ swarm_common.workspace=true
 sparql_client.workspace = true
 async-compression = { workspace = true, features = ["tokio", "gzip"] }
 tortank.workspace = true
+
+async_zip = { workspace = true, features = ["tokio", "tokio-fs","deflate"] }
+

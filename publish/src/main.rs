@@ -1,4 +1,5 @@
-use anyhow::anyhow;
+use anyhow::{Context, anyhow};
+use async_zip::{Compression, ZipEntryBuilder, base::write::ZipFileWriter};
 /* CUSTOM ALLOC, disabled as it consumes more memory */
 //pub use swarm_common::alloc;
 use chrono::Local;
@@ -142,10 +143,15 @@ pub async fn append_to_file(path: &Path, s: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+pub async fn gzip_and_append_to_dir(dir: &Path, file: &Path) -> anyhow::Result<()> {
+    let gzip_file = gzip(file).await?;
+    let final_path = PathBuf::from(dir).join(gzip_file.file_name().context("no filename")?);
+    tokio::fs::rename(gzip_file, final_path).await?;
+    Ok(())
+}
 pub async fn gzip(path: &Path) -> anyhow::Result<PathBuf> {
     if !path.exists() {
-        tokio::fs::File::create(path).await?;
-        return Ok(path.to_path_buf());
+        return Err(anyhow!("{path:?} doesn't exist. Cannot gzip it"));
     }
     use async_compression::tokio::write::GzipEncoder;
     let extension = path.extension().and_then(|ex| ex.to_str()).unwrap_or("");
@@ -158,8 +164,39 @@ pub async fn gzip(path: &Path) -> anyhow::Result<PathBuf> {
     tokio::io::copy_buf(&mut buf, &mut encoder).await?;
 
     encoder.shutdown().await?;
-    tokio::fs::remove_file(&path).await?;
     Ok(gzip_path)
+}
+pub async fn zip(path: &Path) -> anyhow::Result<PathBuf> {
+    let parent_dir = path.parent().context("zip: must have a parent dir")?;
+    let zip_path = PathBuf::from(parent_dir).join(format!(
+        "{}.zip",
+        path.file_name().context("zip: filename")?.to_string_lossy()
+    ));
+    let mut zip = tokio::fs::File::create(&zip_path).await?;
+    let mut writer = ZipFileWriter::with_tokio(&mut zip);
+    let mut entries = tokio::fs::read_dir(&path).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        let path = entry.path();
+        if path.is_dir() {
+            return Err(anyhow!("zip: recursive not implemented."));
+        } else {
+            let mut file = tokio::fs::File::open(&path).await?;
+
+            let builder = ZipEntryBuilder::new(
+                path.file_name()
+                    .context("zip entry: no filename {path:?}")?
+                    .to_string_lossy()
+                    .to_string()
+                    .into(),
+                Compression::Deflate,
+            );
+            let mut data = Vec::new();
+            tokio::io::copy(&mut file, &mut tokio::io::BufWriter::new(&mut data)).await?;
+            writer.write_entry_whole(builder, &data).await?;
+        }
+    }
+    tokio::fs::remove_dir_all(&path).await?;
+    Ok(zip_path)
 }
 
 async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<()>> {
@@ -179,15 +216,18 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
 
         let removed_triple_file_path = task
             .output_dir
-            .join(format!("removed-triples-{}.ttl", IdGenerator.get()));
+            .join(format!("removed-triples-{}", IdGenerator.get()));
 
+        tokio::fs::create_dir_all(&removed_triple_file_path).await?;
         let inserted_triple_file_path = task
             .output_dir
-            .join(format!("inserted-triples-{}.ttl", IdGenerator.get()));
+            .join(format!("inserted-triples-{}", IdGenerator.get()));
+        tokio::fs::create_dir_all(&inserted_triple_file_path).await?;
         // for e.g initial sync
         let intersect_triple_file_path = task
             .output_dir
-            .join(format!("intersection-triples-{}.ttl", IdGenerator.get()));
+            .join(format!("intersection-triples-{}", IdGenerator.get()));
+        tokio::fs::create_dir_all(&intersect_triple_file_path).await?;
         // for debugging, maybe retrying
 
         let failed_query_file_path = task
@@ -237,11 +277,12 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
         }
 
         task.modified_date = Some(Local::now());
+
         task.result = Some(TaskResult::Publish {
-            removed_triple_file_path: gzip(&removed_triple_file_path).await?,
-            intersect_triple_file_path: gzip(&intersect_triple_file_path).await?,
-            inserted_triple_file_path: gzip(&inserted_triple_file_path).await?,
-            failed_query_file_path: gzip(&failed_query_file_path).await?,
+            removed_triple_file_path: zip(&removed_triple_file_path).await?,
+            intersect_triple_file_path: zip(&intersect_triple_file_path).await?,
+            inserted_triple_file_path: zip(&inserted_triple_file_path).await?,
+            failed_query_file_path: zip(&failed_query_file_path).await?,
         });
         task.status = if errors.is_empty() {
             Status::Success
@@ -343,41 +384,22 @@ async fn update(
         chunk.push(stmt.to_string());
         if chunk.len() == config.chunk_size {
             let chunk = std::mem::take(&mut chunk);
-            let append_to_file_path = append_to_file_path.to_owned();
             let config = config.clone();
             tasks.spawn(async move {
-                match config
+                config
                     .sparql_client
                     .bulk_update(&config.target_graph, &chunk, update_type)
                     .await
-                {
-                    Ok(_) => {
-                        let triples = format!("{}\n", chunk.join("\n"));
-                        append_to_file(&append_to_file_path, &triples).await?;
-                        Ok(())
-                    }
-
-                    e @ Err(_) => e,
-                }
             });
         }
     }
     if !chunk.is_empty() {
-        let append_to_file_path = append_to_file_path.to_owned();
         let config = config.clone();
         tasks.spawn(async move {
-            match config
+            config
                 .sparql_client
                 .bulk_update(&config.target_graph, &chunk, update_type)
                 .await
-            {
-                Ok(_) => {
-                    let triples = format!("{}\n", chunk.join("\n"));
-                    append_to_file(&append_to_file_path, &triples).await?;
-                    Ok(())
-                }
-                e @ Err(_) => e,
-            }
         });
     }
     while let Some(handle) = tasks.join_next().await {
@@ -388,6 +410,9 @@ async fn update(
             }
         }
     }
+
+    // copy file to future archive
+    gzip_and_append_to_dir(append_to_file_path, &triples_path).await?;
 
     Ok(())
 }
