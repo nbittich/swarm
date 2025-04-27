@@ -37,6 +37,8 @@ impl IdGenerator {
         uuid::Uuid::now_v7().to_string().replace("-", "")
     }
 }
-pub static REGEX_CLEAN_URL: LazyLock<regex::Regex> = LazyLock::new(|| {
+pub static REGEX_CLEAN_JSESSIONID: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(";jsessionid=[a-zA-Z;0-9]*").expect("could not compile regex")
 });
+pub static REGEX_CLEAN_S_UUID: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"/\(S\([^)]+\)\)").expect("could not compile regex"));

@@ -5,7 +5,7 @@ use chrono::Local;
 use cron::Schedule;
 use sparql_client::SparqlClient;
 use swarm_common::{
-    IdGenerator, REGEX_CLEAN_URL, StreamExt,
+    IdGenerator, REGEX_CLEAN_JSESSIONID, REGEX_CLEAN_S_UUID, StreamExt,
     constant::{
         JOB_COLLECTION, JOB_MANAGER_CONSUMER, PUBLIC_TENANT, SCHEDULED_JOB_COLLECTION,
         SUB_TASK_COLLECTION, SUB_TASK_EVENT_STREAM, SUB_TASK_STATUS_CHANGE_SUBJECT,
@@ -373,7 +373,10 @@ impl JobManagerState {
                 tokio::fs::create_dir_all(&job_root_dir)
                     .await
                     .map_err(|e| ApiError::NewJob(e.to_string()))?;
-                let scrape_url = REGEX_CLEAN_URL.replace_all(&url, "").trim().to_string();
+                let scrape_url = REGEX_CLEAN_JSESSIONID
+                    .replace_all(REGEX_CLEAN_S_UUID.replace_all(&url, "").trim(), "")
+                    .trim()
+                    .to_string();
                 target_url = Some(scrape_url.clone());
                 TaskDefinition {
                     name: task_definition.name,

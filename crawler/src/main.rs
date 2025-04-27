@@ -6,7 +6,7 @@ use rand::distr::{Distribution, Uniform};
 use reqwest::{Client, Url, header::CONTENT_TYPE};
 use std::{env::var, path::Path, str::FromStr, time::Duration};
 use swarm_common::{
-    IdGenerator, REGEX_CLEAN_URL, StreamExt,
+    IdGenerator, REGEX_CLEAN_JSESSIONID, REGEX_CLEAN_S_UUID, StreamExt,
     constant::{
         APPLICATION_NAME, CRAWLER_CONSUMER, MANIFEST_FILE_NAME, SUB_TASK_EVENT_STREAM,
         SUB_TASK_STATUS_CHANGE_EVENT, SUB_TASK_STATUS_CHANGE_SUBJECT, TASK_EVENT_STREAM,
@@ -149,7 +149,10 @@ pub async fn crawl_website(
     client: Client,
 ) -> anyhow::Result<TaskResult> {
     let config = make_config(client, path.to_path_buf()).await?;
-    let url = REGEX_CLEAN_URL.replace_all(url, "").trim().to_string();
+    let url = REGEX_CLEAN_JSESSIONID
+        .replace_all(REGEX_CLEAN_S_UUID.replace_all(url, "").trim(), "")
+        .trim()
+        .to_string();
     let mut success_count = 0;
     let mut failure_count = 0;
     let mut visited_urls = Vec::with_capacity(1500);
@@ -233,7 +236,10 @@ fn random_delay_millis(min_delay: u64, max_delay: u64) -> anyhow::Result<Duratio
     Ok(Duration::from_millis(range.sample(&mut rng)))
 }
 async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlProcessingResult> {
-    let task_url = REGEX_CLEAN_URL.replace_all(url, "").trim().to_string();
+    let task_url = REGEX_CLEAN_JSESSIONID
+        .replace_all(REGEX_CLEAN_S_UUID.replace_all(url, "").trim(), "")
+        .trim()
+        .to_string();
     debug!("processing {task_url}");
 
     let base_iri = {
