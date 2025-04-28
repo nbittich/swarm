@@ -50,7 +50,8 @@ The application can be configured through the following environment variables:
 | `TARGET_GRAPH`           | Target graph for SPARQL operations.                  | http://bittich.be/graphs/swarm-consumer | No           |
 | `SWARM_GRAPH`            | Swarm graph to store sync state                      | N/A                                     | Yes          |
 | `ROOT_OUTPUT_DIR`        | Directory for output files.                          | `/share`                                | No           |
-| `HEAP_SIZE_MB`           | Heap size to limit allocation when reading ttl files | 500                                     | No           |
+| `HEAP_SIZE_MB`           | Heap size to limit allocation when reading ttl files | 50                                      | No           |
 | `DELTA_BUFFER_SLOT_CAP`  | Size of the buffer allocated for accumulating delta. | 32768 (default)                         | No           |
+| `DELTA_SLEEP_MS`         | Sleep time between two delta push calls              | 100 (default)                           | No           |
 
 ---

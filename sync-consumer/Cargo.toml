@@ -21,3 +21,5 @@ cron.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
 xxhash-rust = { workspace = true, features = ["xxh3"] }
+async_zip = { workspace = true, features = ["tokio", "tokio-fs","deflate"] }
+itertools = {workspace =true, features= []}

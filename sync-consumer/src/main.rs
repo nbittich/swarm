@@ -3,29 +3,31 @@
 
 use anyhow::{Context, anyhow};
 use async_compression::tokio::bufread::GzipDecoder;
+use async_zip::base::read::seek::ZipFileReader;
 use chrono::Local;
 use cron::Schedule;
+use itertools::Itertools;
 use reqwest::{
     Client,
     header::{AUTHORIZATION, HeaderMap, HeaderValue},
 };
-use sparql_client::{SparqlClient, TARGET_GRAPH};
+use sparql_client::{SparqlClient, SparqlUpdateType, TARGET_GRAPH};
 use std::{
     borrow::Cow,
     collections::HashMap,
     env::var,
+    io::Cursor,
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
     time::Duration,
 };
 use swarm_common::{
-    IdGenerator,
+    AsyncReadExt, IdGenerator,
     constant::{APPLICATION_NAME, CHUNK_SIZE, ROOT_OUTPUT_DIR, XSD},
     domain::{AuthBody, AuthPayload, Task, TaskResult},
     error, info, json, setup_tracing, warn,
 };
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::{io::BufReader, task::JoinSet};
 use tortank::turtle::turtle_doc::{Node, RdfJsonTriple, Statement, TurtleDoc};
 use xxhash_rust::xxh3::xxh3_64;
@@ -41,6 +43,7 @@ const ENABLE_DELTA_PUSH: &str = "ENABLE_DELTA_PUSH";
 const DELETE_FILES: &str = "DELETE_FILES";
 const HEAP_SIZE_MB: &str = "HEAP_SIZE_MB";
 const DELTA_BUFFER_SLOT_CAP: &str = "DELTA_BUFFER_SLOT_CAP";
+const DELTA_SLEEP_MS: &str = "DELTA_SLEEP_MS";
 
 #[derive(Debug, Clone)]
 struct Config {
@@ -49,6 +52,7 @@ struct Config {
     sparql_client: SparqlClient,
     swarm_base_url: Arc<String>,
     chunk_size: usize,
+    delta_sleep_ms: u64,
     swarm_client: Client,
     swarm_graph: Arc<String>,
     delta_endpoint: Arc<String>,
@@ -70,6 +74,9 @@ async fn get_config() -> anyhow::Result<Config> {
     let chunk_size = var(CHUNK_SIZE)
         .unwrap_or_else(|_| "1024".into())
         .parse::<usize>()?;
+    let delta_sleep_ms = var(DELTA_SLEEP_MS)
+        .unwrap_or_else(|_| "100".into())
+        .parse::<u64>()?;
     let schedule = var(CRON_EXPRESSION)
         .map(|c| cron::Schedule::from_str(&c))
         .unwrap_or_else(|_| cron::Schedule::from_str("0 * * * * * *"))?;
@@ -136,6 +143,7 @@ async fn get_config() -> anyhow::Result<Config> {
         delete_files,
         root_output_dir,
         chunk_size,
+        delta_sleep_ms,
         target_graph,
         swarm_graph,
         swarm_client,
@@ -170,7 +178,7 @@ async fn main() -> anyhow::Result<()> {
         var(HEAP_SIZE_MB)
             .ok()
             .and_then(|h| h.parse::<usize>().ok())
-            .unwrap_or(500)
+            .unwrap_or(50)
             * 1024
             * 1024,
     ); // 500mb
@@ -208,7 +216,7 @@ async fn main() -> anyhow::Result<()> {
                     add_consumed_task(&config, ct).await?;
                 }
                 current_state.consumed_task_ids.append(&mut consumed_tasks);
-                tokio::time::sleep(Duration::from_secs(60)).await;
+                tokio::time::sleep(Duration::from_secs(60)).await; // FIXME make it configurable
             }
             Err(e) => {
                 error!("could not run initial sync! {e}. shutdown...");
@@ -294,7 +302,7 @@ async fn flush_delta(
             .send()
             .await?;
         info!("delta push: sleep before sending next chunk");
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        tokio::time::sleep(Duration::from_millis(config.delta_sleep_ms)).await;
     }
 
     Ok(())
@@ -337,6 +345,53 @@ async fn flush_triple_buffer(
     }
     Ok(())
 }
+async fn process_zip_file(
+    config: &Config,
+    buffer: &mut String,
+    delta_buffer: &mut HashMap<u64, RdfJsonTriple>,
+    dir: PathBuf,
+    sut: SparqlUpdateType,
+) -> anyhow::Result<()> {
+    info!("processing {dir:?}");
+    let mut read_dir = tokio::fs::read_dir(dir).await?;
+
+    while let Some(entry) = read_dir.next_entry().await? {
+        let zip_path = entry.path();
+        info!("processing {sut:?} for {zip_path:?}");
+        let mut zip_file = BufReader::new(tokio::fs::File::open(&zip_path).await?);
+        let mut zip_reader = ZipFileReader::with_tokio(&mut zip_file).await?;
+        for idx in 0..zip_reader.file().entries().len() {
+            let mut entry_reader = zip_reader.reader_with_entry(idx).await?;
+            info!(
+                "processing ttl file {}",
+                entry_reader.entry().filename().as_str()?
+            );
+            buffer.clear();
+            // it will always be gzipped, thus probably refactor this
+            // get rid of the buffer that doesn't solve any problem anymore
+            if entry_reader.entry().filename().as_str()?.ends_with(".gz") {
+                use tokio::io::AsyncReadExt;
+                let mut gz_buff =
+                    String::with_capacity(entry_reader.entry().uncompressed_size() as usize);
+                entry_reader.read_to_string(&mut gz_buff).await?;
+                let cursor = Cursor::new(gz_buff);
+                let mut reader = BufReader::new(cursor);
+                let mut decoder = GzipDecoder::new(&mut reader);
+                decoder.read_to_string(buffer).await?;
+            } else {
+                entry_reader.read_to_string(buffer).await?;
+            }
+            let doc =
+                TurtleDoc::try_from((buffer.as_str(), None)).map_err(|e| anyhow::anyhow!("{e}"))?;
+            for chunk in doc.into_iter().chunks(config.chunk_size).into_iter() {
+                flush_triple_buffer(config, chunk.collect(), sut, delta_buffer).await?;
+            }
+        }
+        flush_delta(config, sut, delta_buffer).await?;
+    }
+    Ok(())
+}
+
 async fn consume(
     consumer_root_dir: &Path,
     config: &Config,
@@ -425,135 +480,38 @@ async fn consume(
 
     // we start with the delete ones.
     if let Some(to_remove_dir) = to_remove_dir.take() {
-        let mut read_dir = tokio::fs::read_dir(to_remove_dir).await?;
-
-        while let Some(entry) = read_dir.next_entry().await? {
-            let path = entry.path();
-            info!("processing deletes for {path:?}");
-            read_ttl_file(&path, buffer).await?;
-
-            let mut stmts = Vec::with_capacity(config.chunk_size);
-            let mut rest = buffer.as_str();
-            while !rest.trim().is_empty() {
-                if let Some((remaining, stmt)) =
-                    TurtleDoc::parse_ntriples_statement(rest).map_err(|e| anyhow!("{e}"))?
-                {
-                    stmts.push(stmt);
-                    rest = remaining;
-                    if stmts.len() == config.chunk_size {
-                        flush_triple_buffer(
-                            config,
-                            std::mem::take(&mut stmts),
-                            sparql_client::SparqlUpdateType::Delete,
-                            delta_buffer,
-                        )
-                        .await?;
-                    }
-                }
-            }
-            if !stmts.is_empty() {
-                flush_triple_buffer(
-                    config,
-                    stmts,
-                    sparql_client::SparqlUpdateType::Delete,
-                    delta_buffer,
-                )
-                .await?;
-            }
-            flush_delta(
-                config,
-                sparql_client::SparqlUpdateType::Delete,
-                delta_buffer,
-            )
-            .await?;
-        }
-    }
-
-    // we then process the new inserts
-    let mut read_dir = tokio::fs::read_dir(new_inserts_dir).await?;
-    while let Some(entry) = read_dir.next_entry().await? {
-        let path = entry.path();
-        info!("processing inserts for {path:?}");
-        read_ttl_file(&path, buffer).await?;
-        let mut stmts = Vec::with_capacity(config.chunk_size);
-        let mut rest = buffer.as_str();
-        while !rest.trim().is_empty() {
-            if let Some((remaining, stmt)) =
-                TurtleDoc::parse_ntriples_statement(rest).map_err(|e| anyhow!("{e}"))?
-            {
-                stmts.push(stmt);
-                rest = remaining;
-                if stmts.len() == config.chunk_size {
-                    flush_triple_buffer(
-                        config,
-                        std::mem::take(&mut stmts),
-                        sparql_client::SparqlUpdateType::Insert,
-                        delta_buffer,
-                    )
-                    .await?;
-                }
-            }
-        }
-        if !stmts.is_empty() {
-            flush_triple_buffer(
-                config,
-                stmts,
-                sparql_client::SparqlUpdateType::Insert,
-                delta_buffer,
-            )
-            .await?;
-        }
-
-        flush_delta(
+        process_zip_file(
             config,
-            sparql_client::SparqlUpdateType::Insert,
+            buffer,
             delta_buffer,
+            to_remove_dir,
+            SparqlUpdateType::Delete,
         )
         .await?;
     }
 
+    // we then process the new inserts
+    process_zip_file(
+        config,
+        buffer,
+        delta_buffer,
+        new_inserts_dir,
+        SparqlUpdateType::Insert,
+    )
+    .await?;
+
     // finally, the intersects if present
+    // the type is insert, because if intersect needs to be consumed, we're probably in initial
+    // sync
     if let Some(intersect_dir) = intersect_dir.take() {
-        let mut read_dir = tokio::fs::read_dir(intersect_dir).await?;
-        while let Some(entry) = read_dir.next_entry().await? {
-            let path = entry.path();
-            info!("processing intersects for {path:?}");
-            read_ttl_file(&path, buffer).await?;
-            let mut stmts = Vec::with_capacity(config.chunk_size);
-            let mut rest = buffer.as_str();
-            while !rest.trim().is_empty() {
-                if let Some((remaining, stmt)) =
-                    TurtleDoc::parse_ntriples_statement(rest).map_err(|e| anyhow!("{e}"))?
-                {
-                    stmts.push(stmt);
-                    rest = remaining;
-                    if stmts.len() == config.chunk_size {
-                        flush_triple_buffer(
-                            config,
-                            std::mem::take(&mut stmts),
-                            sparql_client::SparqlUpdateType::Insert,
-                            delta_buffer,
-                        )
-                        .await?;
-                    }
-                }
-            }
-            if !stmts.is_empty() {
-                flush_triple_buffer(
-                    config,
-                    stmts,
-                    sparql_client::SparqlUpdateType::Insert,
-                    delta_buffer,
-                )
-                .await?;
-            }
-            flush_delta(
-                config,
-                sparql_client::SparqlUpdateType::Insert,
-                delta_buffer,
-            )
-            .await?;
-        }
+        process_zip_file(
+            config,
+            buffer,
+            delta_buffer,
+            intersect_dir,
+            SparqlUpdateType::Insert,
+        )
+        .await?;
     }
     // cleanup
     if config.delete_files {
@@ -562,26 +520,6 @@ async fn consume(
     Ok(tasks.into_iter().map(|t| t.id).collect())
 }
 
-async fn read_ttl_file(path: &Path, buffer: &mut String) -> anyhow::Result<()> {
-    buffer.clear();
-    let f = tokio::fs::File::open(&path).await?;
-    let mut reader = BufReader::new(f);
-
-    if path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .filter(|ext| *ext == "gz")
-        .is_some()
-    {
-        let mut decoder = GzipDecoder::new(reader);
-        decoder.read_to_string(buffer).await?;
-        decoder.shutdown().await?;
-    } else {
-        reader.read_to_string(buffer).await?;
-        reader.shutdown().await?;
-    }
-    Ok(())
-}
 async fn download_task(
     task: &Task,
     base_url: &str,
