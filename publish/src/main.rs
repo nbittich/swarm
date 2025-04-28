@@ -23,7 +23,7 @@ use swarm_common::{
     setup_tracing,
 };
 use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
     task::JoinSet,
 };
 use tortank::turtle::turtle_doc::TurtleDoc;
@@ -191,10 +191,11 @@ pub async fn zip(path: &Path) -> anyhow::Result<PathBuf> {
                 Compression::Deflate,
             );
             let mut data = Vec::new();
-            tokio::io::copy(&mut file, &mut tokio::io::BufWriter::new(&mut data)).await?;
+            file.read_to_end(&mut data).await?;
             writer.write_entry_whole(builder, &data).await?;
         }
     }
+    writer.close().await?;
     tokio::fs::remove_dir_all(&path).await?;
     Ok(zip_path)
 }
@@ -282,7 +283,7 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
             removed_triple_file_path: zip(&removed_triple_file_path).await?,
             intersect_triple_file_path: zip(&intersect_triple_file_path).await?,
             inserted_triple_file_path: zip(&inserted_triple_file_path).await?,
-            failed_query_file_path: zip(&failed_query_file_path).await?,
+            failed_query_file_path,
         });
         task.status = if errors.is_empty() {
             Status::Success
