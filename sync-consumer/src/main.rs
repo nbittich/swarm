@@ -376,8 +376,8 @@ async fn process_zip_file(
             if entry_reader.entry().filename().as_str()?.ends_with(".gz") {
                 use tokio::io::AsyncReadExt;
                 let mut gz_buff =
-                    String::with_capacity(entry_reader.entry().uncompressed_size() as usize);
-                entry_reader.read_to_string(&mut gz_buff).await?;
+                    Vec::with_capacity(entry_reader.entry().uncompressed_size() as usize);
+                entry_reader.read_to_end(&mut gz_buff).await?;
                 let cursor = Cursor::new(gz_buff);
                 let mut reader = BufReader::new(cursor);
                 let mut decoder = GzipDecoder::new(&mut reader);
