@@ -9,7 +9,7 @@ authors = ["Nordine Bittich"]
 description = "Swarm"
 documentation = "https://github.com/nbittich/swarm"
 repository = "https://github.com/nbittich/swarm"
-rust-version = "1.85"
+rust-version = "1.86"
 edition = "2024"
 license = "MIT"
 
