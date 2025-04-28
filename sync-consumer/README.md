@@ -47,8 +47,8 @@ The application can be configured through the following environment variables:
 | `ENABLE_DELTA_PUSH`      | Enables delta push functionality.                    | `false`                                 | No           |
 | `DELETE_FILES`           | Enables deletion of files post-processing.           | `true`                                  | No           |
 | `CHUNK_SIZE`             | Number of items to process in one batch.             | `1024`                                  | No           |
-| `TARGET_GRAPH`           | Target graph for SPARQL operations.                  | http://bittich.be/graphs/swarm-consumer | No           |
-| `SWARM_GRAPH`            | Swarm graph to store sync state                      | N/A                                     | Yes          |
+| `TARGET_GRAPH`           | Target graph for SPARQL operations.                  | N/A                                     | Yes          |
+| `SWARM_GRAPH`            | Swarm graph to store sync state                      | http://bittich.be/graphs/swarm-consumer | No           |
 | `ROOT_OUTPUT_DIR`        | Directory for output files.                          | `/share`                                | No           |
 | `HEAP_SIZE_MB`           | Heap size to limit allocation when reading ttl files | 50                                      | No           |
 | `DELTA_BUFFER_SLOT_CAP`  | Size of the buffer allocated for accumulating delta. | 32768 (default)                         | No           |
