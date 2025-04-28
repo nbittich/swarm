@@ -367,6 +367,10 @@ async fn process_zip_file(
                 entry_reader.entry().filename().as_str()?
             );
             buffer.clear();
+            if entry_reader.entry().uncompressed_size() == 0 {
+                info!("entry seems to be empty, skipping,...");
+                continue;
+            }
             // it will always be gzipped, thus probably refactor this
             // get rid of the buffer that doesn't solve any problem anymore
             if entry_reader.entry().filename().as_str()?.ends_with(".gz") {

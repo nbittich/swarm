@@ -39,7 +39,7 @@ The application can be configured through the following environment variables:
 | **Environment Variable** | **Description**                                      | **Default Value**                       | **Required** |
 | ------------------------ | ---------------------------------------------------- | --------------------------------------- | ------------ |
 | `ENABLE_INITIAL_SYNC`    | Enables initial synchronization.                     | `false`                                 | No           |
-| `CRON_EXPRESSION`        | Cron expression to schedule tasks.                   | `0 * * * * * * ` (Every hour)           | No           |
+| `CRON_EXPRESSION`        | Cron expression to schedule tasks.                   | `0 * * * * * * ` (Every minutes)        | No           |
 | `SWARM_BASE_URL`         | Base URL for Swarm API.                              | N/A                                     | Yes          |
 | `SWARM_USERNAME`         | Username for Swarm authentication.                   | N/A                                     | Yes          |
 | `SWARM_PASSWORD`         | Password for Swarm authentication.                   | N/A                                     | Yes          |

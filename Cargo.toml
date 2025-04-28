@@ -63,6 +63,7 @@ trait-variant = "0.1.2"
 async-trait = "0.1.88"
 swarm_common={version="0.1.0",path="./common"}
 sparql_client={version="0.1.0",path="./sparql_client"}
+mlua = "0.10.3"
 
 [profile.release]
 opt-level = 'z'   # Optimize for size.
