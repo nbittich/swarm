@@ -147,6 +147,7 @@ impl SparqlClient {
         update_type: SparqlUpdateType,
     ) -> anyhow::Result<()> {
         if triples.is_empty() {
+            debug!("no triples to update");
             return Ok(());
         }
         let operation = match update_type {
@@ -156,6 +157,7 @@ impl SparqlClient {
         };
 
         let q = make_update_query(target_graph, operation, triples);
+        debug!("Executing query: \n{q}\n");
         match self.update(&q).await {
             Ok(_) => Ok(()),
             Err(_) if triples.len() == 1 => Err(anyhow!("{q}")),
