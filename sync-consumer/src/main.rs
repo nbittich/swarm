@@ -196,7 +196,14 @@ async fn main() -> anyhow::Result<()> {
         HashMap::with_capacity(0)
     };
 
-    let mut current_state = get_state(&config).await?;
+    info!("getting the current state...");
+    let mut current_state = match get_state(&config).await {
+        Ok(cs) => cs,
+        Err(e) => {
+            error!("Error while getting the current state: {e}");
+            return Err(e);
+        }
+    };
     if config.enable_initial_sync && !current_state.initial_sync_ran {
         let consumer_root_dir = config.root_output_dir.join(IdGenerator.get());
         match consume(
