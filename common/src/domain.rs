@@ -152,6 +152,7 @@ pub enum TaskResult {
         inserted_triple_file_path: PathBuf,
         failed_query_file_path: PathBuf,
     },
+    Index,
     Json(Value),
 }
 

@@ -31,6 +31,9 @@ pub static INTERESTING_PROPERTIES: &str = "INTERESTING_PROPERTIES";
 pub static HTTP_CACHE_PATH: &str = "HTTP_CACHE_PATH";
 pub static UUID_COMPLEMENT_PREDICATE: &str = "UUID_COMPLEMENT_PREDICATE";
 pub static CHUNK_SIZE: &str = "CHUNK_SIZE";
+pub static MEILISEARCH_URL: &str = "MEILISEARCH_URL";
+pub static MEILISEARCH_KEY: &str = "MEILISEARCH_KEY";
+pub static INDEX_CONFIG_PATH: &str = "INDEX_CONFIG_PATH";
 /* COLLECTION NAME */
 pub static TASK_COLLECTION: &str = "tasks";
 pub static SUB_TASK_COLLECTION: &str = "subTasks";
@@ -57,6 +60,7 @@ pub static CLEANUP_CONSUMER: &str = "cleanup";
 pub static ARCHIVE_CONSUMER: &str = "archive";
 pub static EXTRACTOR_CONSUMER: &str = "extractor";
 pub static PUBLISH_CONSUMER: &str = "publish";
+pub static INDEX_CONSUMER: &str = "index";
 pub static JOB_MANAGER_CONSUMER: &str = "jobManager";
 
 /* MISC */

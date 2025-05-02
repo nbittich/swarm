@@ -1,0 +1,27 @@
+[package]
+name = "index"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow = { workspace = true, features = ["backtrace"] }
+chrono.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "fs", "time"] }
+swarm_common.workspace=true
+tortank.workspace = true
+async-compression = { workspace = true, features = ["tokio", "gzip"] }
+sparql_client.workspace=true
+cron.workspace = true
+reqwest = { workspace = true, features = ["json"] }
+serde = { workspace = true, features = ["derive"] }
+xxhash-rust = { workspace = true, features = ["xxh3"] }
+async_zip = { workspace = true, features = ["tokio", "tokio-fs","deflate"] }
+itertools = {workspace =true, features= []}
+serde_json.workspace = true
+meilisearch-sdk.workspace = true
