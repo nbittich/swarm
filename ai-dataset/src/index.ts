@@ -1,7 +1,6 @@
 import Together from "together-ai";
-import { createInterface } from 'readline/promises';
 import token from "./token";
-
+// import { createInterface } from 'readline/promises';
 async function main() {
     process.env.TOGETHER_API_KEY = token;
     const together = new Together();
@@ -12,11 +11,6 @@ async function main() {
     }[] = [
             { "role": "system", "content": "You are an expert in semantic data, SPARQL and RDF." },
         ];
-    const rl = createInterface({
-        input: process.stdin,
-        output: process.stdout,
-    });
-
 
     const message = `generate questions/answers (instruction /input output for ai training) based on the following data:
 	ns77:fac4fba5-e3b7-4afb-aae9-908a688c597a	rdf:type	ns18:BesluitNieuweStijl ,
@@ -36,23 +30,29 @@ async function main() {
         console.log(choice.message!.content)
         messages.push({ "role": "assistant", "content": choice.message!.content || "" });
     }
+    // const rl = createInterface({
+    //     input: process.stdin,
+    //     output: process.stdout,
+    // });
+    //
 
-    let prompt = await rl.question("");
-
-    while (prompt != "exit") {
-
-        messages.push({ "role": "user", "content": prompt });
-        const response = await together.chat.completions.create({
-            messages,
-            model: "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
-        });
-        for (const choice of response!.choices) {
-            console.log(choice.message!.content)
-            messages.push({ "role": "assistant", "content": choice.message!.content || "" });
-        }
-        prompt = await rl.question("");
-
-    }
+    //
+    // let prompt = await rl.question("");
+    //
+    // while (prompt != "exit") {
+    //
+    //     messages.push({ "role": "user", "content": prompt });
+    //     const response = await together.chat.completions.create({
+    //         messages,
+    //         model: "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+    //     });
+    //     for (const choice of response!.choices) {
+    //         console.log(choice.message!.content)
+    //         messages.push({ "role": "assistant", "content": choice.message!.content || "" });
+    //     }
+    //     prompt = await rl.question("");
+    //
+    // }
 }
 
 main().then()
