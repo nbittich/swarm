@@ -285,15 +285,22 @@ async fn update(
                     let mut doc_data = HashMap::new();
 
                     let uuid = {
-                        let mut uuid_stmt = doc.list_statements(
+                        let uuid_stmt = doc.list_statements(
                             Some(&Node::Iri(Cow::Borrowed(&subject))),
                             Some(&Node::Iri(Cow::Borrowed(&config.uuid_predicate))),
                             None,
                         );
                         if uuid_stmt.is_empty() {
-                            return Err(anyhow!("no uuid found in model for {subject}"));
+                            debug!("no uuid found in model for {subject}, skipping...");
+                            None
+                        } else {
+                            uuid_stmt
+                                .first()
+                                .map(|e| e.object.to_string().replace('"', ""))
                         }
-                        uuid_stmt.remove(0).object.to_string().replace('"', "")
+                    };
+                    let Some(uuid) = uuid else {
+                        continue 'sub;
                     };
                     doc_data.insert("id".to_string(), Value::from_str(&uuid)?);
                     for prop in ic.properties.iter() {
