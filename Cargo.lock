@@ -1606,20 +1606,15 @@ name = "index"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-compression",
- "async_zip",
  "chrono",
- "cron",
  "itertools",
  "meilisearch-sdk",
- "reqwest",
  "serde",
  "serde_json",
  "sparql_client",
  "swarm_common",
  "tokio",
  "tortank",
- "xxhash-rust",
 ]
 
 [[package]]
