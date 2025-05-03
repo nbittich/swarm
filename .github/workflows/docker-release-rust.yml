@@ -18,6 +18,7 @@ jobs:
           - diff
           - publish
           - archive
+          - index
           - sync-consumer
           - cleanup
     steps:

@@ -1,7 +1,6 @@
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 
-const SUBJECT_BINDING: &str = "$sbm";
 const SUBJECT_BINDING_TYPE: &str = "$type";
 
 #[derive(Serialize, Deserialize)]
@@ -22,7 +21,7 @@ pub struct RdfProperty {
 }
 
 impl RdfProperty {
-    pub fn to_query_op(&self) -> String {
+    pub fn to_query_op(&self, subject: &str) -> String {
         let path = self
             .paths
             .iter()
@@ -30,38 +29,18 @@ impl RdfProperty {
             .collect::<Vec<_>>()
             .join("/");
         if self.optional {
-            format!("OPTIONAL {{ ?{SUBJECT_BINDING} {path} ?{} }}", self.name)
+            format!("OPTIONAL {{ {subject} {path} ?{} }}", self.name)
         } else {
-            format!("?{SUBJECT_BINDING} {path} ?{}", self.name)
+            format!("{subject} {path} ?{}", self.name)
         }
     }
-    pub fn get_var(&self) -> String {
-        format!("?{}", self.name)
-    }
+
     pub fn validate(&self) -> anyhow::Result<()> {
-        if self.name == SUBJECT_BINDING || self.name == SUBJECT_BINDING_TYPE {
+        if self.name == SUBJECT_BINDING_TYPE {
             return Err(anyhow!(
-                "you cannot name a property with {SUBJECT_BINDING} or {SUBJECT_BINDING_TYPE} in your config, because it's used internally."
+                "you cannot name a property with {SUBJECT_BINDING_TYPE} in your config, because it's used internally."
             ));
         }
         Ok(())
-    }
-}
-
-impl IndexConfiguration {
-    pub fn to_type_op(&self) -> String {
-        let target_types = self
-            .rdf_type
-            .iter()
-            .map(|t| format!("<{t}>"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        format!(
-            r#"
-          VALUES ?{SUBJECT_BINDING_TYPE} {{
-                {target_types}
-            }}
-        "#
-        )
     }
 }

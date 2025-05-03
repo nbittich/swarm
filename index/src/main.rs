@@ -1,13 +1,18 @@
-mod config;
-use anyhow::anyhow;
 /* CUSTOM ALLOC, disabled as it consumes more memory */
 //pub use swarm_common::alloc;
+//
+mod config;
+use anyhow::anyhow;
 use chrono::Local;
 use config::IndexConfiguration;
 use itertools::Itertools;
 use meilisearch_sdk::client::Client as MeiliSearchClient;
+use serde_json::Value;
 use sparql_client::{SparqlClient, SparqlUpdateType};
-use std::{borrow::Cow, env::var, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    borrow::Cow, collections::HashMap, env::var, path::PathBuf, str::FromStr, sync::Arc,
+    time::Duration,
+};
 use swarm_common::{
     StreamExt,
     constant::{
@@ -95,7 +100,7 @@ async fn main() -> anyhow::Result<()> {
                     if matches!(
                         &task.payload,
                         Payload::FromPreviousStep {
-                            payload: Some(TaskResult::Diff { .. }),
+                            payload: Some(TaskResult::Publish { .. }),
                             ..
                         }
                     ) && task.status == Status::Scheduled =>
@@ -151,9 +156,11 @@ async fn main() -> anyhow::Result<()> {
 
 async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<()>> {
     if let Payload::FromPreviousStep {
-        payload: Some(TaskResult::Diff {
-            manifest_file_path, ..
-        }),
+        payload:
+            Some(TaskResult::Publish {
+                diff_manifest_file_path,
+                ..
+            }),
         ..
     } = &task.payload
     {
@@ -162,7 +169,8 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
         }
         tokio::fs::create_dir_all(&task.output_dir).await?;
         let mut manifest =
-            tokio::io::BufReader::new(tokio::fs::File::open(manifest_file_path).await?).lines();
+            tokio::io::BufReader::new(tokio::fs::File::open(diff_manifest_file_path).await?)
+                .lines();
         let mut errors = vec![];
         let mut tasks = JoinSet::new();
         while let Ok(Some(line)) = manifest.next_line().await {
@@ -201,21 +209,15 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
 async fn index(line: &str, config: &Config) -> anyhow::Result<()> {
     let payload = DiffResult::deserialize(line)?;
 
-    let mut tasks = JoinSet::new();
     if let Some(to_remove) = payload.to_remove_path.as_ref() {
         let to_remove = to_remove.clone();
         let config = config.clone();
-        tasks.spawn(async move { update(config, to_remove, SparqlUpdateType::Delete).await });
+        update(config, to_remove, SparqlUpdateType::Delete).await?;
     }
     if let Some(to_insert) = payload.new_insert_path.as_ref() {
         let to_insert = to_insert.clone();
         let config = config.clone();
-        tasks.spawn(async move { update(config, to_insert, SparqlUpdateType::Insert).await });
-    }
-
-    debug!("running {} tasks", tasks.len());
-    while let Some(handle) = tasks.join_next().await {
-        handle??;
+        update(config, to_insert, SparqlUpdateType::Insert).await?;
     }
     Ok(())
 }
@@ -245,27 +247,102 @@ async fn update(
                 // we only need the uuid to delete
                 let uuids = updates
                     .into_iter()
-                    .map(|u| {
+                    .flat_map(|u| {
                         doc.list_statements(
                             Some(&u.subject),
                             Some(&Node::Iri(Cow::Borrowed(&config.uuid_predicate))),
                             None,
                         )
                     })
-                    .flatten()
                     .map(|uuid| uuid.object.to_string().replace('"', ""))
+                    .dedup()
                     .collect_vec();
                 debug!(
                     "deleting the following documents in index {}: {uuids:?}",
                     ic.name
                 );
-                config
+                let task = config
                     .search_client
                     .index(&ic.name)
                     .delete_documents(&uuids)
                     .await?;
+                debug!("{task:?}"); // FIXME this is just being lazy. it might hurt in the future,
+                // as we don't really now if the meilisearch task succeeded once the job is already
+                // set to success
             }
-            SparqlUpdateType::Insert => {}
+            SparqlUpdateType::Insert => {
+                // inserting is a bit more work
+                // we need to query sparql because
+                // the document might need extra information from the triplestore
+                // e.g: the name of the municipality
+                let mut documents = Vec::with_capacity(updates.len());
+                'sub: for subject in updates
+                    .drain(..)
+                    .map(|s| s.subject.to_string())
+                    .dedup()
+                    .collect_vec()
+                {
+                    let mut doc_data = HashMap::new();
+
+                    let uuid = {
+                        let mut uuid_stmt = doc.list_statements(
+                            Some(&Node::Iri(Cow::Borrowed(&subject))),
+                            Some(&Node::Iri(Cow::Borrowed(&config.uuid_predicate))),
+                            None,
+                        );
+                        if uuid_stmt.is_empty() {
+                            return Err(anyhow!("no uuid found in model for {subject}"));
+                        }
+                        uuid_stmt.remove(0).object.to_string().replace('"', "")
+                    };
+                    doc_data.insert("id".to_string(), Value::from_str(&uuid)?);
+                    for prop in ic.properties.iter() {
+                        prop.validate()?;
+                        let where_clause = prop.to_query_op(&subject);
+                        let query = format!(
+                            r#"
+                            SELECT ?{} WHERE {{
+                                # TODO do we want to limit to specific graphs?
+                                {where_clause}
+                            }}
+                        "#,
+                            prop.name
+                        );
+                        let res = config.sparql_client.query(&query).await?;
+                        if res.results.bindings.is_empty() && !prop.optional {
+                            debug!(
+                                "{} is not optional in {}. skipping indexing document {subject}",
+                                prop.name, ic.name
+                            );
+                            continue 'sub;
+                        }
+                        let mut res = res
+                            .results
+                            .bindings
+                            .into_iter()
+                            .flat_map(|b| b.into_values())
+                            .filter_map(|b| Value::from_str(&b.value).ok())
+                            .collect_vec();
+                        if res.is_empty() {
+                            continue;
+                        }
+                        if res.len() == 1 {
+                            doc_data.insert(prop.name.clone(), res.remove(0));
+                        } else {
+                            doc_data.insert(prop.name.clone(), Value::Array(res));
+                        }
+                    }
+                    documents.push(doc_data);
+                }
+                let task = config
+                    .search_client
+                    .index(&ic.name)
+                    .add_or_update(&documents, None)
+                    .await?;
+                debug!("{task:?}"); // FIXME this is just being lazy. it might hurt in the future,
+                // as we don't really now if the meilisearch task succeeded once the job is already
+                // set to success
+            }
             SparqlUpdateType::NoOp => info!("index update: no op"),
         }
     }

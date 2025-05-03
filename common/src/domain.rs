@@ -151,6 +151,7 @@ pub enum TaskResult {
         intersect_triple_file_path: PathBuf,
         inserted_triple_file_path: PathBuf,
         failed_query_file_path: PathBuf,
+        diff_manifest_file_path: PathBuf,
     },
     Index,
     Json(Value),
