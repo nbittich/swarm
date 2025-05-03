@@ -209,15 +209,19 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
 async fn index(line: &str, config: &Config) -> anyhow::Result<()> {
     let payload = DiffResult::deserialize(line)?;
 
+    let mut tasks = JoinSet::new();
     if let Some(to_remove) = payload.to_remove_path.as_ref() {
         let to_remove = to_remove.clone();
         let config = config.clone();
-        update(config, to_remove, SparqlUpdateType::Delete).await?;
+        tasks.spawn(async || update(config, to_remove, SparqlUpdateType::Delete).await);
     }
     if let Some(to_insert) = payload.new_insert_path.as_ref() {
         let to_insert = to_insert.clone();
         let config = config.clone();
-        update(config, to_insert, SparqlUpdateType::Insert).await?;
+        tasks.spawn(async || update(config, to_insert, SparqlUpdateType::Insert).await);
+    }
+    while let Some(handle) = tasks.join_next().await {
+        handle??;
     }
     Ok(())
 }
