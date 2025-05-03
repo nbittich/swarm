@@ -354,7 +354,7 @@ async fn update(
                 let task = config
                     .search_client
                     .index(&ic.name)
-                    .add_or_update(&documents, None)
+                    .add_or_update(&documents, Some("id"))
                     .await?;
                 debug!("{task:?}"); // FIXME this is just being lazy. it might hurt in the future,
                 // as we don't really now if the meilisearch task succeeded once the job is already
