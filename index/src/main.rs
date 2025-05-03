@@ -187,7 +187,7 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
         while let Some(handle) = tasks.join_next().await {
             match handle.map_err(|e| anyhow!("{e}")) {
                 Err(e) | Ok(Err(e)) => {
-                    errors.push(format!("error during publishing!  error: {e:?}"));
+                    errors.push(format!("error during indexing!  error: {e:?}"));
                 }
                 _ => {}
             }
@@ -307,7 +307,10 @@ async fn update(
                     let Some(uuid) = uuid else {
                         continue 'sub;
                     };
-                    doc_data.insert("id".to_string(), Value::from_str(&uuid)?);
+                    doc_data.insert(
+                        "id".to_string(),
+                        Value::from_str(&uuid).unwrap_or_else(|_| Value::String(uuid)),
+                    );
                     for prop in ic.properties.iter() {
                         prop.validate()?;
                         let where_clause = prop.to_query_op(subject);
@@ -333,7 +336,9 @@ async fn update(
                             .bindings
                             .into_iter()
                             .flat_map(|b| b.into_values())
-                            .filter_map(|b| Value::from_str(&b.value).ok())
+                            .map(|b| {
+                                Value::from_str(&b.value).unwrap_or_else(|_| Value::String(b.value))
+                            })
                             .collect_vec();
                         if res.is_empty() {
                             continue;
