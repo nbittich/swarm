@@ -2,6 +2,7 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 
 const SUBJECT_BINDING_TYPE: &str = "$type";
+pub static INDEX_ID_KEY: &str = "_id";
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,9 +43,9 @@ impl RdfProperty {
     }
 
     pub fn validate(&self) -> anyhow::Result<()> {
-        if self.name == SUBJECT_BINDING_TYPE {
+        if self.name == SUBJECT_BINDING_TYPE || self.name == INDEX_ID_KEY {
             return Err(anyhow!(
-                "you cannot name a property with {SUBJECT_BINDING_TYPE} in your config, because it's used internally."
+                "you cannot name a property with {SUBJECT_BINDING_TYPE} or {INDEX_ID_KEY} in your config, because it's used internally."
             ));
         }
         Ok(())

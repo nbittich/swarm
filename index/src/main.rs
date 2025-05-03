@@ -4,7 +4,7 @@
 mod config;
 use anyhow::anyhow;
 use chrono::Local;
-use config::IndexConfiguration;
+use config::{INDEX_ID_KEY, IndexConfiguration};
 use itertools::Itertools;
 use meilisearch_sdk::client::Client as MeiliSearchClient;
 use serde_json::Value;
@@ -308,7 +308,7 @@ async fn update(
                         continue 'sub;
                     };
                     doc_data.insert(
-                        "id".to_string(),
+                        INDEX_ID_KEY.to_string(),
                         Value::from_str(&uuid).unwrap_or_else(|_| Value::String(uuid)),
                     );
                     for prop in ic.properties.iter() {
@@ -354,7 +354,7 @@ async fn update(
                 let task = config
                     .search_client
                     .index(&ic.name)
-                    .add_or_update(&documents, Some("id"))
+                    .add_or_update(&documents, Some(INDEX_ID_KEY))
                     .await?;
                 debug!("{task:?}"); // FIXME this is just being lazy. it might hurt in the future,
                 // as we don't really now if the meilisearch task succeeded once the job is already
