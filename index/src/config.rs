@@ -35,9 +35,9 @@ impl RdfProperty {
             .collect::<Vec<_>>()
             .join("/");
         if self.optional {
-            format!("OPTIONAL {{ {subject} {path} ?{} }}", self.name)
+            format!("OPTIONAL {{ <{subject}> {path} ?{} }}", self.name)
         } else {
-            format!("{subject} {path} ?{}", self.name)
+            format!("<{subject}> {path} ?{}", self.name)
         }
     }
 
