@@ -339,6 +339,7 @@ async fn update(
                             .map(|b| {
                                 Value::from_str(&b.value).unwrap_or_else(|_| Value::String(b.value))
                             })
+                            .dedup()
                             .collect_vec();
                         if res.is_empty() {
                             continue;
