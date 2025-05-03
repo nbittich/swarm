@@ -26,8 +26,8 @@ impl RdfProperty {
             .paths
             .iter()
             .map(|p| {
-                if p.starts_with('^') {
-                    format!("^<{}>", &p[1..])
+                if let Some(stripped) = p.strip_prefix('^') {
+                    format!("^<{}>", stripped)
                 } else {
                     format!("<{p}>")
                 }

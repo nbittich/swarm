@@ -18,7 +18,7 @@ use swarm_common::{
     constant::{
         APPLICATION_NAME, INDEX_CONFIG_PATH, INDEX_CONSUMER, MEILISEARCH_KEY, MEILISEARCH_URL,
         SUB_TASK_EVENT_STREAM, SUB_TASK_STATUS_CHANGE_SUBJECT, TASK_EVENT_STREAM,
-        TASK_STATUS_CHANGE_EVENT, TASK_STATUS_CHANGE_SUBJECT, UUID_COMPLEMENT_PREDICATE,
+        TASK_STATUS_CHANGE_EVENT, TASK_STATUS_CHANGE_SUBJECT, UUID_COMPLEMENT_PREDICATE, XSD,
     },
     debug,
     domain::{DiffResult, JsonMapper, Payload, Status, Task, TaskResult},
@@ -254,7 +254,9 @@ async fn update(
                             None,
                         )
                     })
-                    .map(|uuid| uuid.object.to_string().replace('"', ""))
+                    .map(|e| e.object.clone())
+                    .map(|o| remove_datatype_xsd_string(o))
+                    .map(|o| o.to_string().replace('"', ""))
                     .dedup()
                     .collect_vec();
                 debug!(
@@ -282,11 +284,12 @@ async fn update(
                     .dedup()
                     .collect_vec()
                 {
+                    let subject = &subject[1..subject.len() - 1]; // remove first and last character <url>
                     let mut doc_data = HashMap::new();
 
                     let uuid = {
                         let uuid_stmt = doc.list_statements(
-                            Some(&Node::Iri(Cow::Borrowed(&subject))),
+                            Some(&Node::Iri(Cow::Borrowed(subject))),
                             Some(&Node::Iri(Cow::Borrowed(&config.uuid_predicate))),
                             None,
                         );
@@ -296,7 +299,9 @@ async fn update(
                         } else {
                             uuid_stmt
                                 .first()
-                                .map(|e| e.object.to_string().replace('"', ""))
+                                .map(|e| e.object.clone())
+                                .map(|o| remove_datatype_xsd_string(o))
+                                .map(|o| o.to_string().replace('"', ""))
                         }
                     };
                     let Some(uuid) = uuid else {
@@ -305,7 +310,7 @@ async fn update(
                     doc_data.insert("id".to_string(), Value::from_str(&uuid)?);
                     for prop in ic.properties.iter() {
                         prop.validate()?;
-                        let where_clause = prop.to_query_op(&subject);
+                        let where_clause = prop.to_query_op(subject);
                         let query = format!(
                             r#"
                             SELECT ?{} WHERE {{
@@ -355,4 +360,24 @@ async fn update(
     }
 
     Ok(())
+}
+fn remove_datatype_xsd_string(mut term: Node<'_>) -> Node<'_> {
+    match term {
+        Node::Literal(tortank::turtle::turtle_doc::Literal::Quoted {
+            ref mut datatype, ..
+        }) => match datatype {
+            Some(iri) => {
+                if iri.as_ref() == &Node::Iri(Cow::Owned(XSD("string"))) {
+                    *datatype = None;
+                }
+                term
+            }
+            _ => term,
+        },
+        Node::Ref(node) => {
+            let node = &*node;
+            remove_datatype_xsd_string(node.clone())
+        }
+        _ => term,
+    }
 }
