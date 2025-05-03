@@ -213,7 +213,7 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
         }
         tokio::fs::create_dir_all(&task.output_dir).await?;
         let mut manifest =
-            tokio::io::BufReader::new(tokio::fs::File::open(manifest_file_path).await?).lines();
+            tokio::io::BufReader::new(tokio::fs::File::open(&manifest_file_path).await?).lines();
 
         let removed_triple_file_path = task
             .output_dir
@@ -284,6 +284,7 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
             intersect_triple_file_path: zip(&intersect_triple_file_path).await?,
             inserted_triple_file_path: zip(&inserted_triple_file_path).await?,
             failed_query_file_path,
+            diff_manifest_file_path: manifest_file_path.clone(),
         });
         task.status = if errors.is_empty() {
             Status::Success
@@ -305,7 +306,6 @@ async fn publish(
 ) -> anyhow::Result<()> {
     let payload = DiffResult::deserialize(line)?;
 
-    let mut tasks = JoinSet::new();
     if let Some(to_remove) = payload.to_remove_path.as_ref() {
         let to_remove = to_remove.clone();
         let (config, removed_triple_file_path, failed_query_path) = (
@@ -313,16 +313,14 @@ async fn publish(
             removed_triple_file_path.to_path_buf(),
             failed_query_path.to_path_buf(),
         );
-        tasks.spawn(async move {
-            update(
-                config,
-                to_remove,
-                &removed_triple_file_path,
-                &failed_query_path,
-                SparqlUpdateType::Delete,
-            )
-            .await
-        });
+        update(
+            config,
+            to_remove,
+            &removed_triple_file_path,
+            &failed_query_path,
+            SparqlUpdateType::Delete,
+        )
+        .await?;
     }
     if let Some(to_insert) = payload.new_insert_path.as_ref() {
         let to_insert = to_insert.clone();
@@ -331,16 +329,14 @@ async fn publish(
             inserted_triple_file_path.to_path_buf(),
             failed_query_path.to_path_buf(),
         );
-        tasks.spawn(async move {
-            update(
-                config,
-                to_insert,
-                &inserted_triple_file_path,
-                &failed_query_path,
-                SparqlUpdateType::Insert,
-            )
-            .await
-        });
+        update(
+            config,
+            to_insert,
+            &inserted_triple_file_path,
+            &failed_query_path,
+            SparqlUpdateType::Insert,
+        )
+        .await?;
     }
     if let Some(intersect) = payload.intersect_path.as_ref() {
         let intersect = intersect.clone();
@@ -349,20 +345,14 @@ async fn publish(
             intersect_triple_file_path.to_path_buf(),
             failed_query_path.to_path_buf(),
         );
-        tasks.spawn(async move {
-            update(
-                config,
-                intersect,
-                &intersect_triple_file_path,
-                &failed_query_path,
-                SparqlUpdateType::NoOp,
-            )
-            .await
-        });
-    }
-    debug!("running {} tasks", tasks.len());
-    while let Some(handle) = tasks.join_next().await {
-        handle??;
+        update(
+            config,
+            intersect,
+            &intersect_triple_file_path,
+            &failed_query_path,
+            SparqlUpdateType::NoOp,
+        )
+        .await?;
     }
     Ok(())
 }

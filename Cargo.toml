@@ -1,6 +1,7 @@
 
 [workspace]
-members = [ "add-uuid", "archive", "cleanup", "common","crawler", "diff", "extractor", "job-manager", "publish", "sparql_client", "sync-consumer"]
+members = [ "add-uuid", "archive", "cleanup", "common","crawler", "diff", "extractor", 
+    "index", "job-manager", "publish", "sparql_client", "sync-consumer"]
 resolver = "2"
 
 [workspace.package]
@@ -25,7 +26,7 @@ graph-rdfa-processor = "0.3.3"
 serial_test = "3.2.0"
 test-case = "3.3.1"
 env_logger = "0.11.8"
-tortank = "0.25.4"
+tortank = "0.25.5"
 async_zip = "0.0.17"
 tikv-jemallocator = "0.6.0"
 tokio = "1.44.2"
@@ -61,9 +62,11 @@ xxhash-rust="0.8.15"
 bson="2.14.0"
 trait-variant = "0.1.2"
 async-trait = "0.1.88"
-swarm_common={version="0.1.0",path="./common"}
-sparql_client={version="0.1.0",path="./sparql_client"}
 mlua = "0.10.3"
+meilisearch-sdk = "0.28.0"
+
+swarm_common= {version="0.1.0",path="./common"}
+sparql_client= {version="0.1.0",path="./sparql_client"}
 
 [profile.release]
 opt-level = 'z'   # Optimize for size.

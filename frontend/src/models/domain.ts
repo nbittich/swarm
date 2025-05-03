@@ -94,7 +94,7 @@ export type TaskResult =
     | { type: "filterSHACL"; value: { successCount: number; failureCount: number; manifestFilePath: string } }
     | { type: "complementWithUuid"; value: { successCount: number; failureCount: number; manifestFilePath: string } }
     | { type: "diff"; value: { successCount: number; failureCount: number; manifestFilePath: string } }
-    | { type: "publish"; value: { removedTripleFilePath: string; intersectTripleFilePath: string; insertedTripleFilePath: string; failedQueryFilePath: string } }
+    | { type: "publish"; value: { removedTripleFilePath: string; intersectTripleFilePath: string; insertedTripleFilePath: string; failedQueryFilePath: string, diffManifestFilePath: string } }
     | { type: "json"; value: object };
 
 export type SubTaskResult =
