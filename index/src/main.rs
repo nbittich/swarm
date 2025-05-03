@@ -195,7 +195,7 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
 
         task.modified_date = Some(Local::now());
 
-        task.result = Some(TaskResult::Index);
+        task.result = None; // FIXME, just pure laziness, at least a manifest with the meilisearch task uid
         task.status = if errors.is_empty() {
             Status::Success
         } else {

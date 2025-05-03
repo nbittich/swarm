@@ -153,7 +153,6 @@ pub enum TaskResult {
         failed_query_file_path: PathBuf,
         diff_manifest_file_path: PathBuf,
     },
-    Index,
     Json(Value),
 }
 
