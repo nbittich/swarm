@@ -25,7 +25,13 @@ impl RdfProperty {
         let path = self
             .paths
             .iter()
-            .map(|p| format!("<{p}>"))
+            .map(|p| {
+                if p.starts_with('^') {
+                    format!("^<{}>", &p[1..])
+                } else {
+                    format!("<{p}>")
+                }
+            })
             .collect::<Vec<_>>()
             .join("/");
         if self.optional {
