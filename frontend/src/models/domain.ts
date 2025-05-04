@@ -189,6 +189,10 @@ export interface SearchQueryRequest {
     page: number;
 }
 
+export interface IndexStatistics {
+    numberOfDocuments: number
+}
+
 export type SearchQueryType =
     | { type: "word"; value: string }
     | { type: "phrase"; value: string };

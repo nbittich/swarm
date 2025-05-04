@@ -32,6 +32,7 @@ const appReducer = (state: combinedState | undefined, action: UnknownAction): co
             ...state,
             search: {
                 configurations: [],
+                indexStatistics: undefined,
                 loading: false,
                 searchResult: undefined,
                 searching: false,

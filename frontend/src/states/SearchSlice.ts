@@ -1,6 +1,6 @@
 
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { IndexConfiguration, SearchQueryRequest, SearchQueryResponse } from '@swarm/models/domain';
+import { IndexConfiguration, IndexStatistics, SearchQueryRequest, SearchQueryResponse } from '@swarm/models/domain';
 import axios from 'axios';
 
 
@@ -10,6 +10,7 @@ interface SearchState {
     searchResult: SearchQueryResponse | undefined;
     searching: boolean;
     error: string | undefined;
+    indexStatistics: IndexStatistics | undefined
 }
 
 const initialState: SearchState = {
@@ -18,16 +19,20 @@ const initialState: SearchState = {
     searchResult: undefined,
     searching: false,
     error: undefined,
+    indexStatistics: undefined
 };
 
 
 export const fetchSearchConfigurations = createAsyncThunk('fetchConfigurations', async () => {
     const response = await axios.get<IndexConfiguration[]>('/api/search-configuration');
     return response.data;
-
 });
 
-// Async thunk: POST /search/{index}
+export const fetchIndexStatistics = createAsyncThunk('fetchIndexStatistics', async (index: string) => {
+    const response = await axios.get<IndexStatistics>(`/api/search/${index}/stats`);
+    return response.data;
+});
+
 export const performSearch = createAsyncThunk('performSearch', async ({ index, request }: { index: string; request: SearchQueryRequest }) => {
     const response = await axios.post<SearchQueryResponse>(`/api/search/${index}`, request);
     return response.data;
@@ -56,7 +61,19 @@ const searchSlice = createSlice({
                 state.loading = false;
                 state.error = action.error.message || 'Error fetching configurations';
             })
-
+            // fetchIndexStatistics
+            .addCase(fetchIndexStatistics.pending, (state) => {
+                state.loading = true;
+                state.error = undefined;
+            })
+            .addCase(fetchIndexStatistics.fulfilled, (state, action: PayloadAction<IndexStatistics>) => {
+                state.indexStatistics = action.payload;
+                state.loading = false;
+            })
+            .addCase(fetchIndexStatistics.rejected, (state, action) => {
+                state.loading = false;
+                state.error = action.error.message || 'Error fetching stats';
+            })
             // performSearch
             .addCase(performSearch.pending, (state) => {
                 state.searching = true;

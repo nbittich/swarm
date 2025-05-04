@@ -17,7 +17,9 @@ use swarm_common::{
     TryFutureExt, debug,
     domain::{
         AuthBody, AuthPayload, Job, JobDefinition, ScheduledJob, SubTask, Task, User,
-        index_config::{IndexConfiguration, SearchQueryRequest, SearchQueryResponse},
+        index_config::{
+            IndexConfiguration, IndexStatistics, SearchQueryRequest, SearchQueryResponse,
+        },
     },
     info,
     mongo::{FindOptions, Page, Pageable, Repository, doc},
@@ -45,6 +47,7 @@ pub async fn serve(
     let app = Router::new()
         .route("/sparql", get(sparql).post(sparql))
         .route("/search/{index}", post(search))
+        .route("/search/{index}/stats", get(index_stats))
         .route("/search-configuration", get(search_configuration))
         .route("/login", post(authorize))
         .route("/scheduled-jobs/new", post(new_scheduled_job))
@@ -388,5 +391,21 @@ async fn search(
         .search(&index, &req)
         .await
         .map(Json)
+        .map_err(|e| ApiError::SearchError(e.to_string()))
+}
+async fn index_stats(
+    State(manager): State<JobManagerState>,
+    axum::extract::Path(index): axum::extract::Path<String>,
+) -> Result<Json<IndexStatistics>, ApiError> {
+    manager
+        .search_client
+        .index(index)
+        .get_stats()
+        .await
+        .map(|st| {
+            Json(IndexStatistics {
+                number_of_documents: st.number_of_documents,
+            })
+        })
         .map_err(|e| ApiError::SearchError(e.to_string()))
 }

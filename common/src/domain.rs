@@ -367,6 +367,12 @@ pub mod index_config {
         pub page: Option<usize>,
         pub limit: Option<usize>,
     }
+    #[derive(Debug, Serialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct IndexStatistics {
+        pub number_of_documents: usize,
+    }
+
     impl SearchQueryRequest {
         pub fn get_formatted_query(&self) -> Option<String> {
             self.query.as_ref().map(|query| match query {
