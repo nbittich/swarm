@@ -165,3 +165,16 @@ export const truncate = (str: string, length: number) => {
     }
     return str;
 };
+
+export interface IndexConfiguration {
+    name: string;
+    rdfType: string[];
+    // onPath: string; // fixme, we don't use it
+    properties: RdfProperty[];
+}
+
+export interface RdfProperty {
+    name: string;
+    paths: string[];
+    optional: boolean;
+}

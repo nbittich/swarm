@@ -343,6 +343,30 @@ pub mod index_config {
         pub page: usize,
     }
 
+    #[derive(Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    #[serde(tag = "type", content = "value")]
+    pub enum SearchQueryType {
+        Word(String),
+        Phrase(String),
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub enum Order {
+        Asc,
+        Desc,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct SearchQueryResponse {
+        pub hits: Vec<HashMap<String, Value>>,
+        pub total_hits: Option<usize>,
+        pub total_pages: Option<usize>,
+        pub page: Option<usize>,
+        pub limit: Option<usize>,
+    }
     impl SearchQueryRequest {
         pub fn get_formatted_query(&self) -> Option<String> {
             self.query.as_ref().map(|query| match query {
@@ -364,30 +388,6 @@ pub mod index_config {
                 "".to_string()
             }
         }
-    }
-
-    #[derive(Debug, Serialize, Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    #[serde(tag = "type", content = "value")]
-    pub enum SearchQueryType {
-        Word(String),
-        Phrase(String),
-    }
-
-    #[derive(Debug, Serialize, Deserialize)]
-    pub enum Order {
-        Asc,
-        Desc,
-    }
-
-    #[derive(Debug, Serialize, Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    pub struct SearchQueryResponse {
-        pub hits: Vec<HashMap<String, Value>>,
-        pub total_hits: Option<usize>,
-        pub total_pages: Option<usize>,
-        pub page: Option<usize>,
-        pub limit: Option<usize>,
     }
 }
 
