@@ -1,5 +1,5 @@
 import { AppDispatch, RootState } from "@swarm/states/Store";
-import { Descriptions, Divider, Flex, Input, Pagination, Row, Select, Space, Spin, Typography, } from "antd";
+import { Alert, Card, Descriptions, Divider, Flex, Input, Pagination, Row, Select, Space, Spin, Typography, } from "antd";
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import FilterBuilder from "./FilterBuilder";
@@ -14,6 +14,7 @@ const SearchContainer: React.FC = () => {
     const searchResults = useSelector((state: RootState) => state.appReducer.search.searchResult);
     const loading = useSelector((state: RootState) => state.appReducer.search.loading);
     const searching = useSelector((state: RootState) => state.appReducer.search.searching);
+    const error = useSelector((state: RootState) => state.appReducer.search.error);
     const [selectedIndex, setSelectedIndex] = useState<undefined | string>();
     const [query, setQuery] = useState<undefined | string>("");
     const [limit, _] = useState(5);
@@ -33,11 +34,12 @@ const SearchContainer: React.FC = () => {
     function handleSearch(page = 1) {
         if (!selectedIndex) return;
         let filter: undefined | string = undefined;
-        if (filters.length) {
-            filter = filters.map((f, i) => {
+        const filteredFilters = filters.filter(f => f.key?.length);
+        if (filteredFilters.length) {
+            filter = filteredFilters.map((f, i) => {
                 const value = f.value.split(' ').length > 1 || f.value.includes(".") ? `"${f.value}"` : f.value;
                 const part = `${f.key} ${f.operator} ${value}`;
-                return i < filters.length - 1 ? `${part} ${f.joiner}` : part;
+                return i < filteredFilters.length - 1 ? `${part} ${f.joiner}` : part;
             }).join(' ');
         }
         const req: SearchQueryRequest = {
@@ -72,14 +74,25 @@ const SearchContainer: React.FC = () => {
             <Row style={{ paddingTop: "10px" }}>
                 <FilterBuilder key={selectedIndex}
                     indexConfig={indexConfigs.find(ic => ic.name === selectedIndex)!}
-                    onChange={setFilters}
+                    conditions={filters}
+                    setConditions={setFilters}
                 />
             </Row>
         </>)
         }
+        <Divider dashed />
+        {!searchResults && !error && <Typography.Text>No result</Typography.Text>}
+        {error &&
+            <Alert
+                message="Error"
+                description={error}
+                type="error"
+                showIcon
+                closable
+            />
+        }
         <Spin spinning={loading || searching}>
             {searchResults && (<>
-                <Divider dashed />
                 <Typography.Title level={3} type="secondary">(Found {searchResults.totalHits || 0} document{searchResults.totalHits || 0 > 1 ? 's' : ''})</Typography.Title>
                 <Flex vertical gap="middle" style={{ paddingTop: "10px" }} >
                     {
@@ -109,6 +122,7 @@ const SearchContainer: React.FC = () => {
                 </Flex > </>)
             }
         </Spin >
+
 
 
     </>

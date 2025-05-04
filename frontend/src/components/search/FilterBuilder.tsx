@@ -1,16 +1,23 @@
 import { IndexConfiguration } from "@swarm/models/domain";
 import { Button, Flex, Input, Select, } from "antd";
-import { useState } from "react";
 
 interface FilterBuilderProps {
     indexConfig: IndexConfiguration;
-    onChange: (filters: { key: string, operator: string, joiner: string, value: string }[]) => void;
+    conditions: {
+        key: string;
+        operator: string;
+        joiner: string;
+        value: string;
+    }[];
+    setConditions: (cond: {
+        key: string;
+        operator: string;
+        joiner: string;
+        value: string;
+    }[]) => void;
 }
 
-const FilterBuilder: React.FC<FilterBuilderProps> = ({ indexConfig, onChange }) => {
-    const [conditions, setConditions] = useState<{ key: string, operator: string, joiner: string, value: string }[]>([]
-    );
-
+const FilterBuilder: React.FC<FilterBuilderProps> = ({ indexConfig, conditions, setConditions }) => {
 
     return (<>
         <Flex vertical gap="middle" style={{ width: "100%" }} >
@@ -23,8 +30,6 @@ const FilterBuilder: React.FC<FilterBuilderProps> = ({ indexConfig, onChange }) 
                             const newConditions = [...conditions];
                             newConditions[idx] = { ...newConditions[idx], key: val };
                             setConditions(newConditions);
-                            onChange(newConditions);
-
                         }}
                         value={cond.key}
                         options={indexConfig.properties.map(prop => ({ value: prop.name, label: prop.name }))}
@@ -50,7 +55,6 @@ const FilterBuilder: React.FC<FilterBuilderProps> = ({ indexConfig, onChange }) 
                             const newConditions = [...conditions];
                             newConditions[idx] = { ...newConditions[idx], operator: val };
                             setConditions(newConditions);
-                            onChange(newConditions);
 
                         }}
                     />
@@ -63,7 +67,6 @@ const FilterBuilder: React.FC<FilterBuilderProps> = ({ indexConfig, onChange }) 
                             const newConditions = [...conditions];
                             newConditions[idx] = { ...newConditions[idx], value: e.target.value };
                             setConditions(newConditions);
-                            onChange(newConditions);
 
                         }}
                     />
@@ -77,14 +80,11 @@ const FilterBuilder: React.FC<FilterBuilderProps> = ({ indexConfig, onChange }) 
                             newConditions[idx] = { ...newConditions[idx], joiner: e };
                             setConditions(newConditions);
 
-                            onChange(newConditions);
-
                         }}
                     />
                     <Button onClick={() => {
                         const newConds = conditions.filter((_, i) => i !== idx);
                         setConditions(newConds);
-                        onChange(newConds);
 
                     }}>Remove</Button>
                 </Flex>
