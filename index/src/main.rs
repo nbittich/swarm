@@ -1,10 +1,8 @@
 /* CUSTOM ALLOC, disabled as it consumes more memory */
 //pub use swarm_common::alloc;
 //
-mod config;
 use anyhow::anyhow;
 use chrono::Local;
-use config::{INDEX_ID_KEY, IndexConfiguration};
 use itertools::Itertools;
 use meilisearch_sdk::client::Client as MeiliSearchClient;
 use serde_json::Value;
@@ -13,6 +11,7 @@ use std::{
     borrow::Cow, collections::HashMap, env::var, path::PathBuf, str::FromStr, sync::Arc,
     time::Duration,
 };
+use swarm_common::domain::index_config::{INDEX_ID_KEY, IndexConfiguration};
 use swarm_common::{
     StreamExt,
     constant::{
@@ -61,6 +60,15 @@ async fn main() -> anyhow::Result<()> {
 
     let nc = nats_client::connect().await?;
     let search_client = MeiliSearchClient::new(meilisearch_url, Some(meilisearch_key))?;
+
+    // initialize the index with filterable attributes
+    info!("initializing index with filterable attributes");
+    for ic in index_config.iter() {
+        let index = search_client.index(&ic.name);
+        index
+            .set_filterable_attributes(ic.properties.iter().map(|p| &p.name))
+            .await?;
+    }
 
     while search_client.health().await.is_err() {
         error!("Meilisearch is not available yet. Sleeping for a sec before retrying");

@@ -28,6 +28,7 @@ cron.workspace = true
 mime_guess.workspace=true
 spargebra.workspace=true
 sparql_client.workspace=true
+meilisearch-sdk.workspace = true
 
 [dev-dependencies]
 serde_urlencoded="0.7.1"

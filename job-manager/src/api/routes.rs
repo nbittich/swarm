@@ -15,7 +15,10 @@ use mime_guess::mime::APPLICATION_OCTET_STREAM;
 use sparql_client::{Head, SparqlResponse, SparqlResult};
 use swarm_common::{
     TryFutureExt, debug,
-    domain::{AuthBody, AuthPayload, Job, JobDefinition, ScheduledJob, SubTask, Task, User},
+    domain::{
+        AuthBody, AuthPayload, Job, JobDefinition, ScheduledJob, SubTask, Task, User,
+        index_config::{IndexConfiguration, SearchQueryRequest, SearchQueryResponse},
+    },
     info,
     mongo::{FindOptions, Page, Pageable, Repository, doc},
 };
@@ -41,6 +44,8 @@ pub async fn serve(
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     let app = Router::new()
         .route("/sparql", get(sparql).post(sparql))
+        .route("/search/{index}", post(search))
+        .route("/search-configuration", get(search_configuration))
         .route("/login", post(authorize))
         .route("/scheduled-jobs/new", post(new_scheduled_job))
         .route("/scheduled-jobs/{id}", delete(delete_scheduled_job))
@@ -366,4 +371,22 @@ async fn get_last_publications(
         .await
         .map_err(|e| ApiError::GetLastPublications(e.to_string()))?;
     Ok(Json(tasks))
+}
+
+async fn search_configuration(
+    State(manager): State<JobManagerState>,
+) -> Result<Json<Vec<IndexConfiguration>>, ApiError> {
+    Ok(Json(manager.index_config.iter().cloned().collect()))
+}
+
+async fn search(
+    State(manager): State<JobManagerState>,
+    axum::extract::Path(index): axum::extract::Path<String>,
+    Json(req): Json<SearchQueryRequest>,
+) -> Result<Json<SearchQueryResponse>, ApiError> {
+    manager
+        .search(&index, &req)
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::SearchError(e.to_string()))
 }

@@ -273,6 +273,124 @@ impl JsonMapper for JobDefinition {}
 impl JsonMapper for Vec<JobDefinition> {}
 impl JsonMapper for User {}
 
+pub mod index_config {
+    use std::collections::HashMap;
+
+    use anyhow::anyhow;
+    use serde::{Deserialize, Serialize};
+    use serde_json::Value;
+
+    const SUBJECT_BINDING_TYPE: &str = "$type";
+    pub static INDEX_ID_KEY: &str = "_id";
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[serde(rename_all = "camelCase")]
+    pub struct IndexConfiguration {
+        pub name: String,
+        pub rdf_type: Vec<String>,
+        pub on_path: String,
+        pub properties: Vec<RdfProperty>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[serde(rename_all = "camelCase")]
+    pub struct RdfProperty {
+        pub name: String,
+        pub paths: Vec<String>,
+        pub optional: bool,
+    }
+
+    impl RdfProperty {
+        pub fn to_query_op(&self, subject: &str) -> String {
+            let path = self
+                .paths
+                .iter()
+                .map(|p| {
+                    if let Some(stripped) = p.strip_prefix('^') {
+                        format!("^<{}>", stripped)
+                    } else {
+                        format!("<{p}>")
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("/");
+            if self.optional {
+                format!("OPTIONAL {{ <{subject}> {path} ?{} }}", self.name)
+            } else {
+                format!("<{subject}> {path} ?{}", self.name)
+            }
+        }
+
+        pub fn validate(&self) -> anyhow::Result<()> {
+            if self.name == SUBJECT_BINDING_TYPE || self.name == INDEX_ID_KEY {
+                return Err(anyhow!(
+                    "you cannot name a property with {SUBJECT_BINDING_TYPE} or {INDEX_ID_KEY} in your config, because it's used internally."
+                ));
+            }
+            Ok(())
+        }
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct SearchQueryRequest {
+        pub query: SearchQueryType,
+        pub neg: bool,
+        pub sort_by: Option<String>,
+        pub sort_direction: Option<Order>,
+        pub filters: Option<String>,
+        pub limit: usize,
+        pub page: usize,
+    }
+
+    impl SearchQueryRequest {
+        pub fn get_formatted_query(&self) -> String {
+            match &self.query {
+                SearchQueryType::Word(w) => format!("{}{w}", if self.neg { "-" } else { "" }),
+                SearchQueryType::Phrase(p) => format!("{}\"{p}\"", if self.neg { "-" } else { "" }),
+            }
+        }
+        pub fn get_formatted_sort(&self) -> String {
+            if let (Some(sort_by), Some(direction)) = (&self.sort_by, &self.sort_direction) {
+                format!(
+                    "{sort_by}:{}",
+                    if matches!(direction, Order::Asc) {
+                        "asc"
+                    } else {
+                        "desc"
+                    }
+                )
+            } else {
+                "".to_string()
+            }
+        }
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    #[serde(tag = "type", content = "value")]
+    pub enum SearchQueryType {
+        Word(String),
+        Phrase(String),
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub enum Order {
+        Asc,
+        Desc,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct SearchQueryResponse {
+        pub hits: Vec<HashMap<String, Value>>,
+        pub total_hits: Option<usize>,
+        pub total_pages: Option<usize>,
+        pub page: Option<usize>,
+        pub limit: Option<usize>,
+    }
+}
+
 #[cfg(test)]
 mod test {
 

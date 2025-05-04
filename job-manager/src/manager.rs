@@ -1,23 +1,28 @@
-use std::{mem::discriminant, str::FromStr, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap, env::var, mem::discriminant, str::FromStr, sync::Arc, time::Duration,
+};
 
-use anyhow::anyhow;
+use anyhow::{Context, anyhow};
 use chrono::Local;
 use cron::Schedule;
+use meilisearch_sdk::{client::Client as SearchClient, search::SearchResults};
+use serde_json::Value;
 use sparql_client::SparqlClient;
 use swarm_common::{
     IdGenerator, REGEX_CLEAN_JSESSIONID, REGEX_CLEAN_S_UUID, StreamExt,
     constant::{
-        JOB_COLLECTION, JOB_MANAGER_CONSUMER, PUBLIC_TENANT, SCHEDULED_JOB_COLLECTION,
-        SUB_TASK_COLLECTION, SUB_TASK_EVENT_STREAM, SUB_TASK_STATUS_CHANGE_SUBJECT,
-        TASK_COLLECTION, TASK_EVENT_STREAM, TASK_STATUS_CHANGE_EVENT, TASK_STATUS_CHANGE_SUBJECT,
-        USER_COLLECTION,
+        INDEX_CONFIG_PATH, JOB_COLLECTION, JOB_MANAGER_CONSUMER, MEILISEARCH_KEY, MEILISEARCH_URL,
+        PUBLIC_TENANT, SCHEDULED_JOB_COLLECTION, SUB_TASK_COLLECTION, SUB_TASK_EVENT_STREAM,
+        SUB_TASK_STATUS_CHANGE_SUBJECT, TASK_COLLECTION, TASK_EVENT_STREAM,
+        TASK_STATUS_CHANGE_EVENT, TASK_STATUS_CHANGE_SUBJECT, USER_COLLECTION,
     },
     debug,
     domain::{
         Job, JobDefinition, JsonMapper, Payload, ScheduledJob, Status, SubTask, Task,
         TaskDefinition, User,
+        index_config::{IndexConfiguration, SearchQueryRequest, SearchQueryResponse},
     },
-    error,
+    error, info,
     mongo::{Repository, StoreClient, StoreRepository, doc},
     nats_client::{self, NatsClient, PullConsumer, Stream},
     warn,
@@ -29,6 +34,8 @@ use crate::domain::{ApiError, ROOT_OUTPUT_DIR_PB};
 pub struct JobManagerState {
     pub nc: NatsClient,
     pub sparql_client: SparqlClient,
+    pub search_client: SearchClient,
+    pub index_config: Arc<Vec<IndexConfiguration>>,
     pub task_event_consumer: PullConsumer,
     pub _task_event_stream: Stream,
     pub _sub_task_event_stream: Stream,
@@ -92,12 +99,28 @@ impl JobManagerState {
 
         let user_repository =
             StoreRepository::get_repository(&mongo_client, USER_COLLECTION, PUBLIC_TENANT);
+        let meilisearch_url = var(MEILISEARCH_URL)?;
+        let meilisearch_key = var(MEILISEARCH_KEY)?;
+        let index_config_path = var(INDEX_CONFIG_PATH)?;
+
+        let index_config = {
+            info!("reading index config file {index_config_path}...");
+            let config_str = tokio::fs::read_to_string(&index_config_path).await?;
+            let ic: Vec<IndexConfiguration> = serde_json::from_str(&config_str)?;
+            Arc::new(ic)
+        };
+
+        let nc = nats_client::connect().await?;
+        let search_client = SearchClient::new(meilisearch_url, Some(meilisearch_key))?;
+
         Ok(JobManagerState {
             nc,
             task_event_consumer,
             job_definitions: Arc::new(job_definitions),
             job_repository,
             task_repository,
+            search_client,
+            index_config,
             scheduled_job_repository,
             user_repository,
             sub_task_repository,
@@ -434,5 +457,43 @@ impl JobManagerState {
             .await
             .map_err(|e| ApiError::NewJob(e.to_string()))?;
         Ok(job)
+    }
+
+    pub async fn search(
+        &self,
+        index: &str,
+        req: &SearchQueryRequest,
+    ) -> anyhow::Result<SearchQueryResponse> {
+        let config = self
+            .index_config
+            .iter()
+            .find(|ic| ic.name == index)
+            .context(format!("index config doesn't exist for {index}"))?;
+        let index = self.search_client.index(&config.name);
+
+        let q = req.get_formatted_query();
+        let mut search_builder = index.search();
+        search_builder
+            .with_limit(if req.limit == 0 { 20 } else { req.limit })
+            .with_query(&q)
+            .with_page(if req.page == 0 { 1 } else { req.page });
+        if let Some(filters) = req.filters.as_ref() {
+            search_builder.with_filter(filters);
+        }
+        let sort = req.get_formatted_sort();
+        let sort_arr: &[&str] = &[sort.as_str()];
+        if !sort.is_empty() {
+            search_builder.with_sort(sort_arr);
+        }
+
+        let mut res: SearchResults<HashMap<String, Value>> = search_builder.execute().await?;
+
+        Ok(SearchQueryResponse {
+            hits: res.hits.drain(..).map(|r| r.result).collect(),
+            total_hits: res.total_hits.or(res.estimated_total_hits),
+            total_pages: res.total_pages.or(res.estimated_total_hits),
+            page: res.page,
+            limit: res.limit,
+        })
     }
 }

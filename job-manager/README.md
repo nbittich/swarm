@@ -1,25 +1,30 @@
 # Job Manager
 
 Service responsible for the creation, management, and scheduling of jobs.
-It depends on MongoDB for storage and NATS for messaging. Ensure all required environment variables are configured
+It depends on MongoDB for storage, Meilisearch for indexing, Virtuoso and NATS for messaging. Ensure all required environment variables are configured
 in the different readme's.
 
 ## Prerequisites
 
 - **MongoDB**: Ensure you have a running MongoDB instance.
 - **NATS**: A NATS messaging server is required.
+- **Meilisearch**: A Meilisearch server is required.
+- **Virtuoso**: A Virtuoso database is required.
 
 ## Environment variable
 
-| Variable Name          | Type     | Description                                                                               | Default Value       |
-| ---------------------- | -------- | ----------------------------------------------------------------------------------------- | ------------------- |
-| `JWT_SECRET`           | `String` | Holds JWT keys loaded from the `JWT_SECRET` environment variable.                         | None (must be set)  |
-| `ROOT_OUTPUT_DIR`      | `String` | Path for the root output directory, defaults to `/share` if `ROOT_OUTPUT_DIR` is not set. | `/share`            |
-| `APPLICATION_NAME`     | `String` | Application name, loaded from the `APPLICATION_NAME` environment variable.                | `job-manager`       |
-| `SERVICE_HOST`         | `String` | Service host, loaded from the `SERVICE_HOST` environment variable.                        | `127.0.0.1`         |
-| `SERVICE_PORT`         | `String` | Service port, loaded from the `SERVICE_PORT` environment variable.                        | `80`                |
-| `JOB_DEFINITIONS_PATH` | `String` | Path to the job definitions JSON file                                                     | `/definitions.json` |
-| `BODY_SIZE_LIMIT`      | `String` | Body size limit for downloads (in mb)                                                     | `50`                |
+| Variable Name          | Type     | Description                                                                               | Default Value               |
+| ---------------------- | -------- | ----------------------------------------------------------------------------------------- | ----------------------------|
+| `JWT_SECRET`           | `String` | Holds JWT keys loaded from the `JWT_SECRET` environment variable.                         | None (must be set)          |
+| `ROOT_OUTPUT_DIR`      | `String` | Path for the root output directory, defaults to `/share` if `ROOT_OUTPUT_DIR` is not set. | `/share`                    |
+| `APPLICATION_NAME`     | `String` | Application name, loaded from the `APPLICATION_NAME` environment variable.                | `job-manager`               |
+| `SERVICE_HOST`         | `String` | Service host, loaded from the `SERVICE_HOST` environment variable.                        | `127.0.0.1`                 |
+| `SERVICE_PORT`         | `String` | Service port, loaded from the `SERVICE_PORT` environment variable.                        | `80`                        |
+| `JOB_DEFINITIONS_PATH` | `String` | Path to the job definitions JSON file                                                     | `/definitions.json`         |
+| `BODY_SIZE_LIMIT`      | `String` | Body size limit for downloads (in mb)                                                     | `50`                        |
+| `MEILISEARCH_URL`      |          | URL of the Meilisearch instance                                                           | `N/A`                       |
+| `MEILISEARCH_KEY`      |          | API key used to authenticate with Meilisearch                                             | `N/A`                       |
+| `INDEX_CONFIG_PATH`    |          | Path to the JSON configuration file describing search indexing rules and schema           | `N/A`                       |
 
 ## Endpoints
 
@@ -96,6 +101,18 @@ Example expressions:
   - Description: Retrieves all tasks for a specific job.
   - Parameters:
     - `job_id` (string): ID of the job (path parameter).
+
+
+### SPARQL Endpoint
+
+- **`POST /sparql`**
+  - Description: Sparql endpoint.
+  - Parameters: `query`.
+
+### Search Endpoint
+
+- **`POST /:index/search`**
+  - Description: Search endpoint.
 
 ### Other Routes
 

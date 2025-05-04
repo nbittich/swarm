@@ -1702,6 +1702,7 @@ dependencies = [
  "cron",
  "form_urlencoded",
  "jsonwebtoken",
+ "meilisearch-sdk",
  "mime_guess",
  "rand 0.9.1",
  "regex",

@@ -40,6 +40,7 @@ pub enum ApiError {
     AllJobs(String),
     AllScheduledJobs(String),
     SparqlError(String),
+    SearchError(String),
     GetLastPublications(String),
     DeleteJob(String),
     DeleteScheduledJob(String),
@@ -182,6 +183,7 @@ impl IntoResponse for ApiError {
             | ApiError::Download(e)
             | ApiError::GetLastPublications(e)
             | ApiError::SparqlError(e)
+            | ApiError::SearchError(e)
             | ApiError::NewJob(e)
             | ApiError::NewScheduledJob(e)
             | ApiError::CronExpression(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
