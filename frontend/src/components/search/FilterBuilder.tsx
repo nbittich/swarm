@@ -14,7 +14,6 @@ const FilterBuilder: React.FC<FilterBuilderProps> = ({ indexConfig, onChange }) 
 
     return (<>
         <Flex vertical gap="middle" style={{ width: "100%" }} >
-
             {conditions.map((cond, idx) => (
                 <Flex key={idx} gap="middle" >
                     <Select

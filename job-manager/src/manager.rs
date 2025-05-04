@@ -473,6 +473,7 @@ impl JobManagerState {
 
         let q = req.get_formatted_query();
         let mut search_builder = index.search();
+        debug!("req: {req:?}");
         search_builder
             .with_limit(if req.limit == 0 { 20 } else { req.limit })
             .with_page(if req.page == 0 { 1 } else { req.page });
