@@ -82,7 +82,8 @@ const SearchContainer: React.FC = () => {
                         >
                             {Object.entries(hit).map(([key, val]) => (
                                 <Descriptions.Item key={key} label={key}>
-                                    <span style={{ wordBreak: 'break-word' }}>{String(val)}</span>
+                                    {Array.isArray(val) ? (<ul style={{ padding: 0, marginLeft: 10 }}>{val.map(v => <li>{v}</li>)}</ul>) : <span style={{ wordBreak: 'break-word' }}>{String(val)}</span>
+                                    }
                                 </Descriptions.Item>
                             ))}
                         </Descriptions>
