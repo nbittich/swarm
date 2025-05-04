@@ -4,12 +4,14 @@ import scheduledJobsSlice from './ScheduledJobSlice';
 import jobsSlice from './JobSlice';
 import themeSlice from './ThemeSlice';
 import { jobDefinitionsReducer } from './JobDefinitionSlice';
+import searchReducer from './SearchSlice';
 
 const combinedReducer = combineReducers({
     subTasks: subtaskReducerSlice,
     scheduledJobs: scheduledJobsSlice,
     jobs: jobsSlice,
     jobDefinitions: jobDefinitionsReducer,
+    search: searchReducer,
 });
 
 type combinedState = ReturnType<typeof combinedReducer>;
