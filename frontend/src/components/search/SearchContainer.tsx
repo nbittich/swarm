@@ -1,26 +1,34 @@
 import { AppDispatch, RootState } from "@swarm/states/Store";
-import { Descriptions, Divider, Flex, Input, Pagination, Row, Select, Space, Spin, } from "antd";
+import { Descriptions, Divider, Flex, Input, Pagination, Row, Select, Space, Spin, Typography, } from "antd";
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import FilterBuilder from "./FilterBuilder";
-import { fetchSearchConfigurations, performSearch } from "@swarm/states/SearchSlice";
+import { clearSearchResult, fetchIndexStatistics, fetchSearchConfigurations, performSearch } from "@swarm/states/SearchSlice";
 import { SearchQueryRequest } from "@swarm/models/domain";
-
 const SearchContainer: React.FC = () => {
 
     const dispatch = useDispatch<AppDispatch>();
 
     const indexConfigs = useSelector((state: RootState) => state.appReducer.search.configurations);
+    const indexStats = useSelector((state: RootState) => state.appReducer.search.indexStatistics);
     const searchResults = useSelector((state: RootState) => state.appReducer.search.searchResult);
     const loading = useSelector((state: RootState) => state.appReducer.search.loading);
     const searching = useSelector((state: RootState) => state.appReducer.search.searching);
-    const [selectedIndex, setSelectedIndex] = useState<string>();
+    const [selectedIndex, setSelectedIndex] = useState<undefined | string>();
     const [query, setQuery] = useState<undefined | string>("");
     const [limit, _] = useState(5);
     const [filters, setFilters] = useState<{ key: string, operator: string, joiner: string, value: string }[]>([]);
 
 
     useEffect(() => { dispatch(fetchSearchConfigurations()) }, [dispatch]);
+    useEffect(() => {
+        dispatch(clearSearchResult());
+    }, [selectedIndex, dispatch]);
+
+    function updateIndex(index: undefined | string) {
+        setSelectedIndex(index);
+        dispatch(fetchIndexStatistics(index));
+    }
 
     function handleSearch(page = 1) {
         if (!selectedIndex) return;
@@ -43,11 +51,11 @@ const SearchContainer: React.FC = () => {
     }
 
     return (<>
-        <h2>INDEX</h2>
+        <h2>INDEX {indexStats && (<Typography.Text type="secondary">({indexStats.numberOfDocuments} documents)</Typography.Text>)}</h2>
         <Flex gap="middle" >
             <Select
                 placeholder="Select index"
-                onChange={value => { setSelectedIndex(value); setFilters([]); setQuery(undefined); handleSearch() }}
+                onChange={value => { updateIndex(value); setFilters([]); setQuery(undefined) }}
                 options={indexConfigs.map(ic => ({ value: ic.name, label: ic.name }))}
             />
             <Space />
@@ -62,7 +70,7 @@ const SearchContainer: React.FC = () => {
         </Flex>
         {selectedIndex && (<>
             <Row style={{ paddingTop: "10px" }}>
-                <FilterBuilder
+                <FilterBuilder key={selectedIndex}
                     indexConfig={indexConfigs.find(ic => ic.name === selectedIndex)!}
                     onChange={setFilters}
                 />
@@ -71,17 +79,18 @@ const SearchContainer: React.FC = () => {
         }
         <Spin spinning={loading || searching}>
             {searchResults && (<>
-                <Divider />
+                <Divider dashed />
+                <Typography.Title level={3} type="secondary">(Found {searchResults.totalHits || 0} document{searchResults.totalHits || 0 > 1 ? 's' : ''})</Typography.Title>
                 <Flex vertical gap="middle" style={{ paddingTop: "10px" }} >
                     {
                         searchResults.hits.map((hit, idx) => (
-                            <Descriptions key={idx}
+                            <Descriptions key={hit._id as string}
                                 bordered
                                 column={1}
                             >
                                 {Object.entries(hit).map(([key, val]) => (
-                                    <Descriptions.Item key={key} label={key} styles={{ label: { width: '10vw', fontWeight: "bold" } }}>
-                                        {Array.isArray(val) ? (<ul style={{ padding: 0, marginLeft: 10 }}>{val.map(v => <li>{v}</li>)}</ul>) : <span style={{ wordBreak: 'break-word' }}>{String(val)}</span>
+                                    <Descriptions.Item key={key + idx + hit._id} label={key} styles={{ label: { width: '10vw', fontWeight: "bold" } }}>
+                                        {Array.isArray(val) ? (<ul key={key + idx + hit._id + "ul"} style={{ padding: 0, marginLeft: 10 }}>{val.map(v => <li key={crypto.randomUUID()}>{v}</li>)}</ul>) : <span style={{ wordBreak: 'break-word' }}>{String(val)}</span>
                                         }
                                     </Descriptions.Item>
                                 ))}
@@ -90,7 +99,7 @@ const SearchContainer: React.FC = () => {
                         ))
                     }
                     {(searchResults.totalPages || 1) > 1 && (
-                        <Pagination
+                        <Pagination responsive showSizeChanger={false} align="end"
                             current={searchResults.page || 1}
                             pageSize={limit}
                             total={searchResults.totalHits || (searchResults.totalPages || 1 * limit)}
@@ -99,7 +108,7 @@ const SearchContainer: React.FC = () => {
                     )}
                 </Flex > </>)
             }
-        </Spin>
+        </Spin >
 
 
     </>

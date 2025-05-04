@@ -28,7 +28,8 @@ export const fetchSearchConfigurations = createAsyncThunk('fetchConfigurations',
     return response.data;
 });
 
-export const fetchIndexStatistics = createAsyncThunk('fetchIndexStatistics', async (index: string) => {
+export const fetchIndexStatistics = createAsyncThunk('fetchIndexStatistics', async (index: string | undefined) => {
+    if (!index) return undefined;
     const response = await axios.get<IndexStatistics>(`/api/search/${index}/stats`);
     return response.data;
 });
@@ -66,7 +67,7 @@ const searchSlice = createSlice({
                 state.loading = true;
                 state.error = undefined;
             })
-            .addCase(fetchIndexStatistics.fulfilled, (state, action: PayloadAction<IndexStatistics>) => {
+            .addCase(fetchIndexStatistics.fulfilled, (state, action: PayloadAction<IndexStatistics | undefined>) => {
                 state.indexStatistics = action.payload;
                 state.loading = false;
             })
