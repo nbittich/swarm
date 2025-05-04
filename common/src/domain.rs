@@ -334,7 +334,7 @@ pub mod index_config {
     #[derive(Debug, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct SearchQueryRequest {
-        pub query: SearchQueryType,
+        pub query: Option<SearchQueryType>,
         pub neg: bool,
         pub sort_by: Option<String>,
         pub sort_direction: Option<Order>,
@@ -344,11 +344,11 @@ pub mod index_config {
     }
 
     impl SearchQueryRequest {
-        pub fn get_formatted_query(&self) -> String {
-            match &self.query {
+        pub fn get_formatted_query(&self) -> Option<String> {
+            self.query.as_ref().map(|query| match query {
                 SearchQueryType::Word(w) => format!("{}{w}", if self.neg { "-" } else { "" }),
                 SearchQueryType::Phrase(p) => format!("{}\"{p}\"", if self.neg { "-" } else { "" }),
-            }
+            })
         }
         pub fn get_formatted_sort(&self) -> String {
             if let (Some(sort_by), Some(direction)) = (&self.sort_by, &self.sort_direction) {

@@ -475,10 +475,12 @@ impl JobManagerState {
         let mut search_builder = index.search();
         search_builder
             .with_limit(if req.limit == 0 { 20 } else { req.limit })
-            .with_query(&q)
             .with_page(if req.page == 0 { 1 } else { req.page });
         if let Some(filters) = req.filters.as_ref() {
             search_builder.with_filter(filters);
+        }
+        if let Some(query) = q.as_ref() {
+            search_builder.with_query(query);
         }
         let sort = req.get_formatted_sort();
         let sort_arr: &[&str] = &[sort.as_str()];
