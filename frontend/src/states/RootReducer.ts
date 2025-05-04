@@ -27,6 +27,17 @@ const appReducer = (state: combinedState | undefined, action: UnknownAction): co
             ...state,
             scheduledJobs: {}
         } as unknown as combinedState;
+    } else if (action.type === '/search') {
+        state = {
+            ...state,
+            search: {
+                configurations: [],
+                loading: false,
+                searchResult: undefined,
+                searching: false,
+                error: undefined,
+            }
+        } as unknown as combinedState;
     }
     return combinedReducer(state, action);
 };

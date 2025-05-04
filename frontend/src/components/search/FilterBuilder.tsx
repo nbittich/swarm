@@ -30,7 +30,20 @@ const FilterBuilder: React.FC<FilterBuilderProps> = ({ indexConfig, onChange }) 
                         options={indexConfig.properties.map(prop => ({ value: prop.name, label: prop.name }))}
                     />
                     <Select
-                        options={[{ value: '=', label: '=' }, { value: '!=', label: '!=' }]}
+                        style={{ width: "100%" }}
+                        options={[{ value: '=', label: '=' }, { value: '!=', label: '!=' },
+                        // { value: '>', label: '>' },
+                        // { value: '>=', label: '>=' },
+                        // { value: '<', label: '<' },
+                        // { value: '<=', label: '<=' },
+                        { value: 'CONTAINS', label: 'CONTAINS' },
+                        { value: 'NOT CONTAINS', label: 'NOT CONTAINS' },
+                        { value: 'STARTS WITH', label: 'STARTS WITH' },
+                        { value: 'NOT STARTS WITH', label: 'NOT STARTS WITH' },
+                        { value: 'EXISTS', label: 'EXISTS' },
+                        { value: 'NOT EXISTS', label: 'NOT EXISTS' },
+
+                        ]}
                         defaultValue="="
                         value={cond.operator}
                         onChange={val => {
@@ -39,17 +52,17 @@ const FilterBuilder: React.FC<FilterBuilderProps> = ({ indexConfig, onChange }) 
                             setConditions(newConditions);
                             onChange(newConditions);
 
-
                         }}
                     />
                     <Input
                         placeholder="Value"
                         value={cond.value}
+                        disabled={cond.operator.includes("EXIST")}
+
                         onChange={e => {
                             const newConditions = [...conditions];
                             newConditions[idx] = { ...newConditions[idx], value: e.target.value };
                             setConditions(newConditions);
-
                             onChange(newConditions);
 
                         }}

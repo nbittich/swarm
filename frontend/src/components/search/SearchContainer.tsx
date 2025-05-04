@@ -1,5 +1,5 @@
 import { AppDispatch, RootState } from "@swarm/states/Store";
-import { Button, Card, Flex, Input, Pagination, Row, Select, Space } from "antd";
+import { Button, Descriptions, Divider, Flex, Input, Pagination, Row, Select, Space, } from "antd";
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import FilterBuilder from "./FilterBuilder";
@@ -14,19 +14,18 @@ const SearchContainer: React.FC = () => {
     const searchResults = useSelector((state: RootState) => state.appReducer.search.searchResult);
     const [selectedIndex, setSelectedIndex] = useState<string>();
     const [query, setQuery] = useState("");
-    const [page, setPage] = useState(1);
     const [limit, _] = useState(5);
     const [filters, setFilters] = useState<{ key: string, operator: string, joiner: string, value: string }[]>([]);
 
 
     useEffect(() => { dispatch(fetchSearchConfigurations()) }, [dispatch]);
 
-    function handleSearch() {
+    function handleSearch(page = 1) {
         let filter: undefined | string = undefined;
         if (filters.length) {
             filter = filters.map((f, i) => {
-                const value = f.value.split(' ').length > 1 ? `"${f.value}"` : f.value;
-                const part = `${f.key}${f.operator}${value}`;
+                const value = f.value.split(' ').length > 1 || f.value.includes(".") ? `"${f.value}"` : f.value;
+                const part = `${f.key} ${f.operator} ${value}`;
                 return i < filters.length - 1 ? `${part} ${f.joiner}` : part;
             }).join(' ');
         }
@@ -41,6 +40,7 @@ const SearchContainer: React.FC = () => {
     }
 
     return (<>
+        <h2>INDEX</h2>
         <Flex gap="middle">
             <Select
                 placeholder="Select index"
@@ -71,25 +71,34 @@ const SearchContainer: React.FC = () => {
             </Row>
         </>)
         }
-        {searchResults && (<div>
-            {searchResults.hits.map((hit, idx) => (
-                <Card title={`Record ${idx + 1}`} key={idx} style={{ margin: '10px 0' }}>
-                    {Object.entries(hit).map(([key, val]) => (
-                        <p key={key}>
-                            <strong>{key}:</strong> <span style={{ wordBreak: 'break-word' }}>{String(val)}</span>
-                        </p>
-                    ))}
-                </Card>
-            ))}
-            {(searchResults.totalPages || 1) > 1 && (
-                <Pagination
-                    current={page}
-                    pageSize={limit}
-                    total={searchResults.totalHits || (searchResults.totalPages || 1 * limit)}
-                    onChange={page => { setPage(page); }}
-                />
-            )}
-        </div>)}
+        {searchResults && (<>
+            <Divider />
+            <Flex vertical gap="middle" style={{ paddingTop: "10px" }} >
+                {
+                    searchResults.hits.map((hit, idx) => (
+                        <Descriptions key={idx}
+                            bordered
+                            column={1}
+                        >
+                            {Object.entries(hit).map(([key, val]) => (
+                                <Descriptions.Item key={key} label={key}>
+                                    <span style={{ wordBreak: 'break-word' }}>{String(val)}</span>
+                                </Descriptions.Item>
+                            ))}
+                        </Descriptions>
+
+                    ))
+                }
+                {(searchResults.totalPages || 1) > 1 && (
+                    <Pagination
+                        current={searchResults.page || 1}
+                        pageSize={limit}
+                        total={searchResults.totalHits || (searchResults.totalPages || 1 * limit)}
+                        onChange={p => { handleSearch(p) }}
+                    />
+                )}
+            </Flex > </>)
+        }
 
 
     </>
