@@ -274,7 +274,7 @@ impl JsonMapper for Vec<JobDefinition> {}
 impl JsonMapper for User {}
 
 pub mod index_config {
-    use std::collections::HashMap;
+    use std::collections::BTreeMap;
 
     use anyhow::anyhow;
     use serde::{Deserialize, Serialize};
@@ -361,7 +361,7 @@ pub mod index_config {
     #[derive(Debug, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct SearchQueryResponse {
-        pub hits: Vec<HashMap<String, Value>>,
+        pub hits: Vec<BTreeMap<String, Value>>,
         pub total_hits: Option<usize>,
         pub total_pages: Option<usize>,
         pub page: Option<usize>,

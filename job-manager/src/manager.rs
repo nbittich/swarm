@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap, env::var, mem::discriminant, str::FromStr, sync::Arc, time::Duration,
+    collections::BTreeMap, env::var, mem::discriminant, str::FromStr, sync::Arc, time::Duration,
 };
 
 use anyhow::{Context, anyhow};
@@ -489,7 +489,7 @@ impl JobManagerState {
             search_builder.with_sort(sort_arr);
         }
 
-        let mut res: SearchResults<HashMap<String, Value>> = search_builder.execute().await?;
+        let mut res: SearchResults<BTreeMap<String, Value>> = search_builder.execute().await?;
 
         Ok(SearchQueryResponse {
             hits: res.hits.drain(..).map(|r| r.result).collect(),

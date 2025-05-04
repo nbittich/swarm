@@ -7,10 +7,8 @@ use itertools::Itertools;
 use meilisearch_sdk::client::Client as MeiliSearchClient;
 use serde_json::Value;
 use sparql_client::{SparqlClient, SparqlUpdateType};
-use std::{
-    borrow::Cow, collections::HashMap, env::var, path::PathBuf, str::FromStr, sync::Arc,
-    time::Duration,
-};
+use std::collections::BTreeMap;
+use std::{borrow::Cow, env::var, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 use swarm_common::domain::index_config::{INDEX_ID_KEY, IndexConfiguration};
 use swarm_common::{
     StreamExt,
@@ -293,7 +291,7 @@ async fn update(
                     .collect_vec()
                 {
                     let subject = &subject[1..subject.len() - 1]; // remove first and last character <url>
-                    let mut doc_data = HashMap::new();
+                    let mut doc_data = BTreeMap::new();
 
                     let uuid = {
                         let uuid_stmt = doc.list_statements(
