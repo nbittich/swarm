@@ -475,7 +475,7 @@ impl JobManagerState {
         let mut search_builder = index.search();
         debug!("req: {req:?}");
         search_builder
-            .with_limit(if req.limit == 0 { 10 } else { req.limit })
+            .with_hits_per_page(if req.limit == 0 { 10 } else { req.limit })
             .with_page(if req.page == 0 { 1 } else { req.page });
         if let Some(filters) = req.filters.as_ref() {
             search_builder.with_filter(filters);
