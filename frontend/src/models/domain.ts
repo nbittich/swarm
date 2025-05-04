@@ -178,3 +178,28 @@ export interface RdfProperty {
     paths: string[];
     optional: boolean;
 }
+
+export interface SearchQueryRequest {
+    query?: SearchQueryType;
+    neg: boolean;
+    sortBy?: string;
+    sortDirection?: Order;
+    filters?: string;
+    limit: number;
+    page: number;
+}
+
+export type SearchQueryType =
+    | { type: "word"; value: string }
+    | { type: "phrase"; value: string };
+
+export type Order = "asc" | "desc";
+
+export interface SearchQueryResponse {
+    hits: Array<Record<string, unknown>>;
+    totalHits?: number;
+    totalPages?: number;
+    page?: number;
+    limit?: number;
+}
+
