@@ -24,6 +24,7 @@ const FilterBuilder: React.FC<FilterBuilderProps> = ({ indexConfig, conditions, 
             {conditions.map((cond, idx) => (
                 <Flex key={idx} gap="middle" >
                     <Select
+                        showSearch
                         placeholder="Field"
                         style={{ width: "100%" }}
                         onChange={val => {
@@ -45,6 +46,8 @@ const FilterBuilder: React.FC<FilterBuilderProps> = ({ indexConfig, conditions, 
                         { value: 'NOT CONTAINS', label: 'NOT CONTAINS' },
                         { value: 'STARTS WITH', label: 'STARTS WITH' },
                         { value: 'NOT STARTS WITH', label: 'NOT STARTS WITH' },
+                        { value: 'IS EMPTY', label: 'IS EMPTY' },
+                        { value: 'IS NOT EMPTY', label: 'IS NOT EMPTY' },
                         { value: 'EXISTS', label: 'EXISTS' },
                         { value: 'NOT EXISTS', label: 'NOT EXISTS' },
 
@@ -89,9 +92,7 @@ const FilterBuilder: React.FC<FilterBuilderProps> = ({ indexConfig, conditions, 
                     }}>Remove</Button>
                 </Flex>
             ))}
-            <Button onClick={() => setConditions([...conditions, { key: '', operator: '=', value: '', joiner: 'AND' }])}>
-                Add Filter
-            </Button>
+
         </Flex>
 
     </>
