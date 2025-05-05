@@ -131,14 +131,14 @@ const JobsTable: React.FC = () => {
             }
         },
         {
-            title: 'Creation Date',
+            title: 'Created',
             dataIndex: 'creationDate',
             key: 'creationDate',
             sorter: true,
             render: (date: string) => dayjs(new Date(date)).format('DD/MM/YYYY HH:mm:ss'),
         },
         {
-            title: 'Modified Date',
+            title: 'Modified',
             dataIndex: 'modifiedDate',
             key: 'modifiedDate',
             sorter: true,
