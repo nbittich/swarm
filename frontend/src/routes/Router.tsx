@@ -1,4 +1,4 @@
-import { Navigate, RouterProvider, createBrowserRouter } from "react-router-dom";
+import { RouterProvider, createBrowserRouter } from "react-router-dom";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { useAuth } from "@swarm/auth/authContextHook";
 import Logout from "@swarm/components/auth/Logout";
@@ -12,11 +12,16 @@ import SubTasksTable from "@swarm/components/jobs/SubTasksTable";
 import ScheduledJobsTable from "@swarm/components/jobs/ScheduledJobsTable";
 import Sparql from "@swarm/components/sparql/Sparql";
 import SearchContainer from "@swarm/components/search/SearchContainer";
+import Home from "@swarm/components/pages/Home";
 
 const SwarmRoutes = () => {
     const { token } = useAuth();
 
     const routesForPublic = [
+        {
+            path: "",
+            element: <Home />,
+        },
         {
             path: "yasgui",
             element: <Sparql />,
@@ -36,10 +41,7 @@ const SwarmRoutes = () => {
             path: "/",
             element: <ProtectedRoute />, // Wrap the component in ProtectedRoute
             children: [
-                {
-                    path: "",
-                    element: <Navigate to="/jobs" />,
-                },
+
                 {
                     path: "jobs",
                     children: [
