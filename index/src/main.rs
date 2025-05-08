@@ -185,7 +185,7 @@ async fn main() -> anyhow::Result<()> {
                 let task = config
                     .search_client
                     .index(&ic.name)
-                    .add_or_update(chunk, Some(INDEX_ID_KEY))
+                    .add_documents(chunk, Some(INDEX_ID_KEY))
                     .await?;
                 debug!("{task:?}");
                 debug!("waiting for task to complete...");
@@ -194,6 +194,14 @@ async fn main() -> anyhow::Result<()> {
                     .wait_for_task(task, None, config.index_max_wait_for_task)
                     .await?;
             }
+        }
+
+        info!(
+            "reset done. Please restart the service with the reset flag set to false. NO EVENT will be consumed until then."
+        );
+        loop {
+            // noop
+            tokio::time::sleep(Duration::from_secs(5)).await;
         }
     }
 
