@@ -139,6 +139,7 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<()> {
             vec![]
         });
     for old_job in old_jobs {
+        debug!("deleting job {}...", old_job.id);
         let old_tasks = config
             .task_repository
             .find_by_query(
@@ -149,6 +150,7 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<()> {
             )
             .await?;
         for ot in old_tasks {
+            debug!("deleting task {}...", ot.id);
             config
                 .sub_task_repository
                 .delete_many(Some(doc! {

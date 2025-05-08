@@ -34,6 +34,9 @@ pub static CHUNK_SIZE: &str = "CHUNK_SIZE";
 pub static MEILISEARCH_URL: &str = "MEILISEARCH_URL";
 pub static MEILISEARCH_KEY: &str = "MEILISEARCH_KEY";
 pub static INDEX_CONFIG_PATH: &str = "INDEX_CONFIG_PATH";
+pub static INDEX_MAX_WAIT_FOR_TASK: &str = "INDEX_MAX_WAIT_FOR_TASK";
+pub static RESET_INDEX: &str = "RESET_INDEX";
+pub static RESET_INDEX_NAME: &str = "RESET_INDEX_NAME";
 /* COLLECTION NAME */
 pub static TASK_COLLECTION: &str = "tasks";
 pub static SUB_TASK_COLLECTION: &str = "subTasks";
