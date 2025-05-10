@@ -155,10 +155,11 @@ async fn main() -> anyhow::Result<()> {
                                     {rdf_types}
                                 }}
                                 ?s a ?t;
-                                   <{UUID_COMPLEMENT_PREDICATE}> ?uuid.
+                                   <{}> ?uuid.
                             }}
                        }}
             "#,
+                    config.uuid_predicate
                 ))
                 .await?;
             info!("found {} subjects to reindex.", res.results.bindings.len());
