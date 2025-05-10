@@ -95,10 +95,15 @@ impl SparqlClient {
                 .post(&self.endpoint)
                 .header(
                     ACCEPT,
-                    accept_header.as_deref()
-                        .unwrap_or(SPARQL_RESULT_JSON),
+                    accept_header.as_deref().unwrap_or(SPARQL_RESULT_JSON),
                 )
-                .query(&[("query", query), ("format", SPARQL_RESULT_JSON)])
+                .query(&[
+                    ("query", query),
+                    (
+                        "format",
+                        accept_header.as_deref().unwrap_or(SPARQL_RESULT_JSON),
+                    ),
+                ])
                 .send()
                 .await
                 .and_then(|response| response.error_for_status())
