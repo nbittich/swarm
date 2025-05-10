@@ -157,7 +157,17 @@ const TasksTable: React.FC = () => {
 
     return (
         <Flex vertical gap="middle">
-            <h2>Job Detail</h2>
+            <Flex justify="space-between" wrap>
+                <h2>Job Detail</h2>
+
+                <Space>
+                    <Button onClick={() => navigate("/jobs")} icon={<ArrowLeftOutlined />} size="large" color="default" variant="dashed">Back</Button>
+                    <Button onClick={() => fetchTasks(id)} size="large" color="default" variant="dashed" icon={<SyncOutlined />}>
+                        Refresh
+                    </Button>
+                </Space>
+            </Flex>
+
             {job && <Descriptions key={job._id as string}
                 bordered
                 column={1}
@@ -177,15 +187,10 @@ const TasksTable: React.FC = () => {
                     </Descriptions.Item>
                 ))}
             </Descriptions>}
-            <Flex justify="space-between" wrap>
-                <h2>Tasks</h2>
-                <Space>
-                    <Button onClick={() => navigate("/jobs")} icon={<ArrowLeftOutlined />} size="large" color="default" variant="dashed">Back</Button>
-                    <Button onClick={() => fetchTasks(id)} size="large" color="default" variant="dashed" icon={<SyncOutlined />}>
-                        Refresh
-                    </Button>
-                </Space>
-            </Flex>
+
+
+            <h2>Tasks</h2>
+
             <Table
                 bordered
                 dataSource={tasks}
