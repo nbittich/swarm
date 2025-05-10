@@ -5,11 +5,14 @@ use anyhow::anyhow;
 use chrono::Local;
 use itertools::Itertools;
 use meilisearch_sdk::client::Client as MeiliSearchClient;
+use meilisearch_sdk::settings::PaginationSetting;
 use serde_json::Value;
 use sparql_client::{SparqlClient, SparqlUpdateType};
 use std::collections::BTreeMap;
 use std::{borrow::Cow, env::var, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
-use swarm_common::constant::{CHUNK_SIZE, INDEX_MAX_WAIT_FOR_TASK, RESET_INDEX, RESET_INDEX_NAME};
+use swarm_common::constant::{
+    CHUNK_SIZE, INDEX_MAX_TOTAL_HITS, INDEX_MAX_WAIT_FOR_TASK, RESET_INDEX, RESET_INDEX_NAME,
+};
 use swarm_common::domain::index_config::{INDEX_ID_KEY, IndexConfiguration};
 use swarm_common::{
     StreamExt,
@@ -51,11 +54,16 @@ async fn main() -> anyhow::Result<()> {
     let meilisearch_url = var(MEILISEARCH_URL)?;
     let meilisearch_key = var(MEILISEARCH_KEY)?;
     let index_config_path = var(INDEX_CONFIG_PATH)?;
-    let chunk_size = var(CHUNK_SIZE)
+    let chunk_size = var(CHUNK_SIZE) //INDEX_MAX_TOTAL_HITS
         .iter()
         .flat_map(|r| r.parse::<usize>())
         .last()
         .unwrap_or(100);
+    let index_max_total_hits = var(INDEX_MAX_TOTAL_HITS)
+        .iter()
+        .flat_map(|r| r.parse::<usize>())
+        .last()
+        .unwrap_or(50_000);
     let reset_index = var(RESET_INDEX)
         .iter()
         .flat_map(|r| r.parse::<bool>())
@@ -91,6 +99,11 @@ async fn main() -> anyhow::Result<()> {
         let index = search_client.index(&ic.name);
         index
             .set_filterable_attributes(ic.properties.iter().map(|p| &p.name))
+            .await?;
+        index
+            .set_pagination(PaginationSetting {
+                max_total_hits: index_max_total_hits,
+            })
             .await?;
     }
 

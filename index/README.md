@@ -11,6 +11,7 @@
 | `RESET_INDEX`                | If set to true, forces re-creation of the Meilisearch index.                                                       | No       | `true`                                   |
 | `RESET_INDEX_NAME`           | Optional custom name for the Meilisearch index to reset. It must be defined in the index config                    | No       | `custom_index_name`                      |
 | `CHUNK_SIZE`                 | Size of each batch tasks                                                                                           | No       | `100`                                    |
+| `INDEX_MAX_TOTAL_HITS`       | Max total hits (https://www.meilisearch.com/docs/reference/api/settings#pagination)                                | No       | `50000`                                  |
 
 
 
