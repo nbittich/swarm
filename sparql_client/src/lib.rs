@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, ops::Mul, time::Duration};
 
 use anyhow::anyhow;
 use reqwest::{
-    Client,
+    Client, Response,
     header::{ACCEPT, CONTENT_TYPE},
 };
 use serde::{Deserialize, Serialize};
@@ -75,7 +75,12 @@ impl SparqlClient {
             delay_before_next_retry,
         })
     }
-    pub async fn query(&self, query: &str) -> anyhow::Result<SparqlResponse> {
+    pub async fn _query<T>(
+        &self,
+        query: &str,
+        accept_header: Option<String>,
+        transform: impl AsyncFn(Response) -> anyhow::Result<T>,
+    ) -> anyhow::Result<T> {
         debug!("{query}");
         let mut retry_count = 0;
         let mut err = Err(anyhow!("unexpected error"));
@@ -88,13 +93,17 @@ impl SparqlClient {
             match self
                 .client
                 .post(&self.endpoint)
-                .header(ACCEPT, SPARQL_RESULT_JSON)
+                .header(
+                    ACCEPT,
+                    accept_header.as_deref()
+                        .unwrap_or(SPARQL_RESULT_JSON),
+                )
                 .query(&[("query", query), ("format", SPARQL_RESULT_JSON)])
                 .send()
                 .await
                 .and_then(|response| response.error_for_status())
             {
-                Ok(response) => match response.json::<SparqlResponse>().await {
+                Ok(response) => match transform(response).await {
                     Ok(sr) => return Ok(sr),
                     Err(e) => {
                         retry_count += 1;
@@ -109,6 +118,31 @@ impl SparqlClient {
             }
         }
         err
+    }
+    pub async fn query(&self, query: &str) -> anyhow::Result<SparqlResponse> {
+        self._query(query, None, async |response| {
+            let r = response.json::<SparqlResponse>().await?;
+            Ok(r)
+        })
+        .await
+    }
+
+    pub async fn query_with_accept_header(
+        &self,
+        query: &str,
+        accept_header: Option<String>,
+    ) -> anyhow::Result<(String, String)> {
+        self._query(query, accept_header, async |response| {
+            let ct = response
+                .headers()
+                .get(CONTENT_TYPE)
+                .and_then(|s| s.to_str().ok())
+                .map(|s| s.to_string())
+                .unwrap_or("text/plain".to_string());
+            let r = response.text().await?;
+            Ok((ct, r))
+        })
+        .await
     }
     pub async fn update(&self, query: &str) -> anyhow::Result<()> {
         debug!("{query}");

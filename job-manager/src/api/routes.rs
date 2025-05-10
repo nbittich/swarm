@@ -4,8 +4,8 @@ use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, State},
     http::{
-        StatusCode,
-        header::{self, CONTENT_TYPE},
+        HeaderMap, StatusCode,
+        header::{self, ACCEPT, CONTENT_TYPE},
     },
     response::{AppendHeaders, IntoResponse},
     routing::{delete, get, post},
@@ -160,10 +160,11 @@ async fn all_job_definitions(
 async fn sparql(
     State(manager): State<JobManagerState>,
     claims: Option<Claims>,
+    headers: HeaderMap,
     axum::extract::Form(SparqlQueryPayload { query, update }): axum::extract::Form<
         SparqlQueryPayload,
     >,
-) -> Result<Json<SparqlResponse>, ApiError> {
+) -> impl IntoResponse {
     let query = query
         .or(update)
         .ok_or_else(|| ApiError::SparqlError("missing query param".to_string()))?;
@@ -186,14 +187,24 @@ async fn sparql(
                 distinct: Some(true),
                 bindings: vec![],
             },
-        }))
+        })
+        .into_response())
     } else {
-        let res = manager
+        let accept_header = headers
+            .get(ACCEPT)
+            .and_then(|h| h.to_str().ok())
+            .map(String::from);
+        let (content_type, res) = manager
             .sparql_client
-            .query(&query)
+            .query_with_accept_header(&query, accept_header)
             .await
             .map_err(|e| ApiError::SparqlError(e.to_string()))?;
-        Ok(Json(res))
+        headers.contains_key(ACCEPT);
+        let content_type = (CONTENT_TYPE, content_type);
+
+        let headers = AppendHeaders([content_type]);
+
+        Ok((headers, res).into_response())
     }
 }
 async fn new_job(

@@ -30,7 +30,7 @@ async fn main() -> anyhow::Result<()> {
         .iter()
         .flat_map(|d| d.parse::<u64>())
         .map(Duration::from_secs)
-        .last()
+        .next_back()
         .unwrap_or_else(|| Duration::from_secs(300));
     let job_definitions_path = var(JOB_DEFINITIONS_PATH).unwrap_or_else(|_| "/job_def.json".into());
     let manager_state = JobManagerState::new(&app_name, &job_definitions_path).await?;
