@@ -125,7 +125,7 @@ async fn authorize(
 
 async fn all_jobs(
     State(manager): State<JobManagerState>,
-    _: Claims,
+    _: Option<Claims>,
     Json(pageable): Json<Pageable>,
 ) -> Result<Json<Page<Job>>, ApiError> {
     let jobs = manager
@@ -138,7 +138,7 @@ async fn all_jobs(
 
 async fn all_scheduled_jobs(
     State(manager): State<JobManagerState>,
-    _: Claims,
+    _: Option<Claims>,
     Json(pageable): Json<Pageable>,
 ) -> Result<Json<Page<ScheduledJob>>, ApiError> {
     let scheduled_jobs = manager
@@ -151,7 +151,7 @@ async fn all_scheduled_jobs(
 
 async fn all_job_definitions(
     State(manager): State<JobManagerState>,
-    _: Claims,
+    _: Option<Claims>,
 ) -> Result<Json<Vec<JobDefinition>>, ApiError> {
     Ok(Json(manager.job_definitions.iter().cloned().collect()))
 }
@@ -290,7 +290,7 @@ async fn download(
 }
 async fn all_subtasks(
     State(manager): State<JobManagerState>,
-    _: Claims,
+    _: Option<Claims>,
     axum::extract::Path((job_id, task_id)): axum::extract::Path<(String, String)>,
     axum::extract::Query(GetSubTasksPayload {
         last_element_id,
@@ -326,7 +326,7 @@ async fn all_subtasks(
 }
 async fn all_tasks(
     State(manager): State<JobManagerState>,
-    _: Claims,
+    _: Option<Claims>,
     axum::extract::Path(job_id): axum::extract::Path<String>,
 ) -> Result<Json<Vec<Task>>, ApiError> {
     let tasks = manager
