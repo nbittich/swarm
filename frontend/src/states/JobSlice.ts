@@ -19,7 +19,7 @@ export const fetchJobs = createAsyncThunk(
             page: (pagination?.page || 1) - 1,
             limit: pagination?.limit || 10,
             filter: pagination?.filter || {},
-            sort: pagination?.sort || {},
+            sort: pagination?.sort || { creationDate: -1 },
 
         });
         return response.data;
