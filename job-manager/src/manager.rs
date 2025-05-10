@@ -122,9 +122,7 @@ impl JobManagerState {
                 },
                 doc! {
                     "$set": {
-                        "status.type": {
-                         "failed": {"value": ["manager restarted"]}
-                        }
+                        "status": {"type":"failed","value": ["manager restarted"]}
                     }
                 },
             )
@@ -136,9 +134,7 @@ impl JobManagerState {
                 },
                 doc! {
                     "$set": {
-                        "status.type": {
-                         "failed": {"value": ["manager restarted"]}
-                        }
+                        "status": {"type":"failed","value": ["manager restarted"]}
                     }
                 },
             )
