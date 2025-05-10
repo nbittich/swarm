@@ -1,25 +1,30 @@
 
 import React, { useEffect, useState } from 'react';
-import { Button, Flex, Space, Table, TableProps, Tag, message } from 'antd';
+import { Button, Descriptions, Flex, Space, Table, TableProps, Tag, Typography, message } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';  // for accessing the dynamic route parameter
 import axios from 'axios';
-import { colorForStatus, Status, Task } from '@swarm/models/domain';
+import { colorForStatus, Job, Status, Task, truncate } from '@swarm/models/domain';
 import { ArrowLeftOutlined, DownloadOutlined, RightSquareOutlined, SyncOutlined } from "@ant-design/icons";
 import { download } from '@swarm/states/file/Api';
 import dayjs from 'dayjs';
 
+const { Text } = Typography;
 
 const TasksTable: React.FC = () => {
     const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
+    const [job, setJob] = useState<Job>();
     const [tasks, setTasks] = useState<Task[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const fetchTasks = async (id: string | undefined) => {
         setLoading(true);
         try {
-            const response = await axios.get(`/api/jobs/${id}/tasks`);
-            const tasks = response.data;
+            const responseTasks = await axios.get(`/api/jobs/${id}/tasks`);
+            const tasks = responseTasks.data;
             setTasks(tasks);
+            const responseJob = await axios.get(`/api/jobs/${id}`);
+            const job = responseJob.data;
+            setJob(job);
         } catch (err) {
             console.error(err);
             message.error('Failed to fetch tasks. Check the logs');
@@ -152,6 +157,26 @@ const TasksTable: React.FC = () => {
 
     return (
         <Flex vertical gap="middle">
+            <h2>Job Detail</h2>
+            {job && <Descriptions key={job._id as string}
+                bordered
+                column={1}
+            >
+                {Object.entries(job).filter(([k, _]) => k !== "definition").map(([key, val]) => (
+                    <Descriptions.Item key={key + job._id} label={key} styles={{ label: { width: '10vw', fontWeight: "bold" } }}>
+                        {Array.isArray(val) ? (<ul key={key + job._id + "ul"} style={{ padding: 0, marginLeft: 10 }}>
+                            {val.map(v => <li key={crypto.randomUUID()}>{v}</li>)}</ul>) : <span style={{ wordBreak: 'break-word' }}>
+                            {typeof (val) === "object" && key === "status" ? <Tag color={colorForStatus(val)} >
+                                <Text>{val.type}
+                                    {val.type === "failed" && val.value && `: ${val.value.join(", ")}`}</Text>
+                            </Tag> : String(val)
+
+                            }
+                        </span>
+                        }
+                    </Descriptions.Item>
+                ))}
+            </Descriptions>}
             <Flex justify="space-between" wrap>
                 <h2>Tasks</h2>
                 <Space>
