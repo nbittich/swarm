@@ -121,8 +121,10 @@ impl JobManagerState {
                      "status.type": {"$in": ["busy","scheduled"]},
                 },
                 doc! {
-                    "status.type": {
-                        "failed": {"value": ["manager restarted"]}
+                    "$set": {
+                        "status.type": {
+                         "failed": {"value": ["manager restarted"]}
+                        }
                     }
                 },
             )
@@ -133,8 +135,10 @@ impl JobManagerState {
                      "status.type": {"$in": ["busy","scheduled"]},
                 },
                 doc! {
-                    "status.type": {
+                    "$set": {
+                        "status.type": {
                          "failed": {"value": ["manager restarted"]}
+                        }
                     }
                 },
             )
