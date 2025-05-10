@@ -158,11 +158,14 @@ impl JobManagerState {
         })
     }
 
-    pub async fn delete_job(&self, job_id: &str) -> anyhow::Result<()> {
+    pub async fn get_job(&self, job_id: &str) -> anyhow::Result<Job> {
         let Some(job) = self.job_repository.find_by_id(job_id).await? else {
-            debug!("");
             return Err(anyhow!("job not found {job_id:?}"));
         };
+        Ok(job)
+    }
+    pub async fn delete_job(&self, job_id: &str) -> anyhow::Result<()> {
+        let job = self.get_job(job_id).await?;
         let tasks = self
             .task_repository
             .find_by_query(

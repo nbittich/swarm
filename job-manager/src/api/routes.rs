@@ -53,6 +53,7 @@ pub async fn serve(
         .route("/scheduled-jobs/new", post(new_scheduled_job))
         .route("/scheduled-jobs/{id}", delete(delete_scheduled_job))
         .route("/scheduled-jobs", post(all_scheduled_jobs))
+        .route("/jobs/{job_id}", get(get_job))
         .route("/jobs/{job_id}", delete(delete_job))
         .route("/jobs/{job_id}/download", get(download))
         .route("/jobs/{job_id}/tasks/{task_id}/subtasks", get(all_subtasks))
@@ -236,6 +237,18 @@ async fn new_scheduled_job(
         .new_scheduled_job(name, definition_id, task_definition, cron_expr)
         .await?;
     Ok(Json(sj))
+}
+
+async fn get_job(
+    State(manager): State<JobManagerState>,
+    _: Claims,
+    axum::extract::Path(job_id): axum::extract::Path<String>,
+) -> Result<Json<Job>, ApiError> {
+    manager
+        .get_job(&job_id)
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::GetJob(e.to_string()))
 }
 
 async fn delete_job(

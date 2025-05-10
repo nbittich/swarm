@@ -43,6 +43,7 @@ pub enum ApiError {
     SearchError(String),
     GetLastPublications(String),
     DeleteJob(String),
+    GetJob(String),
     DeleteScheduledJob(String),
     AllTasks(String),
     AllSubTasks(String),
@@ -178,6 +179,7 @@ impl IntoResponse for ApiError {
             | ApiError::AllScheduledJobs(e)
             | ApiError::AllTasks(e)
             | ApiError::DeleteJob(e)
+            | ApiError::GetJob(e)
             | ApiError::DeleteScheduledJob(e)
             | ApiError::AllSubTasks(e)
             | ApiError::Download(e)
