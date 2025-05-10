@@ -100,7 +100,7 @@ pub async fn handle_task(nc: &NatsClient, client: Client, task: &mut Task) -> Op
                     ..
                 },
             ) => {
-                if success_count == 0 && failure_count > 0 {
+                if success_count == 0 {
                     task.status = Status::Failed(vec![format!(
                         "task did not succeed: success: {success_count}, failure: {failure_count}"
                     )]);

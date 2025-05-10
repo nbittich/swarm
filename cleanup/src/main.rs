@@ -125,10 +125,11 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<()> {
     let Payload::Cleanup(status) = &task.payload else {
         return Err(anyhow::anyhow!("{task:?} is not a cleanup task!"));
     };
-    let old_jobs = config
+    let jobs_to_clean = config
         .job_repository
         .find_by_query(
             doc! {
+                 "_id": { "$ne": &task.job_id },
                  "status.type": status.get_type(),
             },
             None,
@@ -138,31 +139,41 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<()> {
             error!("{e}");
             vec![]
         });
-    for old_job in old_jobs {
-        debug!("deleting job {}...", old_job.id);
-        let old_tasks = config
+    for job_to_clean in jobs_to_clean {
+        debug!("deleting job {}...", job_to_clean.id);
+        let tasks_to_clean = config
             .task_repository
             .find_by_query(
                 doc! {
-                  "jobId": &old_job.id
+                  "jobId": &job_to_clean.id
                 },
                 None,
             )
             .await?;
-        for ot in old_tasks {
-            debug!("deleting task {}...", ot.id);
+        for task_to_clean in tasks_to_clean {
+            debug!("deleting task {}...", task_to_clean.id);
             config
                 .sub_task_repository
                 .delete_many(Some(doc! {
-                    "taskId": &ot.id
+                    "taskId": &task_to_clean.id
                 }))
                 .await?;
-            config.task_repository.delete_by_id(&ot.id).await?;
+            config
+                .task_repository
+                .delete_by_id(&task_to_clean.id)
+                .await?;
+            debug!("deleting task directory {:?}...", task_to_clean.output_dir);
+            if let Err(e) = tokio::fs::remove_dir_all(&task_to_clean.output_dir).await {
+                error!("could not delete task directory: {e}");
+            }
+            debug!("directory task {:?} deleted.", task_to_clean.output_dir);
         }
-        if let Err(e) = tokio::fs::remove_dir_all(old_job.root_dir).await {
-            error!("{e}");
+        debug!("deleting job directory {:?}...", job_to_clean.root_dir);
+        if let Err(e) = tokio::fs::remove_dir_all(&job_to_clean.root_dir).await {
+            error!("could not delete job directory: {e}");
         }
-        config.job_repository.delete_by_id(&old_job.id).await?;
+        debug!("job directory {:?} deleted.", job_to_clean.root_dir);
+        config.job_repository.delete_by_id(&job_to_clean.id).await?;
     }
 
     task.modified_date = Some(Local::now());

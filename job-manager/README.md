@@ -22,9 +22,10 @@ in the different readme's.
 | `SERVICE_PORT`         | `String` | Service port, loaded from the `SERVICE_PORT` environment variable.                        | `80`                        |
 | `JOB_DEFINITIONS_PATH` | `String` | Path to the job definitions JSON file                                                     | `/definitions.json`         |
 | `BODY_SIZE_LIMIT`      | `String` | Body size limit for downloads (in mb)                                                     | `50`                        |
-| `MEILISEARCH_URL`      |          | URL of the Meilisearch instance                                                           | `N/A`                       |
-| `MEILISEARCH_KEY`      |          | API key used to authenticate with Meilisearch                                             | `N/A`                       |
-| `INDEX_CONFIG_PATH`    |          | Path to the JSON configuration file describing search indexing rules and schema           | `N/A`                       |
+| `MEILISEARCH_URL`      | `String` | URL of the Meilisearch instance                                                           | `N/A`                       |
+| `MEILISEARCH_KEY`      | `String` | API key used to authenticate with Meilisearch                                             | `N/A`                       |
+| `INDEX_CONFIG_PATH`    | `String` | Path to the JSON configuration file describing search indexing rules and schema           | `N/A`                       |
+| `SCHEDULE_START_DELAY` | `number` | Delay in seconds before starting the job scheduler                                        | `300`                       |
 
 ## Endpoints
 

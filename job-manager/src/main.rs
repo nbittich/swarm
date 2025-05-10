@@ -3,10 +3,12 @@
 
 use manager::JobManagerState;
 
-use std::env::var;
+use std::{env::var, time::Duration};
 use swarm_common::{
-    constant::{APPLICATION_NAME, BODY_SIZE_LIMIT, SERVICE_HOST, SERVICE_PORT},
-    error, setup_tracing,
+    constant::{
+        APPLICATION_NAME, BODY_SIZE_LIMIT, SCHEDULE_START_DELAY, SERVICE_HOST, SERVICE_PORT,
+    },
+    error, info, setup_tracing,
 };
 
 mod api;
@@ -24,6 +26,12 @@ async fn main() -> anyhow::Result<()> {
     let app_name = var(APPLICATION_NAME).unwrap_or_else(|_| "job-manager".into());
     let host = var(SERVICE_HOST).unwrap_or_else(|_| String::from("127.0.0.1"));
     let port = var(SERVICE_PORT).unwrap_or_else(|_| String::from("80"));
+    let schedule_start_delay = var(SCHEDULE_START_DELAY)
+        .iter()
+        .flat_map(|d| d.parse::<u64>())
+        .map(Duration::from_secs)
+        .last()
+        .unwrap_or_else(|| Duration::from_secs(300));
     let job_definitions_path = var(JOB_DEFINITIONS_PATH).unwrap_or_else(|_| "/job_def.json".into());
     let manager_state = JobManagerState::new(&app_name, &job_definitions_path).await?;
     let cloned_state = manager_state.clone();
@@ -36,7 +44,14 @@ async fn main() -> anyhow::Result<()> {
 
     let schedule_executor_handle = {
         let manager_state = manager_state.clone();
-        tokio::spawn(async move { manager_state.start_scheduled_job_executor().await })
+        tokio::spawn(async move {
+            info!(
+                "job scheduler will start in {} seconds...",
+                schedule_start_delay.as_secs()
+            );
+            tokio::time::sleep(schedule_start_delay).await;
+            manager_state.start_scheduled_job_executor().await
+        })
     };
     let sub_task_consumer_handle =
         tokio::spawn(async move { manager_state.start_consuming_sub_task().await });

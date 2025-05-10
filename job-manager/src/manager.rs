@@ -113,6 +113,32 @@ impl JobManagerState {
         let nc = nats_client::connect().await?;
         let search_client = SearchClient::new(meilisearch_url, Some(meilisearch_key))?;
 
+        // set all existing busy / scheduled jobs and tasks to failed
+        // as we restarted the server, we probably want to stop them
+        job_repository
+            .update_many(
+                doc! {
+                     "status.type": {"$in": ["busy","scheduled"]},
+                },
+                doc! {
+                    "status.type": {
+                        "failed": {"value": ["manager restarted"]}
+                    }
+                },
+            )
+            .await?;
+        task_repository
+            .update_many(
+                doc! {
+                     "status.type": {"$in": ["busy","scheduled"]},
+                },
+                doc! {
+                    "status.type": {
+                         "failed": {"value": ["manager restarted"]}
+                    }
+                },
+            )
+            .await?;
         Ok(JobManagerState {
             nc,
             task_event_consumer,
