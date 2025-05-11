@@ -67,7 +67,7 @@ const SearchContainer: React.FC = () => {
                         options={indexConfigs.map(ic => ({ value: ic.name, label: ic.name }))}
                     />
                     <Space />
-                    <Input.Search size="middle"
+                    <Input.Search
                         size="large"
                         disabled={!selectedIndex}
                         enterButton
