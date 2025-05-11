@@ -241,7 +241,7 @@ async fn new_scheduled_job(
 
 async fn get_job(
     State(manager): State<JobManagerState>,
-    _: Claims,
+    _: Option<Claims>,
     axum::extract::Path(job_id): axum::extract::Path<String>,
 ) -> Result<Json<Job>, ApiError> {
     manager
