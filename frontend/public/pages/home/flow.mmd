@@ -1,0 +1,44 @@
+%% pnpm install -g @mermaid-js/mermaid-cli
+%% mmdc -i flow.mmd -o diagram.png -b transparent
+%%{init: {'theme': 'neutral'}}%%
+flowchart TD
+
+    %% User Interface
+    A[User Interface] -->|Manage Jobs| F[JobManager]
+    A -->|Query Data| C
+    A -->|Search| X
+   
+    subgraph DataStore["Data"]
+      C[SPARQL Endpoint]
+       X[Meilisearch]
+    end
+   
+    G[NATS Message Broker]   
+  
+    F -->|Trigger Events| G
+    
+    G --> |Consume Events| F
+   G -->|"collect"| H1[web scraper]
+        G -->|"extract"| H2[RDFa Parser]
+        G -->|"filter"| H3[SHACL Validator]
+        G -->|"add-uuid"| H4[UUID producer]
+        G -->|"diff"| H5[Data Comparator]
+        G -->|"publish"| H6[Publisher]
+        G -->|"index"| H7[Sync]
+        G -->|"archive"| H8[Job Archiver]
+ 
+    %% Data Processing Pipeline
+    subgraph DataPlane["Data Processing Pipeline"]
+     
+        %% Data Processing Connections
+        H1 -->|HTML| H2
+        H2 -->|RDF/N-Triples| H3
+        H3 -->|Validated Data| H4
+        H4 -->|uuid-complemented| H5
+        H5 -->|Diff Results| H6
+        H6 -->|Triples| C
+        H7 -->|Documents| X
+        H8
+    end
+
+

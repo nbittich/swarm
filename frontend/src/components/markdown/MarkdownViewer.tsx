@@ -2,10 +2,22 @@ import { useState, useEffect } from 'react';
 import { Card, Col, Flex, Image, Space, } from 'antd';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useSelector } from 'react-redux';
+import { RootState } from '@swarm/states/Store';
 
 const MarkdownViewer = ({ filePath, gallery }: { filePath: string, gallery?: string[] }) => {
     const [markdown, setMarkdown] = useState('');
 
+    const getDarkImg = (src: string | undefined) => {
+        if (!src) {
+            return src;
+        }
+        const parts = src.split('/');
+        parts[parts.length - 1] = `dark-${parts[parts.length - 1]}`;
+        return parts.join('/');
+    }
+
+    const darkMode = useSelector((state: RootState) => state.theme.darkMode);
     useEffect(() => {
         fetch(filePath)
             .then((response) => {
@@ -19,25 +31,36 @@ const MarkdownViewer = ({ filePath, gallery }: { filePath: string, gallery?: str
     }, [filePath]);
 
     return (
-        <Card>
 
-            <Flex justify='center' align='center' vertical>
-                <Col span={18}>
-                    <Space>
-                        {gallery && gallery.map(pic => <Image key={pic} preview={true} loading='lazy' src={pic}
+        <Flex justify='center' align='center' vertical>
+            <Col span={16}>
+                <Space>
+                    {gallery && gallery.map(pic => <Image key={pic} preview={true} loading='lazy' src={pic}
 
-                        />)}
-                    </Space>
+                    />)}
+                </Space>
 
-                </Col>
-                <Col span={18}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
-                </Col>
+            </Col>
+            <Col span={16}>
+                <Card>
+
+                    <ReactMarkdown
+                        components={{
+                            img: ({ src, alt, title }) => (
+                                <Image
+                                    src={darkMode ? getDarkImg(src) : src}
+                                    alt={alt}
+                                    title={title}
+                                    preview={false} />
+                            ),
+                        }}
+                        remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
+                </Card>
+            </Col>
 
 
-            </Flex>
+        </Flex>
 
-        </Card>
 
     );
 };
