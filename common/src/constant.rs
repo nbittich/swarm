@@ -39,6 +39,8 @@ pub static INDEX_MAX_TOTAL_HITS: &str = "INDEX_MAX_TOTAL_HITS";
 pub static RESET_INDEX: &str = "RESET_INDEX";
 pub static RESET_INDEX_NAME: &str = "RESET_INDEX_NAME";
 pub static SCHEDULE_START_DELAY: &str = "SCHEDULE_START_DELAY";
+pub static MAX_CONCURRENT_JOB: &str = "MAX_CONCURRENT_JOB";
+
 /* COLLECTION NAME */
 pub static TASK_COLLECTION: &str = "tasks";
 pub static SUB_TASK_COLLECTION: &str = "subTasks";

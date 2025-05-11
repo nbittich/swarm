@@ -7,8 +7,9 @@ use reqwest::{
 };
 use swarm_common::constant::{
     BUFFER_BACK_PRESSURE, CONNECTION_POOL_MAX_IDLE_PER_HOST, DEFAULT_ACCEPT, DEFAULT_USER_AGENT,
-    INTERESTING_PROPERTIES, MAX_DELAY_BEFORE_NEXT_RETRY_MILLIS, MAX_DELAY_MILLIS, MAX_RETRY,
-    MIN_DELAY_BEFORE_NEXT_RETRY_MILLIS, MIN_DELAY_MILLIS, REQUEST_TIMEOUT_SEC,
+    INTERESTING_PROPERTIES, MAX_CONCURRENT_JOB, MAX_DELAY_BEFORE_NEXT_RETRY_MILLIS,
+    MAX_DELAY_MILLIS, MAX_RETRY, MIN_DELAY_BEFORE_NEXT_RETRY_MILLIS, MIN_DELAY_MILLIS,
+    REQUEST_TIMEOUT_SEC,
 };
 
 // static CACHE_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
@@ -20,6 +21,7 @@ use swarm_common::constant::{
 #[derive(Debug, Clone)]
 pub struct Configuration {
     pub max_retry: usize,
+    pub max_concurrent_job: usize,
     pub client: Client,
     pub folder_path: PathBuf,
     pub ignore_extensions: [&'static str; 8],
@@ -90,7 +92,12 @@ pub async fn make_config(client: Client, folder_path: PathBuf) -> anyhow::Result
     if min_delay_millis == 0 {
         min_delay_millis = 30; // cannot be 0
     }
-
+    let max_concurrent_job = std::env::var(MAX_CONCURRENT_JOB)
+        .unwrap_or_else(|_| "64".into())
+        .parse::<usize>()
+        .ok()
+        .filter(|c| c > &0)
+        .unwrap_or(64);
     let redirect_selector =
         scraper::Selector::parse(r#"meta[http-equiv="refresh"]"#).map_err(|e| anyhow!("{e}"))?;
 
@@ -113,6 +120,7 @@ pub async fn make_config(client: Client, folder_path: PathBuf) -> anyhow::Result
     Ok(Configuration {
         max_retry,
         href_selector,
+        max_concurrent_job,
         //job_timeout,
         buffer,
         allowed_content_types,

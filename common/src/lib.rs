@@ -37,6 +37,16 @@ impl IdGenerator {
         uuid::Uuid::now_v7().to_string().replace("-", "")
     }
 }
+
+pub fn chunk_drain<T>(arr: &mut Vec<T>, chunk_size: usize) -> Vec<Vec<T>> {
+    let mut chunks = Vec::new();
+
+    while !arr.is_empty() {
+        let chunk = arr.drain(..chunk_size.min(arr.len())).collect::<Vec<_>>();
+        chunks.push(chunk);
+    }
+    chunks
+}
 pub static REGEX_CLEAN_JSESSIONID: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(";jsessionid=[a-zA-Z;0-9]*").expect("could not compile regex")
 });

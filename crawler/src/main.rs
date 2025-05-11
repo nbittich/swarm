@@ -6,7 +6,7 @@ use rand::distr::{Distribution, Uniform};
 use reqwest::{Client, Url, header::CONTENT_TYPE};
 use std::{env::var, path::Path, str::FromStr, time::Duration};
 use swarm_common::{
-    IdGenerator, REGEX_CLEAN_JSESSIONID, REGEX_CLEAN_S_UUID, StreamExt,
+    IdGenerator, REGEX_CLEAN_JSESSIONID, REGEX_CLEAN_S_UUID, StreamExt, chunk_drain,
     constant::{
         APPLICATION_NAME, CRAWLER_CONSUMER, MANIFEST_FILE_NAME, SUB_TASK_EVENT_STREAM,
         SUB_TASK_STATUS_CHANGE_EVENT, SUB_TASK_STATUS_CHANGE_SUBJECT, TASK_EVENT_STREAM,
@@ -161,63 +161,65 @@ pub async fn crawl_website(
     urls.push(url);
 
     while !urls.is_empty() {
-        for url in urls.drain(..) {
-            if visited_urls.iter().any(|k| k == &url) {
-                info!("skipping {url} as it was already visited");
-                continue;
+        for url_jobs in chunk_drain(&mut urls, config.max_concurrent_job) {
+            for url in url_jobs {
+                if visited_urls.iter().any(|k| k == &url) {
+                    debug!("skipping {url} as it was already visited");
+                    continue;
+                }
+
+                debug!("got url = {}", url);
+                debug!("sleeping before crawling {url}");
+
+                tokio::time::sleep(random_delay_millis(
+                    config.min_delay_millis,
+                    config.max_delay_millis,
+                )?)
+                .await;
+                let config = config.clone();
+                visited_urls.push(url.clone());
+
+                tasks.spawn(async move { crawl(&url, config).await });
             }
-
-            debug!("got url = {}", url);
-            debug!("sleeping before crawling {url}");
-
-            tokio::time::sleep(random_delay_millis(
-                config.min_delay_millis,
-                config.max_delay_millis,
-            )?)
-            .await;
-            let config = config.clone();
-            visited_urls.push(url.clone());
-
-            tasks.spawn(async move { crawl(&url, config).await });
-        }
-        //flush
-        while let Some(handle) = tasks.join_next().await {
-            match handle? {
-                Ok(result) => {
-                    if let UrlProcessingResult::Processed((page_res, mut next_urls)) = result {
-                        append_entry_manifest_file(path, &page_res).await?;
+            //flush
+            while let Some(handle) = tasks.join_next().await {
+                match handle? {
+                    Ok(result) => {
+                        if let UrlProcessingResult::Processed((page_res, mut next_urls)) = result {
+                            append_entry_manifest_file(path, &page_res).await?;
+                            let st = SubTask {
+                                id: IdGenerator.get(),
+                                task_id: task_id.into(),
+                                creation_date: Local::now(),
+                                status: Status::Success,
+                                result: Some(SubTaskResult::ScrapeUrl(page_res)),
+                                ..Default::default()
+                            };
+                            let _ = nc.publish(SUB_TASK_STATUS_CHANGE_EVENT(&st.id), &st).await;
+                            success_count += 1;
+                            for nu in next_urls.drain(..) {
+                                if !visited_urls.iter().any(|k| k == &nu) {
+                                    urls.push(nu);
+                                }
+                            }
+                        } else if let UrlProcessingResult::Ignored(url) = result {
+                            // we don't want to persist these, they will be filtered later
+                            // as their status will be success
+                            debug!("{url} was ignored");
+                        }
+                    }
+                    Err(e) => {
+                        error!("{e}");
+                        failure_count += 1;
                         let st = SubTask {
                             id: IdGenerator.get(),
                             task_id: task_id.into(),
                             creation_date: Local::now(),
-                            status: Status::Success,
-                            result: Some(SubTaskResult::ScrapeUrl(page_res)),
+                            status: Status::Failed(vec![format!("could not be visited: {e}")]),
                             ..Default::default()
                         };
                         let _ = nc.publish(SUB_TASK_STATUS_CHANGE_EVENT(&st.id), &st).await;
-                        success_count += 1;
-                        for nu in next_urls.drain(..) {
-                            if !visited_urls.iter().any(|k| k == &nu) {
-                                urls.push(nu);
-                            }
-                        }
-                    } else if let UrlProcessingResult::Ignored(url) = result {
-                        // we don't want to persist these, they will be filtered later
-                        // as their status will be success
-                        debug!("{url} was ignored");
                     }
-                }
-                Err(e) => {
-                    error!("{e}");
-                    failure_count += 1;
-                    let st = SubTask {
-                        id: IdGenerator.get(),
-                        task_id: task_id.into(),
-                        creation_date: Local::now(),
-                        status: Status::Failed(vec![format!("could not be visited: {e}")]),
-                        ..Default::default()
-                    };
-                    let _ = nc.publish(SUB_TASK_STATUS_CHANGE_EVENT(&st.id), &st).await;
                 }
             }
         }

@@ -22,3 +22,4 @@ This application relies on several environment variables to control its runtime 
 | `HTTP_CACHE_PATH`                    | HTTP Cache Path                                        | String            | temp directory                                                           |
 | `CONNECTION_POOL_MAX_IDLE_PER_HOST`  | Pool max idle per host                                 | Integer (`usize`) | `usize::MAX`                                                             |
 | `DEFAULT_ACCEPT`                     | Default accept                                         | String            | `text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8`        |
+| `MAX_CONCURRENT_JOB`                 | Maximum concurrent downloads                           | Integer (`u64`)   | `64`                                                                     |
