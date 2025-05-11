@@ -164,9 +164,12 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<()> {
                 )
                 .await?;
             ot.status = Status::Archived;
+            ot.modified_date = Some(Local::now());
             config.task_repository.upsert(&ot.id, &ot).await?;
         }
         old_job.status = Status::Archived;
+        old_job.modified_date = Some(Local::now());
+
         config.job_repository.upsert(&old_job.id, &old_job).await?;
     }
 
