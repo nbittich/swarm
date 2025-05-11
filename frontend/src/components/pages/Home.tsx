@@ -11,7 +11,7 @@ const gallery =
     ];
 const Home = () => {
     return (
-        <MarkdownViewer filePath="/pages/home/index.md" gallery={gallery} />
+        <MarkdownViewer filePath="/pages/home/index.md" gallery={[]} />
     );
 };
 

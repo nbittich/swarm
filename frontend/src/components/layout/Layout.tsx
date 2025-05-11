@@ -85,8 +85,8 @@ export default function MainLayout() {
             // locale={frBE}
             theme={{
                 token: {
-                    borderRadiusOuter: 0,
-                    borderRadius: 0
+                    // borderRadiusOuter: 0,
+                    // borderRadius: 0
                 },
                 algorithm: darkMode ? theme.darkAlgorithm : theme.defaultAlgorithm, components: {
                     Layout: {
@@ -150,16 +150,10 @@ export default function MainLayout() {
                                 borderRadius: 0
                             }}
                         />
-                        <div>
-                            <a onClick={() => handleNavigation("/")}><Image preview={false} src="/favicon.svg" width={24} height={24}
-                                style={{
-                                    display: "inline-block",
-                                    padding: 0,
-                                    margin: 0,
-                                    verticalAlign: "middle",
-                                }} /></a>
-                        </div>
-
+                        <a onClick={() => handleNavigation("/")}><Image preview={false} src="/favicon.svg" width={24} height={24}
+                            style={{
+                                verticalAlign: "middle",
+                            }} /></a>
                         <Switch
                             checked={darkMode}
                             style={{ padding: 0, marginRight: 10 }}

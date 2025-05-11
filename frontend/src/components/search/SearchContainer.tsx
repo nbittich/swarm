@@ -1,5 +1,5 @@
 import { AppDispatch, RootState } from "@swarm/states/Store";
-import { Alert, Button, Descriptions, Divider, Flex, Input, Pagination, Row, Select, Space, Spin, Typography, } from "antd";
+import { Alert, Button, Col, Descriptions, Divider, Flex, Input, Pagination, Row, Select, Space, Spin, Typography, } from "antd";
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import FilterBuilder from "./FilterBuilder";
@@ -53,39 +53,50 @@ const SearchContainer: React.FC = () => {
     }
 
     return (<>
-        <h2>INDEX {indexStats && (<Typography.Text type="secondary">({indexStats.numberOfDocuments} document{indexStats.numberOfDocuments > 1 ? 's' : ''})</Typography.Text>)}</h2>
-        <Flex gap="middle" >
-            <Select
-                placeholder="Select type"
-                onChange={value => { updateIndex(value); setFilters([]); setQuery(undefined) }}
-                options={indexConfigs.map(ic => ({ value: ic.name, label: ic.name }))}
-            />
-            <Space />
-            <Input.Search size="middle"
-                disabled={!selectedIndex}
-                enterButton
-                onSearch={() => handleSearch()}
-                value={query}
-                placeholder="Enter query"
-                onChange={e => { setQuery(e.target.value) }}
-            />
-            <Button disabled={!selectedIndex} type="dashed" danger onClick={() => setFilters([...filters, { key: '', operator: '=', value: '', joiner: 'AND' }])}>
-                Add Filter
-            </Button>
+        <h2>INDEX</h2>
+        <Flex justify="center" >
+            <Col span={12}>
 
+                <Flex gap="middle" >
+                    <Select
+                        size="large"
+
+
+                        placeholder="Select type"
+                        onChange={value => { updateIndex(value); setFilters([]); setQuery(undefined) }}
+                        options={indexConfigs.map(ic => ({ value: ic.name, label: ic.name }))}
+                    />
+                    <Space />
+                    <Input.Search size="middle"
+                        size="large"
+                        disabled={!selectedIndex}
+                        enterButton
+                        onSearch={() => handleSearch()}
+                        value={query}
+                        placeholder="Enter query"
+                        onChange={e => { setQuery(e.target.value) }}
+                    />
+                    <Button size="large" disabled={!selectedIndex} type="dashed" danger onClick={() => setFilters([...filters, { key: '', operator: '=', value: '', joiner: 'AND' }])}>
+                        Add Filter
+                    </Button>
+                </Flex >
+                {indexStats && (<Typography.Text type="secondary">(~{new Intl.NumberFormat("nl-BE").format(
+                    indexStats.numberOfDocuments,
+                )} document{indexStats.numberOfDocuments > 1 ? 's' : ''})</Typography.Text>)}
+                {selectedIndex && (<>
+                    <Row style={{ paddingTop: "10px" }}>
+                        <FilterBuilder key={selectedIndex}
+                            indexConfig={indexConfigs.find(ic => ic.name === selectedIndex)!}
+                            conditions={filters}
+                            setConditions={setFilters}
+                        />
+                    </Row>
+                </>)
+                }
+                <Divider dashed />
+            </Col>
         </Flex>
-        {selectedIndex && (<>
-            <Row style={{ paddingTop: "10px" }}>
-                <FilterBuilder key={selectedIndex}
-                    indexConfig={indexConfigs.find(ic => ic.name === selectedIndex)!}
-                    conditions={filters}
-                    setConditions={setFilters}
-                />
-            </Row>
-        </>)
-        }
-        <Divider dashed />
-        {!searchResults && !error && <Typography.Text>No result</Typography.Text>}
+
         {error &&
             <Alert
                 message="Error"
@@ -97,7 +108,7 @@ const SearchContainer: React.FC = () => {
         }
         <Spin spinning={loading || searching}>
             {searchResults && (<>
-                <Typography.Title level={3} type="secondary">(Found {searchResults.totalHits || 0} document{(searchResults.totalHits || 0) > 1 ? 's' : ''})</Typography.Title>
+                {/* <Typography.Title level={3} type="secondary">(Found {searchResults.totalHits || 0} document{(searchResults.totalHits || 0) > 1 ? 's' : ''})</Typography.Title> */}
                 <Flex vertical gap="middle" style={{ paddingTop: "10px" }} >
                     {
                         searchResults.hits.map((hit, idx) => (
