@@ -169,17 +169,20 @@ pub async fn crawl_website(
                 }
 
                 debug!("got url = {}", url);
-                debug!("sleeping before crawling {url}");
 
-                tokio::time::sleep(random_delay_millis(
-                    config.min_delay_millis,
-                    config.max_delay_millis,
-                )?)
-                .await;
                 let config = config.clone();
                 visited_urls.push(url.clone());
 
-                tasks.spawn(async move { crawl(&url, config).await });
+                tasks.spawn(async move {
+                    debug!("sleeping before crawling {url}");
+
+                    tokio::time::sleep(random_delay_millis(
+                        config.min_delay_millis,
+                        config.max_delay_millis,
+                    )?)
+                    .await;
+                    crawl(&url, config).await
+                });
             }
             //flush
             while let Some(handle) = tasks.join_next().await {
