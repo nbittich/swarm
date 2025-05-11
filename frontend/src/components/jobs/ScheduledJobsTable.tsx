@@ -10,8 +10,10 @@ import { addScheduledJob, deleteScheduledJob, fetchScheduledJobs, setPageable } 
 import { fetchJobDefinitions } from '@swarm/states/JobDefinitionSlice';
 import { useDebouncedCallback } from 'use-debounce';
 import { SorterResult } from 'antd/es/table/interface';
+import { useAuth } from '@swarm/auth/authContextHook';
 const { Option } = Select;
 const ScheduledJobsTable: React.FC = () => {
+    const { token } = useAuth();
     const dispatch = useDispatch<AppDispatch>();
     const [searchName, setSearchName] = useState();
     const searchNameDebounced = useDebouncedCallback(
@@ -169,7 +171,7 @@ const ScheduledJobsTable: React.FC = () => {
             <Flex vertical gap="middle">
                 <Flex justify="space-between" wrap>
                     <h2>Scheduled Jobs</h2>
-                    <Space>
+                    {token && <Space>
                         <Button onClick={() => toggleModal(true)} size="large" color="default" variant="dashed" icon={<PlusOutlined />}>
                             New Scheduled Job
                         </Button>
@@ -179,7 +181,7 @@ const ScheduledJobsTable: React.FC = () => {
                         })} size="large" color="default" variant="dashed" icon={<SyncOutlined />}>
                             Refresh
                         </Button>
-                    </Space>
+                    </Space>}
 
                 </Flex>
                 <Table
@@ -222,7 +224,7 @@ const ScheduledJobsTable: React.FC = () => {
                         rules={[{ required: true, message: 'Please select a job definition' }]}
                     >
                         <Select placeholder="Select Job Definition" onChange={handleJobDefinitionChange}>
-                            {jobDefinitions.map((definition) => (
+                            {jobDefinitions && jobDefinitions.map((definition) => (
                                 <Option key={definition.id} value={definition.id}>
                                     {definition.name}
                                 </Option>

@@ -19,9 +19,29 @@ const SwarmRoutes = () => {
 
     const routesForPublic = [
         {
-            path: "",
-            element: <Home />,
+            path: "jobs",
+            children: [
+                {
+                    path: "",
+                    element: <JobsTable />,
+                }
+                ,
+                {
+                    path: ":id/tasks",
+                    children: [
+                        {
+                            path: "",
+                            element: <TasksTable />
+                        },
+                        {
+                            path: ":taskId/:taskName",
+                            element: <SubTasksTable />
+                        }
+                    ]
+                },
+            ]
         },
+
         {
             path: "yasgui",
             element: <Sparql />,
@@ -29,6 +49,15 @@ const SwarmRoutes = () => {
             path: "search",
             element: <SearchContainer />,
         },
+        {
+            path: "scheduled-jobs",
+            element: <ScheduledJobsTable />,
+        },
+        {
+            path: "/",
+            element: <Home />,
+        },
+
         {
             path: "*",
             element: <NoMatch />
@@ -38,40 +67,11 @@ const SwarmRoutes = () => {
 
     const routesForUserRole = [
         {
-            path: "/",
+            path: "/logout",
             element: <ProtectedRoute />, // Wrap the component in ProtectedRoute
             children: [
-
                 {
-                    path: "jobs",
-                    children: [
-                        {
-                            path: "",
-                            element: <JobsTable />,
-                        }
-                        ,
-                        {
-                            path: ":id/tasks",
-                            children: [
-                                {
-                                    path: "",
-                                    element: <TasksTable />
-                                },
-                                {
-                                    path: ":taskId/:taskName",
-                                    element: <SubTasksTable />
-                                }
-                            ]
-                        },
-                    ]
-                },
-                {
-                    path: "scheduled-jobs",
-                    element: <ScheduledJobsTable />,
-                },
-
-                {
-                    path: "logout",
+                    path: "",
                     element: <Logout />,
                 },
             ],
@@ -94,9 +94,10 @@ const SwarmRoutes = () => {
                 {
                     element: <Layout />,
                     children: [
+                        ...routesForUserRole,
+
                         ...routesForPublic,
                         ...(!token ? routesForNotAuthenticatedOnly : []),
-                        ...routesForUserRole,
 
                     ]
                 }

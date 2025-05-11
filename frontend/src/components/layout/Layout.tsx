@@ -7,6 +7,7 @@ import {
     LoginOutlined,
     CalendarOutlined,
     NodeIndexOutlined,
+    HomeOutlined,
 } from "@ant-design/icons";
 import { App, Button, ConfigProvider, Flex, Image, Layout, Menu, MenuProps, Switch, theme } from "antd";
 import { useEffect, useState } from "react";
@@ -17,6 +18,7 @@ import { RootState } from "@swarm/states/Store";
 import { toggleTheme } from "@swarm/states/ThemeSlice";
 import { gray, } from "@ant-design/colors";
 import { useNavigate } from "react-router-dom";
+import Link from "antd/es/typography/Link";
 /* import frBE from 'antd/lib/locale/fr_BE'; */
 type MenuItem = Required<MenuProps>['items'][number];
 
@@ -54,18 +56,16 @@ export default function MainLayout() {
     const items: MenuItem[] = [
     ];
 
+    items.push(getItem((<Link onClick={() => handleNavigation("/")}>Home</Link>), '/', <HomeOutlined />));
+    items.push(getItem((<Link onClick={() => handleNavigation("/jobs")}>Jobs</Link>), '/jobs', <ThunderboltOutlined />));
+    items.push(getItem((<Link onClick={() => handleNavigation("/scheduled-jobs")}>Scheduled Jobs</Link>), '/scheduled-jobs', <CalendarOutlined />));
+    items.push(getItem((<Link onClick={() => handleNavigation("/yasgui")}>Sparql</Link>), '/yasgui', <ConsoleSqlOutlined />));
+    items.push(getItem((<Link onClick={() => handleNavigation("/search")}>Index</Link>), '/search', <NodeIndexOutlined />));
+    items.push({ type: 'divider' });
     if (token) {
-        items.push(getItem((<a onClick={() => handleNavigation("/jobs")}>Jobs</a>), '/jobs', <ThunderboltOutlined />));
-        items.push(getItem((<a onClick={() => handleNavigation("/scheduled-jobs")}>Scheduled Jobs</a>), '/scheduled-jobs', <CalendarOutlined />));
-        items.push(getItem((<a onClick={() => handleNavigation("/yasgui")}>Sparql</a>), '/yasgui', <ConsoleSqlOutlined />));
-        items.push(getItem((<a onClick={() => handleNavigation("/search")}>Index</a>), '/search', <NodeIndexOutlined />));
-        items.push({ type: 'divider' });
         items.push(getItem((<a onClick={() => handleNavigation("/logout")}>Logout</a>), '', <LogoutOutlined />));
     } else {
-        items.push(getItem((<a onClick={() => handleNavigation("/yasgui")}>Sparql</a>), '/yasgui', <ConsoleSqlOutlined />));
-        items.push(getItem((<a onClick={() => handleNavigation("/search")}>Index</a>), '/search', <NodeIndexOutlined />));
-        items.push({ type: 'divider' });
-        items.push(getItem((<a onClick={() => handleNavigation("/login")}>Login</a>), '', <LoginOutlined />));
+        items.push(getItem((<Link onClick={() => handleNavigation("/login")}>Login</Link>), '', <LoginOutlined />));
     }
 
 

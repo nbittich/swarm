@@ -11,9 +11,12 @@ import { AppDispatch, RootState } from '@swarm/states/Store';
 import { SorterResult } from 'antd/es/table/interface';
 import { addJob, deleteJob, fetchJobs, setPageable } from '@swarm/states/JobSlice';
 import { useDebouncedCallback } from 'use-debounce';
+import { useAuth } from '@swarm/auth/authContextHook';
 const { Option } = Select;
 const JobsTable: React.FC = () => {
     const navigate = useNavigate();
+    const { token, } = useAuth();
+
     const dispatch = useDispatch<AppDispatch>();
     const [searchName, setSearchName] = useState<undefined | string>();
     const searchNameDebounced = useDebouncedCallback(
@@ -179,7 +182,7 @@ const JobsTable: React.FC = () => {
                     cancelText="No"
                 >
                     <Button
-                        disabled={["pending", "scheduled", "busy"].includes(record.status.type)}
+                        disabled={!token || ["pending", "scheduled", "busy"].includes(record.status.type)}
                         type="link" shape="default" danger icon={<DeleteOutlined />} />
                 </Popconfirm>
             ),
@@ -191,7 +194,7 @@ const JobsTable: React.FC = () => {
             <Flex vertical gap="middle">
                 <Flex justify="space-between" wrap>
                     <h2>Jobs</h2>
-                    <Space>
+                    {token && <Space>
                         <Button onClick={() => toggleModal(true)} size="large" color="default" variant="dashed" icon={<PlusOutlined />}>
                             New Job
                         </Button>
@@ -201,7 +204,7 @@ const JobsTable: React.FC = () => {
                         })} size="large" color="default" variant="dashed" icon={<SyncOutlined />}>
                             Refresh
                         </Button>
-                    </Space>
+                    </Space>}
 
                 </Flex>
                 <Table
@@ -244,7 +247,7 @@ const JobsTable: React.FC = () => {
                         rules={[{ required: true, message: 'Please select a job definition' }]}
                     >
                         <Select placeholder="Select Job Definition" onChange={handleJobDefinitionChange}>
-                            {jobDefinitions.map((definition) => (
+                            {jobDefinitions && jobDefinitions.map((definition) => (
                                 <Option key={definition.id} value={definition.id}>
                                     {definition.name}
                                 </Option>

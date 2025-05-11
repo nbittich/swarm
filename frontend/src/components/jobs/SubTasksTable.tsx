@@ -8,9 +8,12 @@ import { AppDispatch, RootState } from "@swarm/states/Store";
 import { fetchSubTasks, reset } from "@swarm/states/SuBTaskSlice";
 import { download } from "@swarm/states/file/Api";
 import dayjs from "dayjs";
+import Link from "antd/es/typography/Link";
+import { useAuth } from "@swarm/auth/authContextHook";
 
 const { Text } = Typography;
 const SubTasksTable: React.FC = () => {
+    const { token } = useAuth();
     const navigate = useNavigate();
     const { id: jobId, taskId, taskName } = useParams<{ id: string; taskId: string, taskName: string }>();
     const dispatch = useDispatch<AppDispatch>();
@@ -79,19 +82,19 @@ const SubTasksTable: React.FC = () => {
                     switch (res.type) {
                         case "scrapeUrl":
                             component = <Tag>
-                                <a onClick={async () => await download(jobId, res.value.path)}><DownloadOutlined />file.html</a>
+                                <Link disabled={!token} onClick={async () => await download(jobId, res.value.path)}><DownloadOutlined />file.html</Link>
                             </Tag>;
                             break;
                         case "diff":
                             component = <Space>
-                                {res.value.toRemovePath && <a onClick={async () => await download(jobId, res.value.toRemovePath)}><DownloadOutlined />to-remove.ttl</a>}
-                                {res.value.intersectPath && <a onClick={async () => await download(jobId, res.value.intersectPath)}><DownloadOutlined />intersect.ttl</a>}
-                                {res.value.newInsertPath && <a onClick={async () => await download(jobId, res.value.newInsertPath)}><DownloadOutlined />new-inserts.ttl</a>}
+                                {res.value.toRemovePath && <Link disabled={!token} onClick={async () => await download(jobId, res.value.toRemovePath)}><DownloadOutlined />to-remove.ttl</Link>}
+                                {res.value.intersectPath && <Link disabled={!token} onClick={async () => await download(jobId, res.value.intersectPath)}><DownloadOutlined />intersect.ttl</Link>}
+                                {res.value.newInsertPath && <Link disabled={!token} onClick={async () => await download(jobId, res.value.newInsertPath)}><DownloadOutlined />new-inserts.ttl</Link>}
                             </Space>;
                             break;
                         case "nTriple":
                             component = <Tag>
-                                <a onClick={async () => await download(jobId, res.value.path)}><DownloadOutlined />result.ttl</a>
+                                <Link disabled={!token} onClick={async () => await download(jobId, res.value.path)}><DownloadOutlined />result.ttl</Link>
                             </Tag>;
                             break;
                     }

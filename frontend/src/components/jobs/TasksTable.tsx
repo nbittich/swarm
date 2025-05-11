@@ -3,15 +3,18 @@ import React, { useEffect, useState } from 'react';
 import { Button, Descriptions, Flex, Space, Table, TableProps, Tag, Typography, message } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';  // for accessing the dynamic route parameter
 import axios from 'axios';
-import { colorForStatus, Job, Status, Task, truncate } from '@swarm/models/domain';
+import { colorForStatus, Job, Status, Task, } from '@swarm/models/domain';
 import { ArrowLeftOutlined, DownloadOutlined, RightSquareOutlined, SyncOutlined } from "@ant-design/icons";
 import { download } from '@swarm/states/file/Api';
 import dayjs from 'dayjs';
+import { useAuth } from '@swarm/auth/authContextHook';
+import Link from 'antd/es/typography/Link';
 
 const { Text } = Typography;
 
 const TasksTable: React.FC = () => {
     const navigate = useNavigate();
+    const { token } = useAuth();
     const { id } = useParams<{ id: string }>();
     const [job, setJob] = useState<Job>();
     const [tasks, setTasks] = useState<Task[]>([]);
@@ -101,19 +104,19 @@ const TasksTable: React.FC = () => {
                     if (res.type == "diff" || res.type == "extractRDFa" || res.type == "filterSHACL" || res.type == "scrapeWebsite" || res.type == "complementWithUuid") {
                         return <>
                             <Tag>
-                                <a onClick={async () => await download(record.jobId, res.value.manifestFilePath)}><DownloadOutlined />manifest.json</a></Tag>
+                                <Link disabled={!token} onClick={async () => await download(record.jobId, res.value.manifestFilePath)}><DownloadOutlined />manifest.json</Link></Tag>
                         </>
                     }
                     if (res.type == "publish") {
                         return <Flex vertical gap="small">
                             <Tag>
-                                <a onClick={async () => await download(record.jobId, res.value.insertedTripleFilePath)}><DownloadOutlined />Inserted File</a></Tag>
+                                <Link disabled={!token} onClick={async () => await download(record.jobId, res.value.insertedTripleFilePath)}><DownloadOutlined />Inserted File</Link></Tag>
                             <Tag>
-                                <a onClick={async () => await download(record.jobId, res.value.removedTripleFilePath)}><DownloadOutlined />Removed File</a></Tag>
+                                <Link disabled={!token} onClick={async () => await download(record.jobId, res.value.removedTripleFilePath)}><DownloadOutlined />Removed File</Link></Tag>
                             <Tag>
-                                <a onClick={async () => await download(record.jobId, res.value.intersectTripleFilePath)}><DownloadOutlined />Intersect File</a></Tag>
+                                <Link disabled={!token} onClick={async () => await download(record.jobId, res.value.intersectTripleFilePath)}><DownloadOutlined />Intersect File</Link></Tag>
                             <Tag>
-                                <a onClick={async () => await download(record.jobId, res.value.failedQueryFilePath)}><DownloadOutlined />Failed File</a></Tag>
+                                <Link disabled={!token} onClick={async () => await download(record.jobId, res.value.failedQueryFilePath)}><DownloadOutlined />Failed File</Link></Tag>
                         </Flex>
 
                     }
