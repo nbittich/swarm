@@ -6,11 +6,11 @@ import {
     ConsoleSqlOutlined,
     LoginOutlined,
     CalendarOutlined,
-    NodeIndexOutlined,
     HomeOutlined,
+    SearchOutlined,
 } from "@ant-design/icons";
-import { App, Button, ConfigProvider, Flex, Image, Layout, Menu, MenuProps, Switch, theme } from "antd";
-import { useEffect, useState } from "react";
+import { App, Button, ConfigProvider, Drawer, Flex, Image, Layout, Menu, MenuProps, Switch, theme } from "antd";
+import React, { useEffect, useState } from "react";
 import MenuItem from "antd/es/menu/MenuItem";
 import { useAuth } from "@swarm/auth/authContextHook";
 import { useDispatch, useSelector } from "react-redux";
@@ -19,6 +19,7 @@ import { toggleTheme } from "@swarm/states/ThemeSlice";
 import { gray, } from "@ant-design/colors";
 import { useNavigate } from "react-router-dom";
 import Link from "antd/es/typography/Link";
+import { useIsMobile } from "@swarm/hooks/is-mobile";
 /* import frBE from 'antd/lib/locale/fr_BE'; */
 type MenuItem = Required<MenuProps>['items'][number];
 
@@ -37,9 +38,12 @@ function getItem(
     } as MenuItem;
 }
 
+
+
 const { Header, Sider, Content, } = Layout;
 export default function MainLayout() {
     const dispatch = useDispatch();
+    const isMobile = useIsMobile();
     const [collapsed, setCollapsed] = useState(false);
     const { token, userClaims: _ } = useAuth();
     const location = useLocation();
@@ -55,12 +59,24 @@ export default function MainLayout() {
 
     const items: MenuItem[] = [
     ];
-
+    const renderMenu = (fragment: React.ReactNode) => {
+        if (isMobile) {
+            return (<Drawer styles={{ body: { padding: 0, overflow: 'hidden' } }} placement="left" size="default" open={collapsed} onClose={() => setCollapsed(false)} >
+                {fragment}
+            </Drawer>
+            )
+        } else {
+            return (<Sider breakpoint="md" collapsedWidth={0} theme={currenTheme()} trigger={null}
+                collapsible collapsed={collapsed}>
+                {fragment}
+            </Sider>)
+        }
+    }
     items.push(getItem((<Link onClick={() => handleNavigation("/")}>Home</Link>), '/', <HomeOutlined />));
     items.push(getItem((<Link onClick={() => handleNavigation("/jobs")}>Jobs</Link>), '/jobs', <ThunderboltOutlined />));
     items.push(getItem((<Link onClick={() => handleNavigation("/scheduled-jobs")}>Scheduled Jobs</Link>), '/scheduled-jobs', <CalendarOutlined />));
     items.push(getItem((<Link onClick={() => handleNavigation("/yasgui")}>Sparql</Link>), '/yasgui', <ConsoleSqlOutlined />));
-    items.push(getItem((<Link onClick={() => handleNavigation("/search")}>Index</Link>), '/search', <NodeIndexOutlined />));
+    items.push(getItem((<Link onClick={() => handleNavigation("/search")}>Search</Link>), '/search', <SearchOutlined />));
     items.push({ type: 'divider' });
     if (token) {
         items.push(getItem((<a onClick={() => handleNavigation("/logout")}>Logout</a>), '', <LogoutOutlined />));
@@ -100,37 +116,22 @@ export default function MainLayout() {
                 }
             }}>
             <Layout style={{ height: '100vh', width: '100vw' }}>
-                <Sider collapsedWidth={0} theme={currenTheme()} trigger={null}
-                    style={{ display: "flex", flexDirection: 'column', }}
-                    collapsible collapsed={collapsed}>
-                    <Flex vertical style={{ height: '100vh' }}
-                    >
-                        <Menu
-                            style={{
-                                flexGrow: 1,
-                                borderWidth: darkToken ? 0.1 : undefined,
-                                borderRightStyle: 'dotted',
-                                borderColor: darkMode ? gray[6] : gray[1],
-                            }}
-                            theme={currenTheme()}
-                            selectedKeys={[location.pathname]}
-                            items={items.slice(0, -2)}
-                        />
-                        <Menu
+                {renderMenu(<Flex vertical style={{ height: '100vh' }}
+                >
+                    <Menu
+                        style={{
+                            height: '100%',
+                            flexGrow: isMobile ? 0 : 1,
+                            borderWidth: isMobile ? 0 : darkToken ? 0.1 : undefined,
+                            borderRightStyle: 'dotted',
+                            borderColor: !isMobile && darkMode ? gray[6] : gray[1],
+                        }}
+                        theme={currenTheme()}
+                        selectedKeys={[location.pathname]}
+                        items={items}
+                    />
 
-                            style={{
-                                borderWidth: darkToken ? 0.1 : undefined,
-                                borderRightStyle: 'dotted',
-                                borderColor: darkMode ? gray[6] : gray[1],
-                            }}
-                            theme={currenTheme()}
-                            selectedKeys={[]}
-                            defaultSelectedKeys={[]}
-                            items={items.slice(-2)}
-                        />
-                    </Flex>
-
-                </Sider>
+                </Flex>)}
                 <Layout>
                     <Header style={{
                         height: 48,

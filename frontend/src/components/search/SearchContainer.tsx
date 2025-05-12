@@ -1,12 +1,14 @@
 import { AppDispatch, RootState } from "@swarm/states/Store";
-import { Alert, Button, Col, Descriptions, Divider, Flex, Input, Pagination, Row, Select, Space, Spin, Typography, } from "antd";
+import { Alert, Button, Col, Descriptions, Divider, Flex, Input, List, Pagination, Row, Select, Space, Spin, Typography, } from "antd";
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import FilterBuilder from "./FilterBuilder";
 import { clearSearchResult, fetchIndexStatistics, fetchSearchConfigurations, performSearch } from "@swarm/states/SearchSlice";
 import { SearchQueryRequest } from "@swarm/models/domain";
+import { useIsMobile } from "@swarm/hooks/is-mobile";
 const SearchContainer: React.FC = () => {
 
+    const isMobile = useIsMobile();
     const dispatch = useDispatch<AppDispatch>();
 
     const indexConfigs = useSelector((state: RootState) => state.appReducer.search.configurations);
@@ -53,11 +55,11 @@ const SearchContainer: React.FC = () => {
     }
 
     return (<>
-        <h2>INDEX</h2>
+        <h2>SEARCH</h2>
         <Flex justify="center" >
-            <Col span={12}>
+            <Col span={isMobile ? 24 : 12}>
 
-                <Flex gap="middle" >
+                <Flex vertical={isMobile} gap="middle" >
                     <Select
                         size="large"
 
@@ -84,13 +86,11 @@ const SearchContainer: React.FC = () => {
                     indexStats.numberOfDocuments,
                 )} document{indexStats.numberOfDocuments > 1 ? 's' : ''})</Typography.Text>)}
                 {selectedIndex && (<>
-                    <Row style={{ paddingTop: "10px" }}>
-                        <FilterBuilder key={selectedIndex}
-                            indexConfig={indexConfigs.find(ic => ic.name === selectedIndex)!}
-                            conditions={filters}
-                            setConditions={setFilters}
-                        />
-                    </Row>
+                    <FilterBuilder key={selectedIndex}
+                        indexConfig={indexConfigs.find(ic => ic.name === selectedIndex)!}
+                        conditions={filters}
+                        setConditions={setFilters}
+                    />
                 </>)
                 }
                 <Divider dashed />
@@ -109,32 +109,56 @@ const SearchContainer: React.FC = () => {
         <Spin spinning={loading || searching}>
             {searchResults && (<>
                 {/* <Typography.Title level={3} type="secondary">(Found {searchResults.totalHits || 0} document{(searchResults.totalHits || 0) > 1 ? 's' : ''})</Typography.Title> */}
-                <Flex vertical gap="middle" style={{ paddingTop: "10px" }} >
-                    {
-                        searchResults.hits.map((hit, idx) => (
-                            <Descriptions key={hit._id as string}
-                                bordered
-                                column={1}
+                {searchResults.hits.map((hit) => (
+                    <List
+                        key={hit._id as string}
+                        bordered
+                        style={{
+                            marginBottom: '10px',
+                            width: '100%',
+                        }}
+                        dataSource={Object.entries(hit)}
+                        renderItem={([key, val]) => (
+                            <List.Item
+                                style={{
+                                    display: 'flex',
+                                    justifyContent: 'start',
+                                    flexDirection: 'row',
+                                    wordBreak: 'break-word',
+                                }}
                             >
-                                {Object.entries(hit).map(([key, val]) => (
-                                    <Descriptions.Item key={key + idx + hit._id} label={key} styles={{ label: { width: '10vw', fontWeight: "bold" } }}>
-                                        {Array.isArray(val) ? (<ul key={key + idx + hit._id + "ul"} style={{ padding: 0, marginLeft: 10 }}>{val.map(v => <li key={crypto.randomUUID()}>{v}</li>)}</ul>) : <span style={{ wordBreak: 'break-word' }}>{String(val)}</span>
-                                        }
-                                    </Descriptions.Item>
-                                ))}
-                            </Descriptions>
-
-                        ))
-                    }
-                    {(searchResults.totalPages || 1) > 1 && (
-                        <Pagination responsive showSizeChanger={false} align="end"
-                            current={searchResults.page || 1}
-                            pageSize={limit}
-                            total={searchResults.totalHits || (searchResults.totalPages || 1 * limit)}
-                            onChange={p => { handleSearch(p) }}
-                        />
-                    )}
-                </Flex > </>)
+                                <span
+                                    style={{
+                                        fontWeight: 'bold',
+                                        paddingRight: '10px'
+                                    }}
+                                >
+                                    {key}
+                                </span>
+                                <span>
+                                    {Array.isArray(val) ? (
+                                        <ul>
+                                            {val.map((v) => (
+                                                <li key={crypto.randomUUID()}>{v}</li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        String(val)
+                                    )}
+                                </span>
+                            </List.Item>
+                        )}
+                    />
+                ))}
+                {(searchResults.totalPages || 1) > 1 && (
+                    <Pagination responsive showSizeChanger={false} align="end"
+                        current={searchResults.page || 1}
+                        pageSize={limit}
+                        total={searchResults.totalHits || (searchResults.totalPages || 1 * limit)}
+                        onChange={p => { handleSearch(p) }}
+                    />
+                )}
+            </>)
             }
         </Spin >
 

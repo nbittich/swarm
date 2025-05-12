@@ -2,7 +2,7 @@ import { useEffect, } from "react";
 import { useNavigate, useParams } from "react-router-dom"; // For extracting path variables
 import { Table, Tag, Button, TableProps, Flex, Space, Pagination, Typography } from "antd";
 import { colorForStatus, Status, SubTask, truncate, } from "@swarm/models/domain";
-import { ArrowLeftOutlined, DownloadOutlined, PlusOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, DownloadOutlined, PlusSquareOutlined } from "@ant-design/icons";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@swarm/states/Store";
 import { fetchSubTasks, reset } from "@swarm/states/SuBTaskSlice";
@@ -10,9 +10,11 @@ import { download } from "@swarm/states/file/Api";
 import dayjs from "dayjs";
 import Link from "antd/es/typography/Link";
 import { useAuth } from "@swarm/auth/authContextHook";
+import { useIsMobile } from "@swarm/hooks/is-mobile";
 
 const { Text } = Typography;
 const SubTasksTable: React.FC = () => {
+    const isMobile = useIsMobile();
     const { token } = useAuth();
     const navigate = useNavigate();
     const { id: jobId, taskId, taskName } = useParams<{ id: string; taskId: string, taskName: string }>();
@@ -52,7 +54,8 @@ const SubTasksTable: React.FC = () => {
             }
         },
         {
-            title: "Creation Date",
+            title: "Created",
+            responsive: ['sm'],
             dataIndex: "creationDate",
             key: "creationDate",
             render: (date: string) => dayjs(new Date(date)).format('DD/MM/YYYY HH:mm:ss'),
@@ -113,15 +116,16 @@ const SubTasksTable: React.FC = () => {
                 <Flex justify="space-between" wrap>
                     <h2>{taskName}</h2>
                     <Space>
-                        <Button onClick={() => navigate(`/jobs/${jobId}/tasks`)} icon={<ArrowLeftOutlined />} size="large" color="default" variant="dashed">Back</Button>
-                        <Button disabled={loading || !lastElementId} onClick={loadMore} size="large" color="default" variant="dashed" icon={<PlusOutlined />}>
-                            Load {pageSize} more
+                        <Button onClick={() => navigate(`/jobs/${jobId}/tasks`)} icon={<ArrowLeftOutlined />} size="large" color="default" variant="dashed">{!isMobile && 'Back'}</Button>
+                        <Button disabled={loading || !lastElementId} onClick={loadMore} size="large" color="default" variant="dashed" icon={<PlusSquareOutlined />}>
+                            {!isMobile && `Load ${pageSize} more`}
                         </Button>
                     </Space>
 
                 </Flex>
                 <Table
                     bordered
+                    scroll={{ x: 'max-content' }}
                     dataSource={data}
                     columns={columns}
                     rowKey="_id"

@@ -12,8 +12,10 @@ import { SorterResult } from 'antd/es/table/interface';
 import { addJob, deleteJob, fetchJobs, setPageable } from '@swarm/states/JobSlice';
 import { useDebouncedCallback } from 'use-debounce';
 import { useAuth } from '@swarm/auth/authContextHook';
+import { useIsMobile } from '@swarm/hooks/is-mobile';
 const { Option } = Select;
 const JobsTable: React.FC = () => {
+    const isMobile = useIsMobile();
     const navigate = useNavigate();
     const { token, } = useAuth();
 
@@ -105,6 +107,7 @@ const JobsTable: React.FC = () => {
         {
             title: () => <Input placeholder='Name' onChange={searchNameDebounced}></Input>,
             dataIndex: 'name',
+            responsive: ['sm'],
             width: '20%',
             key: 'name',
             render: (name: string) => {
@@ -135,6 +138,7 @@ const JobsTable: React.FC = () => {
         },
         {
             title: 'Created',
+            responsive: ['sm'],
             dataIndex: 'creationDate',
             key: 'creationDate',
             sorter: true,
@@ -142,6 +146,7 @@ const JobsTable: React.FC = () => {
         },
         {
             title: 'Modified',
+            responsive: ['sm'],
             dataIndex: 'modifiedDate',
             key: 'modifiedDate',
             sorter: true,
@@ -170,6 +175,7 @@ const JobsTable: React.FC = () => {
         },
         {
             title: 'Action',
+            responsive: ['sm'],
             key: 'action',
             align: 'center',
             render: (_, record) => (
@@ -191,33 +197,32 @@ const JobsTable: React.FC = () => {
 
     return (
         <>
-            <Flex vertical gap="middle">
-                <Flex justify="space-between" wrap>
-                    <h2>Jobs</h2>
-                    {token && <Space>
-                        <Button onClick={() => toggleModal(true)} size="large" color="default" variant="dashed" icon={<PlusOutlined />}>
-                            New Job
-                        </Button>
-                        <Button onClick={() => handleTableChange({ current: 1 }, {}, {
-                            field: "creationDate",
-                            order: "descend",
-                        })} size="large" color="default" variant="dashed" icon={<SyncOutlined />}>
-                            Refresh
-                        </Button>
-                    </Space>}
+            <Flex justify="space-between" wrap>
+                <h2>Jobs</h2>
+                {token && <Space>
+                    <Button onClick={() => toggleModal(true)} size="large" color="default" variant="dashed" icon={<PlusOutlined />}>
+                        {isMobile ? '' : 'New Job'}
+                    </Button>
+                    <Button onClick={() => handleTableChange({ current: 1 }, {}, {
+                        field: "creationDate",
+                        order: "descend",
+                    })} size="large" color="default" variant="dashed" icon={<SyncOutlined />}>
+                        {isMobile ? '' : 'Refresh'}
+                    </Button>
+                </Space>}
 
-                </Flex>
-                <Table
-                    loading={jobLoading || jobDefLoading}
-                    bordered
-                    dataSource={jobs}
-                    columns={columns}
-                    pagination={pagination}
-                    rowKey="_id"
-                    onChange={handleTableChange}
+            </Flex>
+            <Table
+                loading={jobLoading || jobDefLoading}
+                bordered
+                scroll={{ x: 'max-content' }}
+                dataSource={jobs}
+                columns={columns}
+                pagination={pagination}
+                rowKey="_id"
+                onChange={handleTableChange}
 
-                />
-            </Flex >
+            />
             <Modal
                 title="New Job"
                 open={isModalVisible}

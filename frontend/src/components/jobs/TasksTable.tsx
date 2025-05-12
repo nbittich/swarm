@@ -9,10 +9,12 @@ import { download } from '@swarm/states/file/Api';
 import dayjs from 'dayjs';
 import { useAuth } from '@swarm/auth/authContextHook';
 import Link from 'antd/es/typography/Link';
+import { useIsMobile } from '@swarm/hooks/is-mobile';
 
 const { Text } = Typography;
 
 const TasksTable: React.FC = () => {
+    const isMobile = useIsMobile();
     const navigate = useNavigate();
     const { token } = useAuth();
     const { id } = useParams<{ id: string }>();
@@ -54,13 +56,13 @@ const TasksTable: React.FC = () => {
         },
 
         {
-            title: 'Creation Date',
+            title: 'Created',
             dataIndex: 'creationDate',
             key: 'creationDate',
             render: (date: string) => dayjs(new Date(date)).format('DD/MM/YYYY HH:mm:ss'),
         },
         {
-            title: 'Modified Date',
+            title: 'Modified',
             dataIndex: 'modifiedDate',
             key: 'modifiedDate',
             render: (date?: string) => date ? dayjs(new Date(date)).format('DD/MM/YYYY HH:mm:ss') : 'N/A',
@@ -164,9 +166,9 @@ const TasksTable: React.FC = () => {
                 <h2>Job Detail</h2>
 
                 <Space>
-                    <Button onClick={() => navigate("/jobs")} icon={<ArrowLeftOutlined />} size="large" color="default" variant="dashed">Back</Button>
+                    <Button onClick={() => navigate("/jobs")} icon={<ArrowLeftOutlined />} size="large" color="default" variant="dashed">{!isMobile && 'Back'}</Button>
                     <Button onClick={() => fetchTasks(id)} size="large" color="default" variant="dashed" icon={<SyncOutlined />}>
-                        Refresh
+                        {!isMobile && 'Refresh'}
                     </Button>
                 </Space>
             </Flex>

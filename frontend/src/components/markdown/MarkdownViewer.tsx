@@ -4,10 +4,12 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useSelector } from 'react-redux';
 import { RootState } from '@swarm/states/Store';
+import { useIsMobile } from '@swarm/hooks/is-mobile';
 
 const MarkdownViewer = ({ filePath, gallery }: { filePath: string, gallery?: string[] }) => {
     const [markdown, setMarkdown] = useState('');
 
+    const isMobile = useIsMobile();
     const getDarkImg = (src: string | undefined) => {
         if (!src) {
             return src;
@@ -33,7 +35,7 @@ const MarkdownViewer = ({ filePath, gallery }: { filePath: string, gallery?: str
     return (
 
         <Flex justify='center' align='center' vertical>
-            <Col span={16}>
+            <Col span={isMobile ? 24 : 16}>
                 <Space>
                     {gallery && gallery.map(pic => <Image key={pic} preview={true} loading='lazy' src={pic}
 
@@ -41,7 +43,7 @@ const MarkdownViewer = ({ filePath, gallery }: { filePath: string, gallery?: str
                 </Space>
 
             </Col>
-            <Col span={16}>
+            <Col span={isMobile ? 24 : 16}>
                 <Card>
 
                     <ReactMarkdown

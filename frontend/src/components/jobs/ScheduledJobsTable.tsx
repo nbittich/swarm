@@ -11,8 +11,10 @@ import { fetchJobDefinitions } from '@swarm/states/JobDefinitionSlice';
 import { useDebouncedCallback } from 'use-debounce';
 import { SorterResult } from 'antd/es/table/interface';
 import { useAuth } from '@swarm/auth/authContextHook';
+import { useIsMobile } from '@swarm/hooks/is-mobile';
 const { Option } = Select;
 const ScheduledJobsTable: React.FC = () => {
+    const isMobile = useIsMobile();
     const { token } = useAuth();
     const dispatch = useDispatch<AppDispatch>();
     const [searchName, setSearchName] = useState();
@@ -109,6 +111,7 @@ const ScheduledJobsTable: React.FC = () => {
         {
             title: () => <Input placeholder='Name' onChange={searchNameDebounced}></Input>,
             dataIndex: 'name',
+            responsive: ['sm'],
             width: '20%',
             key: 'name',
             render: (name?: string) => name || 'N/A'
@@ -129,21 +132,23 @@ const ScheduledJobsTable: React.FC = () => {
             }
         },
         {
-            title: 'Creation Date',
+            title: 'Created',
+            responsive: ['sm'],
             dataIndex: 'creationDate',
             key: 'creationDate',
             sorter: true,
             render: (date: string) => dayjs(new Date(date)).format('DD/MM/YYYY HH:mm:ss'),
         },
         {
-            title: 'Next execution',
+            title: 'Next',
+            responsive: ['sm'],
             dataIndex: 'nextExecution',
             key: 'nextExecution',
             sorter: true,
             render: (date?: string) => date ? dayjs(new Date(date)).format('DD/MM/YYYY HH:mm:ss') : 'N/A',
         },
         {
-            title: "Cron Expression",
+            title: "Cron",
             dataIndex: "cronExpr",
             key: "cronExpr"
         },
@@ -168,32 +173,31 @@ const ScheduledJobsTable: React.FC = () => {
 
     return (
         <>
-            <Flex vertical gap="middle">
-                <Flex justify="space-between" wrap>
-                    <h2>Scheduled Jobs</h2>
-                    {token && <Space>
-                        <Button onClick={() => toggleModal(true)} size="large" color="default" variant="dashed" icon={<PlusOutlined />}>
-                            New Scheduled Job
-                        </Button>
-                        <Button onClick={() => handleTableChange({ current: 1 }, {}, {
-                            field: "creationDate",
-                            order: "descend",
-                        })} size="large" color="default" variant="dashed" icon={<SyncOutlined />}>
-                            Refresh
-                        </Button>
-                    </Space>}
+            <Flex justify="space-between" >
+                <h2>Scheduled Jobs</h2>
+                {token && <Space>
+                    <Button onClick={() => toggleModal(true)} size="large" color="default" variant="dashed" icon={<PlusOutlined />}>
+                        {isMobile ? '' : 'New Scheduled Job'}
+                    </Button>
+                    <Button onClick={() => handleTableChange({ current: 1 }, {}, {
+                        field: "creationDate",
+                        order: "descend",
+                    })} size="large" color="default" variant="dashed" icon={<SyncOutlined />}>
+                        {isMobile ? '' : 'Refresh'}
+                    </Button>
+                </Space>}
 
-                </Flex>
-                <Table
-                    pagination={pagination}
-                    loading={jobDefLoading || scheduledJobLoading}
-                    bordered
-                    dataSource={scheduledJobs}
-                    columns={columns}
-                    onChange={handleTableChange}
-                    rowKey="_id"
-                />
             </Flex>
+            <Table
+                pagination={pagination}
+                scroll={{ x: 'max-content' }}
+                loading={jobDefLoading || scheduledJobLoading}
+                bordered
+                dataSource={scheduledJobs}
+                columns={columns}
+                onChange={handleTableChange}
+                rowKey="_id"
+            />
 
             <Modal
                 title="New Scheduled Job"
