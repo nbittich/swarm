@@ -180,7 +180,7 @@ const TasksTable: React.FC = () => {
                         {Array.isArray(val) ? (<ul key={key + job._id + "ul"} style={{ padding: 0, marginLeft: 10 }}>
                             {val.map(v => <li key={crypto.randomUUID()}>{v}</li>)}</ul>) : <span style={{ wordBreak: 'break-word' }}>
                             {typeof (val) === "object" && key === "status" ? <Tag color={colorForStatus(val)} >
-                                <Text>{val.type}
+                                <Text style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{val.type}
                                     {val.type === "failed" && val.value && `: ${val.value.join(", ")}`}</Text>
                             </Tag> : String(val)
 
