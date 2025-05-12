@@ -160,7 +160,7 @@ const ScheduledJobsTable: React.FC = () => {
                     okText="Yes"
                     cancelText="No"
                 >
-                    <Button type="link" shape="default" danger icon={<DeleteOutlined />} />
+                    <Button disabled={!token} type="link" shape="default" danger icon={<DeleteOutlined />} />
                 </Popconfirm>
             ),
         }
