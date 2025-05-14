@@ -2543,7 +2543,6 @@ name = "publish"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-compression",
  "async_zip",
  "chrono",
  "sparql_client",
@@ -3426,6 +3425,7 @@ name = "swarm_common"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-compression",
  "async-nats",
  "async-trait",
  "chrono",
@@ -3434,6 +3434,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "tokio",
  "tracing",
  "tracing-subscriber",
  "uuid",

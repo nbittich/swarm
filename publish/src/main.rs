@@ -11,6 +11,7 @@ use std::{
 };
 use swarm_common::{
     IdGenerator, StreamExt,
+    compress::{gzip, ungzip},
     constant::{
         APPLICATION_NAME, CHUNK_SIZE, PUBLISH_CONSUMER, SUB_TASK_EVENT_STREAM,
         SUB_TASK_STATUS_CHANGE_SUBJECT, TASK_EVENT_STREAM, TASK_STATUS_CHANGE_EVENT,
@@ -23,7 +24,7 @@ use swarm_common::{
     setup_tracing,
 };
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt},
     task::JoinSet,
 };
 use tortank::turtle::turtle_doc::TurtleDoc;
@@ -144,29 +145,17 @@ pub async fn append_to_file(path: &Path, s: &str) -> anyhow::Result<()> {
 }
 
 pub async fn gzip_and_append_to_dir(dir: &Path, file: &Path) -> anyhow::Result<()> {
-    let gzip_file = gzip(file).await?;
+    let gzip_file = gzip(file, false).await?; // we don't delete the file as we delete the whole
+    // folder later.
+    // in this case we must ackshually copy the file because otherwise it will be moved from the
+    // diff step folder.
     let final_path = PathBuf::from(dir).join(gzip_file.file_name().context("no filename")?);
-    tokio::fs::rename(gzip_file, final_path).await?;
+    tokio::fs::copy(gzip_file, final_path).await?;
     Ok(())
 }
-pub async fn gzip(path: &Path) -> anyhow::Result<PathBuf> {
-    if !path.exists() {
-        return Err(anyhow!("{path:?} doesn't exist. Cannot gzip it"));
-    }
-    use async_compression::tokio::write::GzipEncoder;
-    let extension = path.extension().and_then(|ex| ex.to_str()).unwrap_or("");
 
-    let gzip_path = path.with_extension(format!("{extension}.gz"));
-    let input_file = tokio::fs::File::open(path).await?;
-    let output_file = tokio::fs::File::create(&gzip_path).await?;
-    let mut encoder = GzipEncoder::new(output_file);
-    let mut buf = BufReader::new(input_file);
-    tokio::io::copy_buf(&mut buf, &mut encoder).await?;
-
-    encoder.shutdown().await?;
-    Ok(gzip_path)
-}
 pub async fn zip(path: &Path) -> anyhow::Result<PathBuf> {
+    debug!("removing {path:?}");
     let parent_dir = path.parent().context("zip: must have a parent dir")?;
     let zip_path = PathBuf::from(parent_dir).join(format!(
         "{}.zip",
@@ -366,7 +355,8 @@ async fn update(
 ) -> anyhow::Result<()> {
     debug!("update {triples_path:?} with type {update_type:?} to {append_to_file_path:?}");
 
-    let turtle_str = tokio::fs::read_to_string(&triples_path).await?;
+    let mut turtle_str = String::with_capacity(1024);
+    ungzip(&triples_path, &mut turtle_str).await?;
     let doc = TurtleDoc::try_from((turtle_str.as_str(), None)).map_err(|e| anyhow!("{e}"))?;
     let mut chunk = Vec::with_capacity(config.chunk_size);
     let mut tasks = JoinSet::new();

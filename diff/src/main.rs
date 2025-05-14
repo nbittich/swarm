@@ -6,6 +6,7 @@ use chrono::Local;
 use std::{env::var, path::Path, time::Duration};
 use swarm_common::{
     IdGenerator, StreamExt,
+    compress::{gzip, ungzip},
     constant::{
         APPLICATION_NAME, DIFF_CONSUMER, JOB_COLLECTION, MANIFEST_FILE_NAME, PUBLIC_TENANT,
         SUB_TASK_COLLECTION, SUB_TASK_EVENT_STREAM, SUB_TASK_STATUS_CHANGE_EVENT,
@@ -329,12 +330,13 @@ async fn diff(
     output_dir: &Path,
 ) -> anyhow::Result<DiffResult> {
     let payload = NTripleResult::deserialize(line)?;
-    let ttl_file = tokio::fs::read_to_string(payload.path).await?;
+    let mut ttl_file = String::with_capacity(1024); // todo use accurate file len
+    ungzip(&payload.path, &mut ttl_file).await?;
 
     debug!("old diff task id: {old_diff_task_id:?}");
     let doc = TurtleDoc::try_from((ttl_file.as_str(), None)).map_err(|e| anyhow::anyhow!("{e}"))?;
-    let new_ttl_buff;
-    let intersect_ttl_buff;
+    let mut new_ttl_buff;
+    let mut intersect_ttl_buff;
 
     let old_doc = {
         let Some(SubTaskResult::Diff(DiffResult {
@@ -356,7 +358,8 @@ async fn diff(
         };
 
         let new_ttl_doc = if let Some(p) = new_insert_path {
-            new_ttl_buff = tokio::fs::read_to_string(p).await?;
+            new_ttl_buff = String::with_capacity(1024);
+            ungzip(&p, &mut new_ttl_buff).await?;
             TurtleDoc::try_from((new_ttl_buff.as_str(), None))
                 .map_err(|e| anyhow::anyhow!("{e}"))?
         } else {
@@ -364,8 +367,8 @@ async fn diff(
         };
 
         let intersect_ttl_doc = if let Some(p) = intersect_path {
-            intersect_ttl_buff = tokio::fs::read_to_string(p).await?;
-
+            intersect_ttl_buff = String::with_capacity(1024);
+            ungzip(&p, &mut intersect_ttl_buff).await?;
             TurtleDoc::try_from((intersect_ttl_buff.as_str(), None))
                 .map_err(|e| anyhow::anyhow!("{e}"))?
         } else {
@@ -382,10 +385,13 @@ async fn diff(
             None
         } else {
             let id = IdGenerator.get();
-            let path = output_dir.join(format!("intersect-triples-{id}.ttl"));
-            tokio::fs::write(&path, intersection_doc.to_string())
-                .await
-                .map_err(|e| anyhow!("{e}"))?;
+            let path = {
+                let path = output_dir.join(format!("intersect-triples-{id}.ttl"));
+                tokio::fs::write(&path, intersection_doc.to_string())
+                    .await
+                    .map_err(|e| anyhow!("{e}"))?;
+                gzip(&path, true).await?
+            };
             Some(path)
         }
     };
@@ -394,10 +400,13 @@ async fn diff(
             None
         } else {
             let id = IdGenerator.get();
-            let path = output_dir.join(format!("new-triples-{id}.ttl"));
-            tokio::fs::write(&path, new_doc.to_string())
-                .await
-                .map_err(|e| anyhow!("{e}"))?;
+            let path = {
+                let path = output_dir.join(format!("new-triples-{id}.ttl"));
+                tokio::fs::write(&path, new_doc.to_string())
+                    .await
+                    .map_err(|e| anyhow!("{e}"))?;
+                gzip(&path, true).await?
+            };
             Some(path)
         }
     };
@@ -406,10 +415,13 @@ async fn diff(
             None
         } else {
             let id = IdGenerator.get();
-            let path = output_dir.join(format!("to-remove-triples-{id}.ttl"));
-            tokio::fs::write(&path, to_remove_doc.to_string())
-                .await
-                .map_err(|e| anyhow!("{e}"))?;
+            let path = {
+                let path = output_dir.join(format!("to-remove-triples-{id}.ttl"));
+                tokio::fs::write(&path, to_remove_doc.to_string())
+                    .await
+                    .map_err(|e| anyhow!("{e}"))?;
+                gzip(&path, true).await?
+            };
             Some(path)
         }
     };

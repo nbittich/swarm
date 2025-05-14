@@ -12,6 +12,7 @@ pub mod domain;
 pub mod nats_client;
 pub use futures::*;
 // pub mod alloc;
+pub mod compress;
 pub mod mongo;
 
 pub use serde_json::json;

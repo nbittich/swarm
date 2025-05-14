@@ -8,6 +8,7 @@ use fix_stmt::fix_triples;
 use graph_rdfa_processor::RdfaGraph;
 use swarm_common::{
     IdGenerator, StreamExt,
+    compress::{gzip, ungzip},
     constant::{
         APPLICATION_NAME, EXTRACTOR_CONSUMER, MANIFEST_FILE_NAME, PROV, SUB_TASK_EVENT_STREAM,
         SUB_TASK_STATUS_CHANGE_EVENT, SUB_TASK_STATUS_CHANGE_SUBJECT, TASK_EVENT_STREAM,
@@ -236,13 +237,14 @@ async fn extract_rdfa(line: &str, output_dir: &Path) -> Result<NTripleResult, Ex
         base_url: "N/A".into(),
         error: e.to_string(),
     })?;
-    let html_file =
-        tokio::fs::read_to_string(payload.path)
-            .await
-            .map_err(|e| ExtractRDFaError {
-                base_url: payload.base_url.to_string(),
-                error: e.to_string(),
-            })?;
+    let mut html_file = String::with_capacity(1024); // todo, if we save the len of the file, we alloc more
+    // accurately
+    ungzip(&payload.path, &mut html_file)
+        .await
+        .map_err(|e| ExtractRDFaError {
+            base_url: payload.base_url.to_string(),
+            error: e.to_string(),
+        })?;
 
     let ttl = RdfaGraph::parse_str(&html_file, &payload.base_url, None).map_err(|e| {
         ExtractRDFaError {
@@ -275,13 +277,19 @@ async fn extract_rdfa(line: &str, output_dir: &Path) -> Result<NTripleResult, Ex
     })?;
     let id = IdGenerator.get();
 
-    let path = output_dir.join(format!("{id}.ttl"));
-    tokio::fs::write(&path, doc.to_string())
-        .await
-        .map_err(|e| ExtractRDFaError {
-            base_url: payload.base_url.to_string(),
-            error: e.to_string(),
-        })?;
+    let map_err = |e: String| ExtractRDFaError {
+        base_url: payload.base_url.to_string(),
+        error: e,
+    };
+    let path = {
+        let path = output_dir.join(format!("{id}.ttl"));
+        tokio::fs::write(&path, doc.to_string())
+            .await
+            .map_err(|e| map_err(e.to_string()))?;
+        gzip(&path, true)
+            .await
+            .map_err(|e| map_err(e.to_string()))?
+    };
     Ok(NTripleResult {
         base_url: payload.base_url,
         len: doc.len(),

@@ -7,6 +7,7 @@ use moka::future::Cache;
 use std::{borrow::Cow, collections::HashMap, env::var, path::Path};
 use swarm_common::{
     IdGenerator, StreamExt,
+    compress::{gzip, ungzip},
     constant::{
         ADD_UUID_CONSUMER, APPLICATION_NAME, MANIFEST_FILE_NAME, PUBLIC_TENANT,
         SUB_TASK_EVENT_STREAM, SUB_TASK_STATUS_CHANGE_EVENT, SUB_TASK_STATUS_CHANGE_SUBJECT,
@@ -15,8 +16,8 @@ use swarm_common::{
     },
     debug,
     domain::{
-        JsonMapper, NTripleResult, Payload, ScrapeResult, Status, SubTask, SubTaskResult, Task,
-        TaskResult, UuidSubject,
+        JsonMapper, NTripleResult, Payload, Status, SubTask, SubTaskResult, Task, TaskResult,
+        UuidSubject,
     },
     error, info,
     mongo::{Repository, StoreClient, StoreRepository, doc},
@@ -297,8 +298,9 @@ async fn complement(
     predicate: &str,
     output_dir: &Path,
 ) -> anyhow::Result<NTripleResult> {
-    let payload = ScrapeResult::deserialize(line)?;
-    let ttl_file = tokio::fs::read_to_string(payload.path).await?;
+    let payload = NTripleResult::deserialize(line)?;
+    let mut ttl_file = String::with_capacity(1024); // todo if we have the len of the file we alloc more accurately
+    ungzip(&payload.path, &mut ttl_file).await?;
 
     let doc = TurtleDoc::try_from((ttl_file.as_str(), None)).map_err(|e| anyhow::anyhow!("{e}"))?;
     let subjects = doc.all_subjects();
@@ -322,10 +324,11 @@ async fn complement(
     }
     let id = IdGenerator.get();
 
-    let path = output_dir.join(format!("complemented-{id}.ttl"));
-    tokio::fs::write(&path, triples.to_string())
-        .await
-        .map_err(|e| anyhow!("{e}"))?;
+    let path = {
+        let path = output_dir.join(format!("complemented-{id}.ttl"));
+        tokio::fs::write(&path, triples.to_string()).await?;
+        gzip(&path, true).await?
+    };
     Ok(NTripleResult {
         base_url: payload.base_url,
         len: triples.len(),

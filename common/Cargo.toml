@@ -16,12 +16,14 @@ tracing-subscriber = { workspace = true, features = ["env-filter", "local-time"]
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 async-nats.workspace = true
-anyhow.workspace = true
+anyhow={workspace=true, features=["backtrace"]}
 futures.workspace = true
 async-trait.workspace = true
 uuid = { workspace = true, features = ["v7"] }
 regex.workspace = true
 mongodb.workspace = true
+async-compression = { workspace = true, features = ["tokio", "gzip"] }
+tokio={workspace=true, features=["fs"]}
 # mimalloc={workspace=true, features=["secure"]}
 
 

@@ -7,6 +7,7 @@ use reqwest::{Client, Url, header::CONTENT_TYPE};
 use std::{env::var, path::Path, str::FromStr, time::Duration};
 use swarm_common::{
     IdGenerator, REGEX_CLEAN_JSESSIONID, REGEX_CLEAN_S_UUID, StreamExt, chunk_drain,
+    compress::gzip,
     constant::{
         APPLICATION_NAME, CRAWLER_CONSUMER, MANIFEST_FILE_NAME, SUB_TASK_EVENT_STREAM,
         SUB_TASK_STATUS_CHANGE_EVENT, SUB_TASK_STATUS_CHANGE_SUBJECT, TASK_EVENT_STREAM,
@@ -302,8 +303,13 @@ async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlPro
 
                 // debug!("saving url {task_url} to file");
                 let file_name = format!("{}.html", IdGenerator.get());
-                let path = configuration.folder_path.join(file_name);
-                tokio::fs::write(&path, &html).await?;
+
+                let path = {
+                    let path = configuration.folder_path.join(file_name);
+                    tokio::fs::write(&path, &html).await?;
+                    gzip(&path, true).await?
+                };
+
                 let document = scraper::Html::parse_document(&html);
 
                 let mut next_urls = Vec::with_capacity(configuration.buffer);

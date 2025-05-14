@@ -10,6 +10,7 @@ use serde_json::Value;
 use sparql_client::{SparqlClient, SparqlUpdateType};
 use std::collections::BTreeMap;
 use std::{borrow::Cow, env::var, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
+use swarm_common::compress::ungzip;
 use swarm_common::constant::{
     CHUNK_SIZE, INDEX_MAX_TOTAL_HITS, INDEX_MAX_WAIT_FOR_TASK, RESET_INDEX, RESET_INDEX_NAME,
 };
@@ -358,7 +359,8 @@ async fn update(
 ) -> anyhow::Result<()> {
     debug!("index {triples_path:?} with operation type {update_type:?}");
 
-    let turtle_str = tokio::fs::read_to_string(&triples_path).await?;
+    let mut turtle_str = String::with_capacity(1024);
+    ungzip(&triples_path, &mut turtle_str).await?;
     let doc = TurtleDoc::try_from((turtle_str.as_str(), None)).map_err(|e| anyhow!("{e}"))?;
 
     for ic in config.index_config.iter() {

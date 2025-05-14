@@ -5,7 +5,9 @@ import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -15,7 +17,8 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
-
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 import org.apache.jena.riot.Lang;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
@@ -266,7 +269,12 @@ public class AppRunner implements CommandLineRunner {
     public NTripleResult validateAndFilter(String line, Path outputDir) {
         var payload = parse(line);
         try {
-            var model = ModelUtils.toModel(new FileInputStream(payload.path().toFile()),
+            java.io.InputStream is = new FileInputStream(payload.path().toFile());
+            if (payload.path().toString().endsWith(".gz")) {
+                is = new GZIPInputStream(is);
+            }
+
+            var model = ModelUtils.toModel(is,
                     ModelUtils.filenameToLang(payload.path().toFile().getName(), Lang.TURTLE));
             var report = this.shaclService.validate(model.getGraph());
             log.debug("{} is conforms: {}", payload.path(), report.conforms());
@@ -278,13 +286,36 @@ public class AppRunner implements CommandLineRunner {
             return NTripleResult.builder()
                     .baseUrl(payload.baseUrl())
                     .len(filtered.size())
-                    .path(path)
+                    .path(gzip(path, true))
                     .creationDate(OffsetDateTime.now(ZoneOffset.systemDefault()))
                     .build();
         } catch (Throwable ex) {
             throw ValidateAndFilterException.builder().exception(new RuntimeException(ex)).baseUrl(payload.baseUrl())
                     .path(payload.path()).build();
         }
+
+    }
+
+    private Path gzip(Path file, boolean delete) {
+        if (!Files.exists(file) || Files.isDirectory(file)) {
+            throw new RuntimeException(String.format("path %s is not a file or doesnt exist!", file.toString()));
+        }
+        var gzipFile = Paths.get(file.toString() + ".gz");
+        try (FileInputStream fis = new FileInputStream(file.toFile());
+                var fos = new java.io.FileOutputStream(gzipFile.toFile());
+                var gzipOS = new GZIPOutputStream(fos);) {
+            byte[] buffer = new byte[1024];
+            int len;
+            while ((len = fis.read(buffer)) != -1) {
+                gzipOS.write(buffer, 0, len);
+            }
+            if (delete) {
+                Files.delete(file);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return gzipFile;
 
     }
 
