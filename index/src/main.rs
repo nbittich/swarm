@@ -2,11 +2,11 @@
 //pub use swarm_common::alloc;
 //
 use anyhow::anyhow;
-use chrono::Local;
+use chrono::{DateTime, Local};
 use itertools::Itertools;
 use meilisearch_sdk::client::Client as MeiliSearchClient;
 use meilisearch_sdk::settings::PaginationSetting;
-use serde_json::Value;
+use serde_json::{Number, Value};
 use sparql_client::{SparqlClient, SparqlUpdateType};
 use std::collections::BTreeMap;
 use std::{borrow::Cow, env::var, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
@@ -30,6 +30,9 @@ use swarm_common::{
 };
 use tokio::{io::AsyncBufReadExt, task::JoinSet};
 use tortank::turtle::turtle_doc::{Node, Statement, TurtleDoc};
+use tortank::utils::{
+    DATE_FORMATS, XSD_BOOLEAN, XSD_DATE, XSD_DATE_TIME, XSD_DECIMAL, XSD_DOUBLE, XSD_INTEGER,
+};
 
 pub const NS_TYPE: Node = Node::Iri(Cow::Borrowed(
     "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
@@ -494,19 +497,67 @@ async fn gather_properties(
             prop.name
         );
         let res = sparql_cli.query(&query).await?;
-        if res.results.bindings.is_empty() && !prop.optional {
+        if res.results.bindings.is_empty()
+            || res
+                .results
+                .bindings
+                .iter()
+                .all(|v| v.values().all(|v1| v1.value.trim().is_empty()))
+                && !prop.optional
+        {
             debug!(
                 "{} is not optional in {}. skipping indexing document {subject}",
                 prop.name, ic.name
             );
             return Ok(false);
         }
+        let parse_from_str = DateTime::parse_from_str;
+
         let mut res = res
             .results
             .bindings
             .into_iter()
             .flat_map(|b| b.into_values())
-            .map(|b| Value::from_str(&b.value).unwrap_or_else(|_| Value::String(b.value)))
+            .filter(|b| !b.value.trim().is_empty())
+            .map(|b| {
+                let v = b.value.trim();
+                match b.datatype.as_deref() {
+                    Some(XSD_DATE) | Some(XSD_DATE_TIME) => DATE_FORMATS
+                        .iter()
+                        .find_map(|f| match parse_from_str(v, f) {
+                            Ok(v) => Some(v),
+                            Err(e) => {
+                                debug!("could not parse {}. err: {}", v, e);
+                                None
+                            }
+                        })
+                        .or_else(|| DateTime::parse_from_rfc3339(v).ok())
+                        .map(|d| d.timestamp())
+                        .and_then(|n| Number::from_i128(n as i128))
+                        .map(Value::Number)
+                        .unwrap_or_else(|| Value::String(v.to_string())),
+                    Some(XSD_DECIMAL) | Some(XSD_DOUBLE) => b
+                        .value
+                        .parse::<f64>()
+                        .ok()
+                        .and_then(Number::from_f64)
+                        .map(Value::Number)
+                        .unwrap_or_else(|| Value::String(v.to_string())),
+                    Some(XSD_INTEGER) => b
+                        .value
+                        .parse::<i128>()
+                        .ok()
+                        .and_then(Number::from_i128)
+                        .map(Value::Number)
+                        .unwrap_or_else(|| Value::String(v.to_string())),
+                    Some(XSD_BOOLEAN) => b
+                        .value
+                        .parse::<bool>()
+                        .map(Value::Bool)
+                        .unwrap_or_else(|_| Value::String(v.to_string())),
+                    _ => Value::String(v.to_string()),
+                }
+            })
             .dedup()
             .collect_vec();
         if res.is_empty() {
