@@ -1,4 +1,4 @@
-FROM public.ecr.aws/docker/library/rust:1.86-alpine3.21 AS chef 
+FROM public.ecr.aws/docker/library/rust:1.87-alpine3.21 AS chef 
 # We only pay the installation cost once, 
 # it will be cached from the second build onwards
 RUN  apk add --no-cache openssl-dev build-base cmake pkgconfig musl-dev  openssl-libs-static perl 
