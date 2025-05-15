@@ -2,7 +2,7 @@
 
 Swarm is an open-source project designed to centralize and make searchable the data published by every municipality in Flanders. All data is extracted from the official websites of Flemish municipalities, where it is published as RDFa-annotated HTML. Swarm scrapes this data, processes it, and republishes it in a usable format.
 
-Although it's fully functional, it's not intended to replace more established tools. I use it primarily as a sandbox for trying out new ideas in data extraction and processing. For production-level work, I'd strongly recommend relying on more reliable solutions.
+Although it's fully functional, it's not intended to replace more established tools. I use it primarily as a sandbox for trying out new ideas in data extraction and processing. For production-level work, I'd strongly recommend using a more reliable solutions.
 
 ### How It Works
 

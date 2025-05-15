@@ -105,7 +105,7 @@ export type SubTaskResult =
 
 export interface ScrapeResult {
     baseUrl: string;
-    path: string;
+    path?: string;
     creationDate: string;
 }
 
@@ -120,7 +120,7 @@ export interface DiffResult {
 export interface NTripleResult {
     baseUrl: string;
     len: number;
-    path: string;
+    path?: string;
     creationDate: string;
 }
 

@@ -85,19 +85,19 @@ const SubTasksTable: React.FC = () => {
                     switch (res.type) {
                         case "scrapeUrl":
                             component = <Tag>
-                                <Link disabled={!token} onClick={async () => await download(jobId, res.value.path)}><DownloadOutlined />file.html</Link>
+                                <Link disabled={!token || !res.value.path} onClick={async () => await download(jobId, res.value.path)}><DownloadOutlined />file.html</Link>
                             </Tag>;
                             break;
                         case "diff":
                             component = <Space>
-                                {res.value.toRemovePath && <Link disabled={!token} onClick={async () => await download(jobId, res.value.toRemovePath)}><DownloadOutlined />to-remove.ttl</Link>}
-                                {res.value.intersectPath && <Link disabled={!token} onClick={async () => await download(jobId, res.value.intersectPath)}><DownloadOutlined />intersect.ttl</Link>}
-                                {res.value.newInsertPath && <Link disabled={!token} onClick={async () => await download(jobId, res.value.newInsertPath)}><DownloadOutlined />new-inserts.ttl</Link>}
+                                {res.value.toRemovePath && <Link disabled={!token || !res.value.toRemovePath} onClick={async () => await download(jobId, res.value.toRemovePath)}><DownloadOutlined />to-remove.ttl</Link>}
+                                {res.value.intersectPath && <Link disabled={!token || !res.value.intersectPath} onClick={async () => await download(jobId, res.value.intersectPath)}><DownloadOutlined />intersect.ttl</Link>}
+                                {res.value.newInsertPath && <Link disabled={!token || !res.value.newInsertPath} onClick={async () => await download(jobId, res.value.newInsertPath)}><DownloadOutlined />new-inserts.ttl</Link>}
                             </Space>;
                             break;
                         case "nTriple":
                             component = <Tag>
-                                <Link disabled={!token} onClick={async () => await download(jobId, res.value.path)}><DownloadOutlined />result.ttl</Link>
+                                <Link disabled={!token || !res.value.path} onClick={async () => await download(jobId, res.value.path)}><DownloadOutlined />result.ttl</Link>
                             </Tag>;
                             break;
                     }

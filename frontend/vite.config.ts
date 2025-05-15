@@ -8,7 +8,7 @@ export default defineConfig({
                 manualChunks: {
                     vendor: ['react', 'react-dom', 'react-redux', 'cron-validate', 'uuid', 'react-router-dom', '@reduxjs/toolkit'],
                     ui: ['@ant-design/colors', 'antd'],
-                    yasgui: ['@triply/yasgui']
+                    yasgui: ['@zazuko/yasgui']
                 }
             }
         }

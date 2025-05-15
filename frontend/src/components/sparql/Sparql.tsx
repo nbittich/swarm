@@ -14,8 +14,8 @@ const Sparql = () => {
     useEffect(() => {
         if (containerRef.current && !initialized) {
             Promise.all([
-                import('@triply/yasgui'),
-                import('@triply/yasgui/build/yasgui.min.css'),
+                import('@zazuko/yasgui'),
+                import('@zazuko/yasgui/build/yasgui.min.css'),
                 import('./YasguiCssDark.css'),
                 import('./YasguiCssDefault.css'),
             ]).then(([module]) => {

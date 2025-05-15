@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { Button, Descriptions, Flex, Space, Table, TableProps, Tag, Typography, message } from 'antd';
+import { Button, Flex, Space, Table, TableProps, Tag, Typography, message } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';  // for accessing the dynamic route parameter
 import axios from 'axios';
 import { colorForStatus, Job, Status, Task, } from '@swarm/models/domain';
@@ -10,8 +10,8 @@ import dayjs from 'dayjs';
 import { useAuth } from '@swarm/auth/authContextHook';
 import Link from 'antd/es/typography/Link';
 import { useIsMobile } from '@swarm/hooks/is-mobile';
+import JobDetail from './JobDetail';
 
-const { Text } = Typography;
 
 const TasksTable: React.FC = () => {
     const isMobile = useIsMobile();
@@ -173,26 +173,8 @@ const TasksTable: React.FC = () => {
                 </Space>
             </Flex>
 
-            {job && <Descriptions key={job._id as string}
-                bordered
-                column={1}
-            >
-                {Object.entries(job).filter(([k, _]) => k !== "definition").map(([key, val]) => (
-                    <Descriptions.Item key={key + job._id} label={key} styles={{ label: { width: '10vw', fontWeight: "bold" } }}>
-                        {Array.isArray(val) ? (<ul key={key + job._id + "ul"} style={{ padding: 0, marginLeft: 10 }}>
-                            {val.map(v => <li key={crypto.randomUUID()}>{v}</li>)}</ul>) : <span style={{ wordBreak: 'break-word' }}>
-                            {typeof (val) === "object" && key === "status" ? <Tag color={colorForStatus(val)} >
-                                <Text style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{val.type}
-                                    {val.type === "failed" && val.value && `: ${val.value.join(", ")}`}</Text>
-                            </Tag> : String(val)
 
-                            }
-                        </span>
-                        }
-                    </Descriptions.Item>
-                ))}
-            </Descriptions>}
-
+            {job && <JobDetail job={job} />}
 
             <h2>Tasks</h2>
 
