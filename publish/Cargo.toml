@@ -16,6 +16,7 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "fs
 swarm_common.workspace=true
 sparql_client.workspace = true
 tortank.workspace = true
+itertools.workspace=true
 
 async_zip = { workspace = true, features = ["tokio", "tokio-fs","deflate"] }
 

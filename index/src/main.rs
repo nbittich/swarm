@@ -489,7 +489,7 @@ async fn gather_properties(
         let where_clause = prop.to_query_op(subject);
         let query = format!(
             r#"
-                            SELECT ?{} WHERE {{
+                            SELECT DISTINCT ?{} WHERE {{
                                 # TODO do we want to limit to specific graphs?
                                 {where_clause}
                             }}

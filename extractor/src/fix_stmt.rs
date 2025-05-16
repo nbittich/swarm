@@ -35,28 +35,32 @@ fn fix_term(mut term: Node<'_>) -> Option<Node<'_>> {
                 datatype,
                 value,
                 lang,
-            } => match datatype {
-                Some(iri) => {
-                    lang.take(); // we don't want langStrings?
-                    if iri.as_ref() == &Node::Iri(Cow::Owned(XSD("boolean"))) {
-                        let lowercase = value.trim().to_lowercase();
-                        if lowercase.eq("true") || lowercase.eq("false") {
-                            *value = Cow::Owned(lowercase);
-                            Some(term)
-                        } else {
-                            None
-                        }
-                    } else if iri.as_ref() == &Node::Iri(Cow::Owned(RDFS("Literal")))
-                        || iri.as_ref() == &Node::Iri(Cow::Owned(RDF("langString")))
-                    {
-                        *datatype = Some(Box::new(Node::Iri(Cow::Owned(XSD("string")))));
-                        return Some(term);
-                    } else {
-                        Some(term)
-                    }
+            } => {
+                lang.take(); // we don't want langStrings?
+                if value.trim() != value {
+                    *value = Cow::Owned(value.trim().to_owned());
                 }
-                None => Some(term),
-            },
+                match datatype {
+                    Some(iri) => {
+                        if iri.as_ref() == &Node::Iri(Cow::Owned(XSD("boolean"))) {
+                            value
+                                .to_lowercase()
+                                .parse::<bool>()
+                                .ok()
+                                .map(tortank::turtle::turtle_doc::Literal::Boolean)
+                                .map(Node::Literal)
+                        } else if iri.as_ref() == &Node::Iri(Cow::Owned(RDFS("Literal")))
+                            || iri.as_ref() == &Node::Iri(Cow::Owned(RDF("langString")))
+                        {
+                            *datatype = Some(Box::new(Node::Iri(Cow::Owned(XSD("string")))));
+                            return Some(term);
+                        } else {
+                            Some(term)
+                        }
+                    }
+                    None => Some(term),
+                }
+            }
             _ => Some(term),
         },
         Node::Ref(node) => {

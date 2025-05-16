@@ -2538,6 +2538,7 @@ dependencies = [
  "anyhow",
  "async_zip",
  "chrono",
+ "itertools",
  "sparql_client",
  "swarm_common",
  "tokio",

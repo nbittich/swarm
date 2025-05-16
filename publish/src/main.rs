@@ -3,6 +3,7 @@ use async_zip::{Compression, ZipEntryBuilder, base::write::ZipFileWriter};
 /* CUSTOM ALLOC, disabled as it consumes more memory */
 //pub use swarm_common::alloc;
 use chrono::Local;
+use itertools::Itertools;
 use sparql_client::{SparqlClient, SparqlUpdateType, TARGET_GRAPH};
 use std::{
     env::var,
@@ -358,23 +359,15 @@ async fn update(
     let mut turtle_str = String::with_capacity(1024);
     ungzip(&triples_path, &mut turtle_str).await?;
     let doc = TurtleDoc::try_from((turtle_str.as_str(), None)).map_err(|e| anyhow!("{e}"))?;
-    let mut chunk = Vec::with_capacity(config.chunk_size);
     let mut tasks = JoinSet::new();
 
-    for stmt in doc {
-        chunk.push(stmt.to_string());
-        if chunk.len() == config.chunk_size {
-            let chunk = std::mem::take(&mut chunk);
-            let config = config.clone();
-            tasks.spawn(async move {
-                config
-                    .sparql_client
-                    .bulk_update(&config.target_graph, &chunk, update_type)
-                    .await
-            });
-        }
-    }
-    if !chunk.is_empty() {
+    for chunk in doc
+        .into_iter()
+        .map(|c| c.to_string())
+        .chunks(config.chunk_size)
+        .into_iter()
+        .map(|c| c.collect_vec())
+    {
         let config = config.clone();
         tasks.spawn(async move {
             config
@@ -383,6 +376,7 @@ async fn update(
                 .await
         });
     }
+
     while let Some(handle) = tasks.join_next().await {
         match handle? {
             Ok(_) => {}
