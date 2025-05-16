@@ -4,7 +4,7 @@
 use anyhow::anyhow;
 use chrono::Local;
 use moka::future::Cache;
-use std::{borrow::Cow, collections::HashMap, env::var, path::Path};
+use std::{borrow::Cow, collections::HashMap, env::var, path::Path, sync::Arc};
 use swarm_common::{
     IdGenerator, StreamExt,
     compress::{gzip, ungzip},
@@ -22,9 +22,9 @@ use swarm_common::{
     error, info,
     mongo::{Repository, StoreClient, StoreRepository, doc},
     nats_client::{self, NatsClient},
-    setup_tracing,
+    retry_fs, setup_tracing,
 };
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+use tokio::io::AsyncBufReadExt;
 use tortank::turtle::turtle_doc::{Node, TurtleDoc};
 
 #[tokio::main]
@@ -126,12 +126,7 @@ pub async fn append_entry_manifest_file(
     let mut line = page_res.serialize()?;
     line += "\n";
     let path = dir_path.join(MANIFEST_FILE_NAME);
-    let mut manifest_file = tokio::fs::File::options()
-        .create(true)
-        .append(true)
-        .open(path)
-        .await?;
-    manifest_file.write_all(line.as_bytes()).await?;
+    retry_fs::append_to_file(path, line).await?;
 
     Ok(())
 }
@@ -151,13 +146,13 @@ async fn handle_task(
     } = &task.payload
     {
         if task.output_dir.exists() {
-            tokio::fs::remove_dir_all(&task.output_dir).await?;
+            retry_fs::remove_dir_all(&task.output_dir).await?;
         }
-        tokio::fs::create_dir_all(&task.output_dir).await?;
+        retry_fs::create_dir_all(&task.output_dir).await?;
         let mut success_count = 0;
         let mut failure_count = 0;
         let mut manifest =
-            tokio::io::BufReader::new(tokio::fs::File::open(manifest_file_path).await?).lines();
+            tokio::io::BufReader::new(retry_fs::open_file(manifest_file_path).await?).lines();
 
         while let Ok(Some(line)) = manifest.next_line().await {
             if line.trim().is_empty() {
@@ -299,8 +294,7 @@ async fn complement(
     output_dir: &Path,
 ) -> anyhow::Result<NTripleResult> {
     let payload = NTripleResult::deserialize(line)?;
-    let mut ttl_file = String::with_capacity(1024); // todo if we have the len of the file we alloc more accurately
-    ungzip(&payload.path, &mut ttl_file).await?;
+    let ttl_file = ungzip(&payload.path).await?;
 
     let doc = TurtleDoc::try_from((ttl_file.as_str(), None)).map_err(|e| anyhow::anyhow!("{e}"))?;
     let subjects = doc.all_subjects();
@@ -326,7 +320,7 @@ async fn complement(
 
     let path = {
         let path = output_dir.join(format!("complemented-{id}.ttl"));
-        tokio::fs::write(&path, triples.to_string()).await?;
+        retry_fs::write(&path, Arc::new(triples.to_string())).await?;
         gzip(&path, true).await?
     };
     Ok(NTripleResult {

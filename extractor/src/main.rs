@@ -1,7 +1,9 @@
 /* CUSTOM ALLOC, disabled as it consumes more memory */
 //pub use swarm_common::alloc;
 
-use std::{borrow::Cow, env::var, error::Error, fmt::Display, path::Path, time::Duration};
+use std::{
+    borrow::Cow, env::var, error::Error, fmt::Display, path::Path, sync::Arc, time::Duration,
+};
 mod fix_stmt;
 use chrono::Local;
 use fix_stmt::fix_triples;
@@ -21,12 +23,9 @@ use swarm_common::{
     },
     error, info,
     nats_client::{self, NatsClient},
-    setup_tracing,
+    retry_fs, setup_tracing,
 };
-use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt},
-    task::JoinSet,
-};
+use tokio::{io::AsyncBufReadExt, task::JoinSet};
 use tortank::turtle::turtle_doc::TurtleDoc;
 
 #[tokio::main]
@@ -115,12 +114,7 @@ pub async fn append_entry_manifest_file(
     let mut line = page_res.serialize()?;
     line += "\n";
     let path = dir_path.join(MANIFEST_FILE_NAME);
-    let mut manifest_file = tokio::fs::File::options()
-        .create(true)
-        .append(true)
-        .open(path)
-        .await?;
-    manifest_file.write_all(line.as_bytes()).await?;
+    retry_fs::append_to_file(path, line).await?;
 
     Ok(())
 }
@@ -134,13 +128,13 @@ async fn handle_task(nc: &NatsClient, task: &mut Task) -> anyhow::Result<Option<
     } = &task.payload
     {
         if task.output_dir.exists() {
-            tokio::fs::remove_dir_all(&task.output_dir).await?;
+            retry_fs::remove_dir_all(&task.output_dir).await?;
         }
-        tokio::fs::create_dir_all(&task.output_dir).await?;
+        retry_fs::create_dir_all(&task.output_dir).await?;
         let mut success_count = 0;
         let mut failure_count = 0;
         let mut manifest =
-            tokio::io::BufReader::new(tokio::fs::File::open(manifest_file_path).await?).lines();
+            tokio::io::BufReader::new(retry_fs::open_file(manifest_file_path).await?).lines();
         let mut tasks = JoinSet::new();
 
         while let Ok(Some(line)) = manifest.next_line().await {
@@ -237,14 +231,10 @@ async fn extract_rdfa(line: &str, output_dir: &Path) -> Result<NTripleResult, Ex
         base_url: "N/A".into(),
         error: e.to_string(),
     })?;
-    let mut html_file = String::with_capacity(1024); // todo, if we save the len of the file, we alloc more
-    // accurately
-    ungzip(&payload.path, &mut html_file)
-        .await
-        .map_err(|e| ExtractRDFaError {
-            base_url: payload.base_url.to_string(),
-            error: e.to_string(),
-        })?;
+    let html_file = ungzip(&payload.path).await.map_err(|e| ExtractRDFaError {
+        base_url: payload.base_url.to_string(),
+        error: e.to_string(),
+    })?;
 
     let ttl = RdfaGraph::parse_str(&html_file, &payload.base_url, None).map_err(|e| {
         ExtractRDFaError {
@@ -283,7 +273,7 @@ async fn extract_rdfa(line: &str, output_dir: &Path) -> Result<NTripleResult, Ex
     };
     let path = {
         let path = output_dir.join(format!("{id}.ttl"));
-        tokio::fs::write(&path, doc.to_string())
+        retry_fs::write(&path, Arc::new(doc.to_string()))
             .await
             .map_err(|e| map_err(e.to_string()))?;
         gzip(&path, true)

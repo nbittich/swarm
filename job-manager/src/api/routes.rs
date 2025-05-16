@@ -23,6 +23,7 @@ use swarm_common::{
     },
     info,
     mongo::{FindOptions, Page, Pageable, Repository, doc},
+    retry_fs,
 };
 use tokio_util::io::ReaderStream;
 
@@ -176,7 +177,7 @@ async fn sparql(
     if is_update {
         manager
             .sparql_client
-            .update(&query)
+            .update(query)
             .await
             .map_err(|e| ApiError::SparqlError(e.to_string()))?;
         Ok(Json(SparqlResponse {
@@ -198,7 +199,7 @@ async fn sparql(
             .map(String::from);
         let (content_type, res) = manager
             .sparql_client
-            .query_with_accept_header(&query, accept_header)
+            .query_with_accept_header(query, accept_header)
             .await
             .map_err(|e| ApiError::SparqlError(e.to_string()))?;
         headers.contains_key(ACCEPT);
@@ -292,7 +293,7 @@ async fn download(
     {
         return Err(ApiError::Download("Unauthorized".to_string()));
     }
-    let f = tokio::fs::File::open(&path)
+    let f = retry_fs::open_file(&path)
         .map_err(|e| ApiError::Download(e.to_string()))
         .await?;
     let stream = ReaderStream::new(f);

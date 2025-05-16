@@ -3,7 +3,7 @@
 
 use anyhow::anyhow;
 use chrono::Local;
-use std::{env::var, path::Path, time::Duration};
+use std::{env::var, path::Path, sync::Arc, time::Duration};
 use swarm_common::{
     IdGenerator, StreamExt,
     compress::{gzip, ungzip},
@@ -21,12 +21,9 @@ use swarm_common::{
     error, info,
     mongo::{Repository, StoreClient, StoreRepository, doc},
     nats_client::{self, NatsClient},
-    setup_tracing,
+    retry_fs, setup_tracing,
 };
-use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt},
-    task::JoinSet,
-};
+use tokio::{io::AsyncBufReadExt, task::JoinSet};
 use tortank::turtle::turtle_doc::TurtleDoc;
 
 #[derive(Clone)]
@@ -145,13 +142,7 @@ pub async fn append_entry_manifest_file(
     let mut line = page_res.serialize()?;
     line += "\n";
     let path = dir_path.join(MANIFEST_FILE_NAME);
-    let mut manifest_file = tokio::fs::File::options()
-        .create(true)
-        .append(true)
-        .open(path)
-        .await?;
-    manifest_file.write_all(line.as_bytes()).await?;
-
+    retry_fs::append_to_file(path, line).await?;
     Ok(())
 }
 
@@ -167,13 +158,13 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
     } = &task.payload
     {
         if task.output_dir.exists() {
-            tokio::fs::remove_dir_all(&task.output_dir).await?;
+            retry_fs::remove_dir_all(&task.output_dir).await?;
         }
-        tokio::fs::create_dir_all(&task.output_dir).await?;
+        retry_fs::create_dir_all(&task.output_dir).await?;
         let mut success_count = 0;
         let mut failure_count = 0;
         let mut manifest =
-            tokio::io::BufReader::new(tokio::fs::File::open(manifest_file_path).await?).lines();
+            tokio::io::BufReader::new(retry_fs::open_file(manifest_file_path).await?).lines();
 
         let Some(current_job) = config.job_repository.find_by_id(&task.job_id).await? else {
             return Err(anyhow!("current job not found {task:?}"));
@@ -330,13 +321,12 @@ async fn diff(
     output_dir: &Path,
 ) -> anyhow::Result<DiffResult> {
     let payload = NTripleResult::deserialize(line)?;
-    let mut ttl_file = String::with_capacity(1024); // todo use accurate file len
-    ungzip(&payload.path, &mut ttl_file).await?;
+    let ttl_file = ungzip(&payload.path).await?;
 
     debug!("old diff task id: {old_diff_task_id:?}");
     let doc = TurtleDoc::try_from((ttl_file.as_str(), None)).map_err(|e| anyhow::anyhow!("{e}"))?;
-    let mut new_ttl_buff;
-    let mut intersect_ttl_buff;
+    let new_ttl_buff;
+    let intersect_ttl_buff;
 
     let old_doc = {
         let Some(SubTaskResult::Diff(DiffResult {
@@ -358,8 +348,7 @@ async fn diff(
         };
 
         let new_ttl_doc = if let Some(p) = new_insert_path {
-            new_ttl_buff = String::with_capacity(1024);
-            ungzip(&p, &mut new_ttl_buff).await?;
+            new_ttl_buff = ungzip(&p).await?;
             TurtleDoc::try_from((new_ttl_buff.as_str(), None))
                 .map_err(|e| anyhow::anyhow!("{e}"))?
         } else {
@@ -367,8 +356,7 @@ async fn diff(
         };
 
         let intersect_ttl_doc = if let Some(p) = intersect_path {
-            intersect_ttl_buff = String::with_capacity(1024);
-            ungzip(&p, &mut intersect_ttl_buff).await?;
+            intersect_ttl_buff = ungzip(&p).await?;
             TurtleDoc::try_from((intersect_ttl_buff.as_str(), None))
                 .map_err(|e| anyhow::anyhow!("{e}"))?
         } else {
@@ -387,7 +375,7 @@ async fn diff(
             let id = IdGenerator.get();
             let path = {
                 let path = output_dir.join(format!("intersect-triples-{id}.ttl"));
-                tokio::fs::write(&path, intersection_doc.to_string())
+                retry_fs::write(&path, Arc::new(intersection_doc.to_string()))
                     .await
                     .map_err(|e| anyhow!("{e}"))?;
                 gzip(&path, true).await?
@@ -402,7 +390,7 @@ async fn diff(
             let id = IdGenerator.get();
             let path = {
                 let path = output_dir.join(format!("new-triples-{id}.ttl"));
-                tokio::fs::write(&path, new_doc.to_string())
+                retry_fs::write(&path, Arc::new(new_doc.to_string()))
                     .await
                     .map_err(|e| anyhow!("{e}"))?;
                 gzip(&path, true).await?
@@ -417,7 +405,7 @@ async fn diff(
             let id = IdGenerator.get();
             let path = {
                 let path = output_dir.join(format!("to-remove-triples-{id}.ttl"));
-                tokio::fs::write(&path, to_remove_doc.to_string())
+                retry_fs::write(&path, Arc::new(to_remove_doc.to_string()))
                     .await
                     .map_err(|e| anyhow!("{e}"))?;
                 gzip(&path, true).await?

@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, ops::Mul, time::Duration};
+use std::{collections::BTreeMap, fmt::Debug, sync::Arc, time::Duration};
 
 use anyhow::anyhow;
 use reqwest::{
@@ -6,7 +6,8 @@ use reqwest::{
     header::{ACCEPT, CONTENT_TYPE},
 };
 use serde::{Deserialize, Serialize};
-use tracing::debug;
+use swarm_retryable_fut::retryable_fut;
+use tracing::{debug, instrument};
 
 pub static SPARQL_ENDPOINT: &str = "SPARQL_ENDPOINT";
 pub static TARGET_GRAPH: &str = "TARGET_GRAPH";
@@ -47,7 +48,7 @@ pub struct Binding {
 #[derive(Debug, Clone)]
 pub struct SparqlClient {
     pub client: Client,
-    pub endpoint: String,
+    pub endpoint: Arc<String>,
     pub max_retry: u32,
     pub delay_before_next_retry: Duration,
 }
@@ -70,61 +71,44 @@ impl SparqlClient {
         let client = get_sparql_client()?;
         Ok(SparqlClient {
             client,
-            endpoint,
+            endpoint: Arc::new(endpoint),
             max_retry,
             delay_before_next_retry,
         })
     }
     pub async fn _query<T>(
         &self,
-        query: &str,
+        query: String,
         accept_header: Option<String>,
-        transform: impl AsyncFn(Response) -> anyhow::Result<T>,
+        transform: impl AsyncFn(Response) -> anyhow::Result<T> + Send + Sync,
     ) -> anyhow::Result<T> {
         debug!("{query}");
-        let mut retry_count = 0;
-        let mut err = Err(anyhow!("unexpected error"));
-        while retry_count < self.max_retry {
-            if retry_count > 0 {
-                let wait_before_next_retry = self.delay_before_next_retry.mul(retry_count);
-                debug!("sleeping for {wait_before_next_retry:?} millis before trying again...");
-                tokio::time::sleep(wait_before_next_retry).await;
-            }
-            match self
-                .client
-                .post(&self.endpoint)
-                .header(
-                    ACCEPT,
-                    accept_header.as_deref().unwrap_or(SPARQL_RESULT_JSON),
-                )
-                .query(&[
-                    ("query", query),
-                    (
-                        "format",
-                        accept_header.as_deref().unwrap_or(SPARQL_RESULT_JSON),
-                    ),
-                ])
-                .send()
-                .await
-                .and_then(|response| response.error_for_status())
-            {
-                Ok(response) => match transform(response).await {
-                    Ok(sr) => return Ok(sr),
-                    Err(e) => {
-                        retry_count += 1;
-                        err = Err(anyhow!("{e}"));
-                    }
-                },
-
-                Err(e) => {
-                    retry_count += 1;
-                    err = Err(anyhow!("{e}"));
-                }
-            }
-        }
-        err
+        let client = self.client.clone();
+        let endpoint = self.endpoint.clone();
+        retryable_fut(
+            self.max_retry as u64,
+            self.delay_before_next_retry.as_secs(),
+            async move || {
+                let client = &client;
+                let accept_header = accept_header.as_deref();
+                let res = client
+                    .post(endpoint.as_str())
+                    .header(ACCEPT, accept_header.unwrap_or(SPARQL_RESULT_JSON))
+                    .query(&[
+                        ("query", query.as_str()),
+                        ("format", accept_header.unwrap_or(SPARQL_RESULT_JSON)),
+                    ])
+                    .send()
+                    .await
+                    .and_then(|response| response.error_for_status())?;
+                transform(res).await
+            },
+        )
+        .await
     }
-    pub async fn query(&self, query: &str) -> anyhow::Result<SparqlResponse> {
+
+    #[instrument(level = "debug")]
+    pub async fn query(&self, query: String) -> anyhow::Result<SparqlResponse> {
         self._query(query, None, async |response| {
             let r = response.json::<SparqlResponse>().await?;
             Ok(r)
@@ -132,9 +116,10 @@ impl SparqlClient {
         .await
     }
 
+    #[instrument(level = "debug")]
     pub async fn query_with_accept_header(
         &self,
-        query: &str,
+        query: String,
         accept_header: Option<String>,
     ) -> anyhow::Result<(String, String)> {
         self._query(query, accept_header, async |response| {
@@ -149,36 +134,35 @@ impl SparqlClient {
         })
         .await
     }
-    pub async fn update(&self, query: &str) -> anyhow::Result<()> {
+    async fn _update(&self, query: String) -> anyhow::Result<()> {
         debug!("{query}");
-        let mut retry_count = 0;
-        let mut err = Err(anyhow!("unexpected error"));
-        while retry_count < self.max_retry {
-            if retry_count > 0 {
-                let wait_before_next_retry = self.delay_before_next_retry.mul(retry_count);
-                debug!("sleeping for {wait_before_next_retry:?} millis before trying again...");
-                tokio::time::sleep(wait_before_next_retry).await;
-            }
-            match self
-                .client
-                .post(&self.endpoint)
-                .header(ACCEPT, SPARQL_RESULT_JSON)
-                .header(CONTENT_TYPE, SPARQL_UPDATE)
-                .body(query.to_string())
-                .send()
-                .await
-                .and_then(|response| response.error_for_status())
-            {
-                Ok(_) => return Ok(()),
-
-                Err(e) => {
-                    retry_count += 1;
-                    err = Err(anyhow!("{e}"));
-                }
-            }
-        }
-        err
+        let client = self.client.clone();
+        let endpoint = self.endpoint.clone();
+        retryable_fut(
+            self.max_retry as u64,
+            self.delay_before_next_retry.as_secs(),
+            async move || {
+                let client = &client;
+                let _ = client
+                    .post(endpoint.as_str())
+                    .header(ACCEPT, SPARQL_RESULT_JSON)
+                    .header(CONTENT_TYPE, SPARQL_UPDATE)
+                    .body(query.to_string())
+                    .send()
+                    .await
+                    .and_then(|response| response.error_for_status())?;
+                Ok(())
+            },
+        )
+        .await
     }
+
+    #[instrument(level = "debug")]
+    pub async fn update(&self, query: String) -> anyhow::Result<()> {
+        self._update(query).await
+    }
+
+    #[instrument(level = "debug")]
     pub async fn bulk_update(
         &self,
         target_graph: &str,
@@ -197,9 +181,11 @@ impl SparqlClient {
 
         let q = make_update_query(target_graph, operation, triples);
         debug!("Executing query: \n{q}\n");
-        match self.update(&q).await {
+        match self._update(q).await {
             Ok(_) => Ok(()),
-            Err(_) if triples.len() == 1 => Err(anyhow!("{q}")),
+            Err(_) if triples.len() == 1 => {
+                Err(anyhow!("Could not execute bulk update for {triples:?}"))
+            }
             Err(e) => {
                 debug!("could not execute sparql bulk update: {e}");
                 let (a, b) = triples.split_at(triples.len() / 2);

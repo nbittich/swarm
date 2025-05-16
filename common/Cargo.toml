@@ -24,6 +24,7 @@ regex.workspace = true
 mongodb.workspace = true
 async-compression = { workspace = true, features = ["tokio", "gzip"] }
 tokio={workspace=true, features=["fs"]}
+swarm_retryable_fut.workspace=true
 # mimalloc={workspace=true, features=["secure"]}
 
 

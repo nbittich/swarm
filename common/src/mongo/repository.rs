@@ -7,6 +7,7 @@ pub use mongodb::options::{FindOneAndReplaceOptions, FindOptions};
 use mongodb::results::{DeleteResult, InsertManyResult, InsertOneResult};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use tracing::instrument;
 
 use super::StoreError;
 use super::client::StoreClient;
@@ -82,10 +83,13 @@ where
     }
 }
 #[async_trait]
-pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std::fmt::Debug> {
+pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std::fmt::Debug>:
+    std::fmt::Debug
+{
     fn get_collection(&self) -> &Collection<T>;
     fn get_client(&self) -> &StoreClient;
 
+    #[instrument(level = "debug")]
     async fn find_all(&self) -> Result<Vec<T>, StoreError> {
         let collection = self.get_collection();
         let cursor = collection
@@ -99,6 +103,7 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
         Ok(collection)
     }
 
+    #[instrument(level = "debug")]
     async fn count(&self, query: Option<Document>) -> Result<u64, StoreError> {
         let collection = self.get_collection();
         let count = collection
@@ -108,14 +113,16 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
         Ok(count)
     }
 
+    #[instrument(level = "debug")]
     async fn find_by_ids(&self, ids: Vec<String>) -> Result<Vec<T>, StoreError> {
         self.find_by_query(doc! {"_id": {"$in": ids}}, None).await
     }
 
+    #[instrument(level = "debug")]
     async fn find_by_query(
         &self,
         query: Document,
-        options: impl Into<Option<FindOptions>> + Send,
+        options: impl Into<Option<FindOptions>> + Send + std::fmt::Debug,
     ) -> Result<Vec<T>, StoreError> {
         let collection = self.get_collection();
         let cursor = collection
@@ -132,6 +139,7 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
             .await
             .map_err(|e| StoreError { msg: e.to_string() })
     }
+    #[instrument(level = "debug")]
     async fn find_page_large_collection(
         &self,
         main_query: Option<Document>,
@@ -170,6 +178,8 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
             .map_err(|e| StoreError { msg: e.to_string() })?;
         Ok(collection)
     }
+
+    #[instrument(level = "debug")]
     async fn find_page(&self, pageable: Pageable) -> Result<Page<T>, StoreError> {
         let (limit, page) = (pageable.limit.unwrap_or(10), pageable.page.unwrap_or(0));
         let collection = self.get_collection();
@@ -219,6 +229,7 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
         Ok(page)
     }
 
+    #[instrument(level = "debug")]
     async fn delete_many(&self, query: Option<Document>) -> Result<DeleteResult, StoreError> {
         let query = if let Some(q) = query {
             q
@@ -233,6 +244,7 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
         Ok(res)
     }
 
+    #[instrument(level = "debug")]
     async fn insert_many(&self, data: &Vec<T>) -> Result<InsertManyResult, StoreError> {
         let res = self
             .get_collection()
@@ -242,6 +254,7 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
         Ok(res)
     }
 
+    #[instrument(level = "debug")]
     async fn insert_one(&self, data: &T) -> Result<InsertOneResult, StoreError> {
         let res = self
             .get_collection()
@@ -251,6 +264,7 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
         Ok(res)
     }
 
+    #[instrument(level = "debug")]
     async fn find_by_id(&self, id: &str) -> Result<Option<T>, StoreError> {
         let collection = self.get_collection();
         let res = collection
@@ -260,6 +274,7 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
         Ok(res)
     }
 
+    #[instrument(level = "debug")]
     async fn find_one(&self, query: Option<Document>) -> Result<Option<T>, StoreError> {
         let collection = self.get_collection();
         let res = collection
@@ -269,10 +284,12 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
         Ok(res)
     }
 
+    #[instrument(level = "debug")]
     async fn delete_by_id(&self, id: &str) -> Result<Option<T>, StoreError> {
         self.delete_by_query(doc! {"_id": id}).await
     }
 
+    #[instrument(level = "debug")]
     async fn delete_by_query(&self, query: Document) -> Result<Option<T>, StoreError> {
         let collection = self.get_collection();
         let res = collection
@@ -286,6 +303,7 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
     /// let filter = doc! { "targetUrl": "http://x.com", "status.type": "success" };
     /// let update = doc! { "$set": { "status.type": "archived" } };
     /// repository.update_many(filter, update).await?;
+    #[instrument(level = "debug")]
     async fn update_many(&self, filter: Document, replace: Document) -> Result<u64, StoreError> {
         let collection = self.get_collection();
         let update_result = collection
@@ -295,6 +313,7 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
         Ok(update_result.modified_count)
     }
 
+    #[instrument(level = "debug")]
     async fn upsert(&self, id: &str, entity: &T) -> Result<Option<T>, StoreError> {
         let collection = self.get_collection();
 
@@ -309,6 +328,7 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
         Ok(res)
     }
 
+    #[instrument(level = "debug")]
     async fn upsert_many(&self, entities: &[T]) -> Result<(), StoreError> {
         let client = self.get_client().get_raw_client();
 

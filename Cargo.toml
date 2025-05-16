@@ -1,7 +1,7 @@
 
 [workspace]
 members = [ "add-uuid", "archive", "cleanup", "common","crawler", "diff", "extractor", 
-    "index", "job-manager", "publish", "sparql_client", "sync-consumer"]
+    "index", "job-manager", "publish", "retryable_fut", "sparql_client", "sync-consumer"]
 resolver = "2"
 
 [workspace.package]
@@ -64,10 +64,11 @@ trait-variant = "0.1.2"
 async-trait = "0.1.88"
 mlua = "0.10.3"
 meilisearch-sdk = "0.28.0"
-
+async_fn_traits = "0.1.1"
 swarm_common= {version="0.1.0",path="./common"}
+swarm_retryable_fut= {version="0.1.0",path="./retryable_fut"}
 sparql_client= {version="0.1.0",path="./sparql_client"}
-
+tokio-stream = "0.1.17"
 [profile.release]
 opt-level = 'z'   # Optimize for size.
 lto = true        # Link Time Optimization (LTO)

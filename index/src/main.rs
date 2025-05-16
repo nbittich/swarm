@@ -15,6 +15,7 @@ use swarm_common::constant::{
     CHUNK_SIZE, INDEX_MAX_TOTAL_HITS, INDEX_MAX_WAIT_FOR_TASK, RESET_INDEX, RESET_INDEX_NAME,
 };
 use swarm_common::domain::index_config::{INDEX_ID_KEY, IndexConfiguration};
+use swarm_common::retry_fs;
 use swarm_common::{
     StreamExt,
     constant::{
@@ -84,7 +85,7 @@ async fn main() -> anyhow::Result<()> {
 
     let index_config = {
         info!("reading index config file {index_config_path}...");
-        let config_str = tokio::fs::read_to_string(&index_config_path).await?;
+        let config_str = retry_fs::read_to_string(&index_config_path).await?;
         let ic: Vec<IndexConfiguration> = serde_json::from_str(&config_str)?;
         Arc::new(ic)
     };
@@ -164,7 +165,7 @@ async fn main() -> anyhow::Result<()> {
             let rdf_types = ic.rdf_type.iter().map(|t| format!("<{t}>")).join("\n");
             let mut res = config
                 .sparql_client
-                .query(&format!(
+                .query(format!(
                     r#"
                        SELECT DISTINCT ?s ?uuid WHERE {{
                             GRAPH ?g  {{
@@ -298,12 +299,11 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
     } = &task.payload
     {
         if task.output_dir.exists() {
-            tokio::fs::remove_dir_all(&task.output_dir).await?;
+            retry_fs::remove_dir_all(&task.output_dir).await?;
         }
-        tokio::fs::create_dir_all(&task.output_dir).await?;
+        retry_fs::create_dir_all(&task.output_dir).await?;
         let mut manifest =
-            tokio::io::BufReader::new(tokio::fs::File::open(diff_manifest_file_path).await?)
-                .lines();
+            tokio::io::BufReader::new(retry_fs::open_file(diff_manifest_file_path).await?).lines();
         let mut errors = vec![];
         let mut tasks = JoinSet::new();
         while let Ok(Some(line)) = manifest.next_line().await {
@@ -362,8 +362,7 @@ async fn update(
 ) -> anyhow::Result<()> {
     debug!("index {triples_path:?} with operation type {update_type:?}");
 
-    let mut turtle_str = String::with_capacity(1024);
-    ungzip(&triples_path, &mut turtle_str).await?;
+    let turtle_str = ungzip(&triples_path).await?;
     let doc = TurtleDoc::try_from((turtle_str.as_str(), None)).map_err(|e| anyhow!("{e}"))?;
 
     for ic in config.index_config.iter() {
@@ -496,7 +495,7 @@ async fn gather_properties(
                         "#,
             prop.name
         );
-        let res = sparql_cli.query(&query).await?;
+        let res = sparql_cli.query(query).await?;
         if res.results.bindings.is_empty()
             || res
                 .results

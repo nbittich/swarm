@@ -3317,6 +3317,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "swarm_retryable_fut",
  "tokio",
  "tracing",
 ]
@@ -3428,10 +3429,19 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "swarm_retryable_fut",
  "tokio",
  "tracing",
  "tracing-subscriber",
  "uuid",
+]
+
+[[package]]
+name = "swarm_retryable_fut"
+version = "0.1.0"
+dependencies = [
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

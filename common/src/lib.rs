@@ -6,6 +6,7 @@ use tracing_subscriber::{EnvFilter, FmtSubscriber, fmt::time::FormatTime};
 
 struct LocalTime;
 
+pub use swarm_retryable_fut::retryable_fut;
 pub use tracing::{debug, error, info, trace, warn};
 pub mod constant;
 pub mod domain;
@@ -14,7 +15,7 @@ pub use futures::*;
 // pub mod alloc;
 pub mod compress;
 pub mod mongo;
-
+pub mod retry_fs;
 pub use serde_json::json;
 impl FormatTime for LocalTime {
     fn format_time(&self, w: &mut tracing_subscriber::fmt::format::Writer<'_>) -> std::fmt::Result {
@@ -48,6 +49,7 @@ pub fn chunk_drain<T>(arr: &mut Vec<T>, chunk_size: usize) -> Vec<Vec<T>> {
     }
     chunks
 }
+
 pub static REGEX_CLEAN_JSESSIONID: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(";jsessionid=[a-zA-Z;0-9]*").expect("could not compile regex")
 });

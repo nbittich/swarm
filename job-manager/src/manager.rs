@@ -25,7 +25,7 @@ use swarm_common::{
     error, info,
     mongo::{Repository, StoreClient, StoreRepository, doc},
     nats_client::{self, NatsClient, PullConsumer, Stream},
-    warn,
+    retry_fs, warn,
 };
 
 use crate::domain::{ApiError, ROOT_OUTPUT_DIR_PB};
@@ -52,7 +52,7 @@ pub struct JobManagerState {
 impl JobManagerState {
     pub async fn new(app_name: &str, job_definitions_path: &str) -> anyhow::Result<Self> {
         type JobDefTypes = Vec<JobDefinition>;
-        let def_json = tokio::fs::read_to_string(job_definitions_path).await?;
+        let def_json = retry_fs::read_to_string(job_definitions_path).await?;
         let mut job_definitions = JobDefTypes::deserialize(&def_json)?;
 
         for jd in job_definitions.iter_mut() {
@@ -105,7 +105,7 @@ impl JobManagerState {
 
         let index_config = {
             info!("reading index config file {index_config_path}...");
-            let config_str = tokio::fs::read_to_string(&index_config_path).await?;
+            let config_str = retry_fs::read_to_string(&index_config_path).await?;
             let ic: Vec<IndexConfiguration> = serde_json::from_str(&config_str)?;
             Arc::new(ic)
         };
@@ -183,7 +183,7 @@ impl JobManagerState {
                 .await?;
             self.task_repository.delete_by_id(&ot.id).await?;
         }
-        if let Err(e) = tokio::fs::remove_dir_all(job.root_dir).await {
+        if let Err(e) = retry_fs::remove_dir_all(job.root_dir).await {
             return Err(anyhow!("could not delete directory {e}"));
         }
         self.job_repository.delete_by_id(&job.id).await?;
@@ -422,7 +422,7 @@ impl JobManagerState {
                 payload: cleanup,
             },
             Payload::ScrapeUrl(url) => {
-                tokio::fs::create_dir_all(&job_root_dir)
+                retry_fs::create_dir_all(&job_root_dir)
                     .await
                     .map_err(|e| ApiError::NewJob(e.to_string()))?;
                 let scrape_url = REGEX_CLEAN_JSESSIONID

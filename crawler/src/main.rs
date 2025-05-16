@@ -4,7 +4,7 @@
 use chrono::Local;
 use rand::distr::{Distribution, Uniform};
 use reqwest::{Client, Url, header::CONTENT_TYPE};
-use std::{env::var, path::Path, str::FromStr, time::Duration};
+use std::{env::var, path::Path, str::FromStr, sync::Arc, time::Duration};
 use swarm_common::{
     IdGenerator, REGEX_CLEAN_JSESSIONID, REGEX_CLEAN_S_UUID, StreamExt, chunk_drain,
     compress::gzip,
@@ -17,9 +17,9 @@ use swarm_common::{
     domain::{JsonMapper, Payload, ScrapeResult, Status, SubTask, SubTaskResult, Task, TaskResult},
     error, info,
     nats_client::{self, NatsClient},
-    setup_tracing,
+    retry_fs, setup_tracing,
 };
-use tokio::{io::AsyncWriteExt, task::JoinSet};
+use tokio::task::JoinSet;
 use util::{Configuration, get_reqwest_client, make_config};
 
 mod util;
@@ -132,13 +132,7 @@ pub async fn append_entry_manifest_file(
     let mut line = page_res.serialize()?;
     line += "\n";
     let path = dir_path.join(MANIFEST_FILE_NAME);
-    let mut manifest_file = tokio::fs::File::options()
-        .create(true)
-        .append(true)
-        .open(path)
-        .await?;
-    manifest_file.write_all(line.as_bytes()).await?;
-
+    retry_fs::append_to_file(path, line).await?;
     Ok(())
 }
 
@@ -304,9 +298,10 @@ async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlPro
                 // debug!("saving url {task_url} to file");
                 let file_name = format!("{}.html", IdGenerator.get());
 
+                let html = Arc::new(html);
                 let path = {
                     let path = configuration.folder_path.join(file_name);
-                    tokio::fs::write(&path, &html).await?;
+                    retry_fs::write(&path, html.clone()).await?;
                     gzip(&path, true).await?
                 };
 

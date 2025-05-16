@@ -5,11 +5,14 @@ use reqwest::{
     Client,
     header::{ACCEPT, HeaderMap, HeaderValue, USER_AGENT},
 };
-use swarm_common::constant::{
-    BUFFER_BACK_PRESSURE, CONNECTION_POOL_MAX_IDLE_PER_HOST, DEFAULT_ACCEPT, DEFAULT_USER_AGENT,
-    INTERESTING_PROPERTIES, MAX_CONCURRENT_JOB, MAX_DELAY_BEFORE_NEXT_RETRY_MILLIS,
-    MAX_DELAY_MILLIS, MAX_RETRY, MIN_DELAY_BEFORE_NEXT_RETRY_MILLIS, MIN_DELAY_MILLIS,
-    REQUEST_TIMEOUT_SEC,
+use swarm_common::{
+    constant::{
+        BUFFER_BACK_PRESSURE, CONNECTION_POOL_MAX_IDLE_PER_HOST, DEFAULT_ACCEPT,
+        DEFAULT_USER_AGENT, INTERESTING_PROPERTIES, MAX_CONCURRENT_JOB,
+        MAX_DELAY_BEFORE_NEXT_RETRY_MILLIS, MAX_DELAY_MILLIS, MAX_RETRY,
+        MIN_DELAY_BEFORE_NEXT_RETRY_MILLIS, MIN_DELAY_MILLIS, REQUEST_TIMEOUT_SEC,
+    },
+    retry_fs,
 };
 
 // static CACHE_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
@@ -103,9 +106,9 @@ pub async fn make_config(client: Client, folder_path: PathBuf) -> anyhow::Result
 
     let href_selector = scraper::Selector::parse("a").map_err(|e| anyhow!("{e}"))?;
     if folder_path.exists() {
-        tokio::fs::remove_dir_all(&folder_path).await?;
+        retry_fs::remove_dir_all(&folder_path).await?;
     }
-    tokio::fs::create_dir_all(&folder_path).await?;
+    retry_fs::create_dir_all(&folder_path).await?;
     let ignore_extensions = [
         ".js", ".css", ".pdf", ".jpg", ".png", ".docx", ".csv", ".xlsx",
     ];

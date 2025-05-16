@@ -26,7 +26,7 @@ use swarm_common::{
     AsyncReadExt, IdGenerator,
     constant::{APPLICATION_NAME, CHUNK_SIZE, ROOT_OUTPUT_DIR, XSD},
     domain::{AuthBody, AuthPayload, Task, TaskResult},
-    error, info, json, setup_tracing, warn,
+    error, info, json, retry_fs, setup_tracing, warn,
 };
 use tokio::{io::BufReader, task::JoinSet};
 use tortank::turtle::turtle_doc::{Node, RdfJsonTriple, Statement, TurtleDoc};
@@ -132,7 +132,7 @@ async fn get_config() -> anyhow::Result<Config> {
         .map(PathBuf::from)
         .unwrap_or_else(|_| "/share".into());
     if !root_output_dir.exists() {
-        tokio::fs::create_dir_all(&root_output_dir).await?;
+        retry_fs::create_dir_all(&root_output_dir).await?;
     }
 
     Ok(Config {
@@ -266,7 +266,7 @@ async fn main() -> anyhow::Result<()> {
             Err(e) => {
                 error!("could not run delta sync! {e}. will try again during the next run...");
                 if consumer_root_dir.exists() {
-                    tokio::fs::remove_dir_all(&consumer_root_dir).await?;
+                    retry_fs::remove_dir_all(&consumer_root_dir).await?;
                 }
             }
         }
@@ -360,12 +360,12 @@ async fn process_zip_file(
     sut: SparqlUpdateType,
 ) -> anyhow::Result<()> {
     info!("processing {dir:?}");
-    let mut read_dir = tokio::fs::read_dir(dir).await?;
+    let mut read_dir = retry_fs::read_dir(dir).await?;
 
     while let Some(entry) = read_dir.next_entry().await? {
         let zip_path = entry.path();
         info!("processing {sut:?} for {zip_path:?}");
-        let mut zip_file = BufReader::new(tokio::fs::File::open(&zip_path).await?);
+        let mut zip_file = BufReader::new(retry_fs::open_file(&zip_path).await?);
         let mut zip_reader = ZipFileReader::with_tokio(&mut zip_file).await?;
         for idx in 0..zip_reader.file().entries().len() {
             let mut entry_reader = zip_reader.reader_with_entry(idx).await?;
@@ -426,25 +426,25 @@ async fn consume(
         return Ok(vec![]);
     }
 
-    tokio::fs::create_dir(&consumer_root_dir).await?;
+    retry_fs::create_dir_all(&consumer_root_dir).await?;
 
     // now the interesting bits. we can download the files in parallel
     // but we will insert/remove triple files one by one
     let new_inserts_dir = consumer_root_dir.join("new-inserts");
-    tokio::fs::create_dir(&new_inserts_dir).await?;
+    retry_fs::create_dir_all(&new_inserts_dir).await?;
 
     let mut to_remove_dir = if is_initial_sync {
         None
     } else {
         let trd = consumer_root_dir.join("to-remove");
-        tokio::fs::create_dir(&trd).await?;
+        retry_fs::create_dir_all(&trd).await?;
         Some(trd)
     };
     let mut intersect_dir = if !is_initial_sync {
         None
     } else {
         let trd = consumer_root_dir.join("intersects");
-        tokio::fs::create_dir(&trd).await?;
+        retry_fs::create_dir_all(&trd).await?;
         Some(trd)
     };
 
@@ -526,7 +526,7 @@ async fn consume(
     }
     // cleanup
     if config.delete_files {
-        tokio::fs::remove_dir_all(consumer_root_dir).await?;
+        retry_fs::remove_dir_all(consumer_root_dir).await?;
     }
     Ok(tasks.into_iter().map(|t| t.id).collect())
 }
@@ -597,17 +597,16 @@ async fn download(
     download_path: &Path,
     local_path: &Path,
 ) -> anyhow::Result<()> {
-    info!("download {download_path:?} in {local_path:?}");
+    // info!("download {download_path:?} in {local_path:?}");
+
     let mut resp = swarm_client
         .get(url)
-        .query(&[("path", download_path)])
+        .query(&[("path", &download_path)])
         .send()
         .await?;
-    let mut f = tokio::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(local_path)
-        .await?;
+    let mut options = tokio::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    let mut f = retry_fs::open_file_with_options(local_path, options).await?;
     while let Some(chunk) = resp.chunk().await? {
         tokio::io::copy(&mut chunk.as_ref(), &mut f).await?;
     }
@@ -657,7 +656,7 @@ async fn add_consumed_task(config: &Config, task_id: &str) -> anyhow::Result<()>
     "#
     );
 
-    config.sparql_client.update(&q).await
+    config.sparql_client.update(q).await
 }
 async fn update_initial_sync(config: &Config, initial_sync: bool) -> anyhow::Result<()> {
     let graph = &config.swarm_graph;
@@ -681,7 +680,7 @@ async fn update_initial_sync(config: &Config, initial_sync: bool) -> anyhow::Res
     "#
     );
 
-    config.sparql_client.update(&q).await
+    config.sparql_client.update(q).await
 }
 async fn get_state(config: &Config) -> anyhow::Result<SyncConsumerState> {
     let q = format!(
@@ -697,7 +696,7 @@ async fn get_state(config: &Config) -> anyhow::Result<SyncConsumerState> {
    "#,
         config.swarm_graph
     );
-    let res = config.sparql_client.query(&q).await?;
+    let res = config.sparql_client.query(q).await?;
 
     let mut consumed_task_ids = Vec::with_capacity(res.results.bindings.len());
     for mut binding in res.results.bindings {
@@ -718,7 +717,7 @@ async fn get_state(config: &Config) -> anyhow::Result<SyncConsumerState> {
    "#,
         config.swarm_graph
     );
-    let res = config.sparql_client.query(&q).await?;
+    let res = config.sparql_client.query(q).await?;
 
     let initial_sync_ran = if res.results.bindings.is_empty() {
         false

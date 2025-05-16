@@ -16,3 +16,4 @@ reqwest = { workspace = true, features = ["json"] }
 anyhow = { workspace = true, features = ["backtrace"] }
 tokio = { workspace = true, features = ["time"] }
 tracing.workspace = true
+swarm_retryable_fut.workspace=true

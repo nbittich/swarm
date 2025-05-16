@@ -22,12 +22,9 @@ use swarm_common::{
     domain::{DiffResult, JsonMapper, Payload, Status, Task, TaskResult},
     error, info,
     nats_client::{self, NatsClient},
-    setup_tracing,
+    retry_fs, setup_tracing,
 };
-use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt},
-    task::JoinSet,
-};
+use tokio::{io::AsyncBufReadExt, task::JoinSet};
 use tortank::turtle::turtle_doc::TurtleDoc;
 
 #[derive(Clone)]
@@ -135,23 +132,13 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn append_to_file(path: &Path, s: &str) -> anyhow::Result<()> {
-    let mut f = tokio::fs::File::options()
-        .create(true)
-        .append(true)
-        .open(path)
-        .await?;
-    f.write_all(s.as_bytes()).await?;
-    Ok(())
-}
-
 pub async fn gzip_and_append_to_dir(dir: &Path, file: &Path) -> anyhow::Result<()> {
     let gzip_file = gzip(file, false).await?; // we don't delete the file as we delete the whole
     // folder later.
     // in this case we must ackshually copy the file because otherwise it will be moved from the
     // diff step folder.
     let final_path = PathBuf::from(dir).join(gzip_file.file_name().context("no filename")?);
-    tokio::fs::copy(gzip_file, final_path).await?;
+    retry_fs::copy(gzip_file, final_path).await?;
     Ok(())
 }
 
@@ -162,16 +149,14 @@ pub async fn zip(path: &Path) -> anyhow::Result<PathBuf> {
         "{}.zip",
         path.file_name().context("zip: filename")?.to_string_lossy()
     ));
-    let mut zip = tokio::fs::File::create(&zip_path).await?;
+    let mut zip = retry_fs::create_file(&zip_path).await?;
     let mut writer = ZipFileWriter::with_tokio(&mut zip);
-    let mut entries = tokio::fs::read_dir(&path).await?;
+    let mut entries = retry_fs::read_dir(&path).await?;
     while let Some(entry) = entries.next_entry().await? {
         let path = entry.path();
         if path.is_dir() {
             return Err(anyhow!("zip: recursive not implemented."));
         } else {
-            let mut file = tokio::fs::File::open(&path).await?;
-
             let builder = ZipEntryBuilder::new(
                 path.file_name()
                     .context("zip entry: no filename {path:?}")?
@@ -180,13 +165,12 @@ pub async fn zip(path: &Path) -> anyhow::Result<PathBuf> {
                     .into(),
                 Compression::Deflate,
             );
-            let mut data = Vec::new();
-            file.read_to_end(&mut data).await?;
+            let data = retry_fs::read_to_end(path).await?;
             writer.write_entry_whole(builder, &data).await?;
         }
     }
     writer.close().await?;
-    tokio::fs::remove_dir_all(&path).await?;
+    retry_fs::remove_dir_all(&path).await?;
     Ok(zip_path)
 }
 
@@ -199,26 +183,26 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
     } = &task.payload
     {
         if task.output_dir.exists() {
-            tokio::fs::remove_dir_all(&task.output_dir).await?;
+            retry_fs::remove_dir_all(&task.output_dir).await?;
         }
-        tokio::fs::create_dir_all(&task.output_dir).await?;
+        retry_fs::create_dir_all(&task.output_dir).await?;
         let mut manifest =
-            tokio::io::BufReader::new(tokio::fs::File::open(&manifest_file_path).await?).lines();
+            tokio::io::BufReader::new(retry_fs::open_file(&manifest_file_path).await?).lines();
 
         let removed_triple_file_path = task
             .output_dir
             .join(format!("removed-triples-{}", IdGenerator.get()));
 
-        tokio::fs::create_dir_all(&removed_triple_file_path).await?;
+        retry_fs::create_dir_all(&removed_triple_file_path).await?;
         let inserted_triple_file_path = task
             .output_dir
             .join(format!("inserted-triples-{}", IdGenerator.get()));
-        tokio::fs::create_dir_all(&inserted_triple_file_path).await?;
+        retry_fs::create_dir_all(&inserted_triple_file_path).await?;
         // for e.g initial sync
         let intersect_triple_file_path = task
             .output_dir
             .join(format!("intersection-triples-{}", IdGenerator.get()));
-        tokio::fs::create_dir_all(&intersect_triple_file_path).await?;
+        retry_fs::create_dir_all(&intersect_triple_file_path).await?;
         // for debugging, maybe retrying
 
         let failed_query_file_path = task
@@ -356,8 +340,7 @@ async fn update(
 ) -> anyhow::Result<()> {
     debug!("update {triples_path:?} with type {update_type:?} to {append_to_file_path:?}");
 
-    let mut turtle_str = String::with_capacity(1024);
-    ungzip(&triples_path, &mut turtle_str).await?;
+    let turtle_str = ungzip(&triples_path).await?;
     let doc = TurtleDoc::try_from((turtle_str.as_str(), None)).map_err(|e| anyhow!("{e}"))?;
     let mut tasks = JoinSet::new();
 
@@ -381,7 +364,7 @@ async fn update(
         match handle? {
             Ok(_) => {}
             Err(failed_query) => {
-                append_to_file(query_error_path, &format!("{failed_query}\n;\n")).await?
+                retry_fs::append_to_file(query_error_path, format!("{failed_query}\n;\n")).await?
             }
         }
     }

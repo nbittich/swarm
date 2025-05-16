@@ -15,7 +15,7 @@ use swarm_common::{
     error, info,
     mongo::{Repository, StoreClient, StoreRepository, doc},
     nats_client::{self, NatsClient},
-    setup_tracing,
+    retry_fs, setup_tracing,
 };
 
 #[derive(Clone)]
@@ -163,13 +163,13 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<()> {
                 .delete_by_id(&task_to_clean.id)
                 .await?;
             debug!("deleting task directory {:?}...", task_to_clean.output_dir);
-            if let Err(e) = tokio::fs::remove_dir_all(&task_to_clean.output_dir).await {
+            if let Err(e) = retry_fs::remove_dir_all(&task_to_clean.output_dir).await {
                 error!("could not delete task directory: {e}");
             }
             debug!("directory task {:?} deleted.", task_to_clean.output_dir);
         }
         debug!("deleting job directory {:?}...", job_to_clean.root_dir);
-        if let Err(e) = tokio::fs::remove_dir_all(&job_to_clean.root_dir).await {
+        if let Err(e) = retry_fs::remove_dir_all(&job_to_clean.root_dir).await {
             error!("could not delete job directory: {e}");
         }
         debug!("job directory {:?} deleted.", job_to_clean.root_dir);

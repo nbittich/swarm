@@ -1,4 +1,4 @@
-use std::{sync::LazyLock, time::Duration};
+use std::{fmt::Debug, sync::LazyLock, time::Duration};
 
 use crate::{
     constant::{
@@ -17,6 +17,7 @@ use async_nats::{
         stream::{Config, DiscardPolicy},
     },
 };
+use tracing::instrument;
 
 pub static NATS_WAIT_BEFORE_REDELIVERY: LazyLock<Duration> = LazyLock::new(|| {
     std::env::var(NATS_ACK_WAIT)
@@ -25,6 +26,7 @@ pub static NATS_WAIT_BEFORE_REDELIVERY: LazyLock<Duration> = LazyLock::new(|| {
         .map(Duration::from_secs)
         .unwrap_or_else(|_| panic!("missing {NATS_ACK_WAIT}"))
 });
+
 #[derive(Clone, Debug)]
 pub struct NatsClient {
     pub client: Client,
@@ -93,7 +95,12 @@ impl NatsClient {
 
         Ok(consumer)
     }
-    pub async fn publish(&self, subject: String, payload: &impl JsonMapper) -> anyhow::Result<()> {
+    #[instrument(level = "debug")]
+    pub async fn publish(
+        &self,
+        subject: String,
+        payload: &(impl JsonMapper + Debug),
+    ) -> anyhow::Result<()> {
         let bytes = payload.serialize_bytes()?;
         self.jetstream.publish(subject, bytes.into()).await?; // do not wait for ack?
         Ok(())
