@@ -191,6 +191,7 @@ async fn sparql(
         })
         .into_response())
     } else {
+        spargebra::Query::parse(&query, None).map_err(|e| ApiError::SparqlError(e.to_string()))?;
         let accept_header = headers
             .get(ACCEPT)
             .and_then(|h| h.to_str().ok())

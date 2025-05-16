@@ -335,7 +335,7 @@ async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlPro
                             .filter(|p| interesting_properties.iter().any(|ip| p.contains(ip)))
                             .is_none()
                         {
-                            // debug!("{a_property:?} doesn't have interesting properties");
+                            debug!("{a_property:?} doesn't have interesting properties");
                             continue;
                         }
                     }
