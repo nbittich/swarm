@@ -8,7 +8,6 @@ use sparql_client::{SparqlClient, SparqlUpdateType, TARGET_GRAPH};
 use std::{
     env::var,
     path::{Path, PathBuf},
-    time::Duration,
 };
 use swarm_common::{
     IdGenerator, StreamExt,
@@ -209,7 +208,6 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
             .output_dir
             .join(format!("failed-queries-{}.sparql", IdGenerator.get()));
         let mut errors = vec![];
-        let mut tasks = JoinSet::new();
         while let Ok(Some(line)) = manifest.next_line().await {
             if line.trim().is_empty() {
                 continue;
@@ -228,23 +226,17 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
                 intersect_triple_file_path.to_path_buf(),
                 failed_query_file_path.to_path_buf(),
             );
-            tasks.spawn(async move {
-                publish(
-                    &line,
-                    &config,
-                    &removed_triple_file_path,
-                    &inserted_triple_file_path,
-                    &intersect_triple_file_path,
-                    &failed_query_file_path,
-                )
-                .await
-            });
-            // sleep for a while
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-        while let Some(handle) = tasks.join_next().await {
-            match handle.map_err(|e| anyhow!("{e}")) {
-                Err(e) | Ok(Err(e)) => {
+            match publish(
+                &line,
+                &config,
+                &removed_triple_file_path,
+                &inserted_triple_file_path,
+                &intersect_triple_file_path,
+                &failed_query_file_path,
+            )
+            .await
+            {
+                Err(e) => {
                     errors.push(format!("error during publishing!  error: {e:?}"));
                 }
                 _ => {}
