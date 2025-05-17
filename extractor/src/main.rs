@@ -153,7 +153,7 @@ async fn handle_task(nc: &NatsClient, task: &mut Task) -> anyhow::Result<Option<
             let _ = nc
                 .publish(SUB_TASK_STATUS_CHANGE_EVENT(&sub_task.id), &sub_task)
                 .await;
-            tasks.spawn(tokio::spawn(async move {
+            tasks.spawn(async move {
                 match extract_rdfa(&line, &out_dir).await {
                     Ok(o) => Ok((sub_task, o)),
                     Err(ExtractRDFaError { base_url, error }) => {
@@ -166,12 +166,12 @@ async fn handle_task(nc: &NatsClient, task: &mut Task) -> anyhow::Result<Option<
                         Err((sub_task, error))
                     }
                 }
-            }));
+            });
             // sleep just a little to avoid using all the cpu
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
         while let Some(handle) = tasks.join_next().await {
-            let mut sub_task = match handle?? {
+            let mut sub_task = match handle? {
                 Ok((mut sub_task, res @ NTripleResult { len: 0, .. })) => {
                     sub_task.status = Status::Failed(vec!["did not extract any data".into()]);
                     sub_task.result = Some(SubTaskResult::NTriple(res));

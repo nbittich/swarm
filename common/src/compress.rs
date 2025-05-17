@@ -25,7 +25,7 @@ pub async fn gzip(path: &Path, delete: bool) -> anyhow::Result<PathBuf> {
     let path = Arc::new(path.to_path_buf());
 
     let inner_path = path.clone();
-    match retryable_fut(
+    retryable_fut(
         *retry_fs::MAX_RETRY,
         *retry_fs::DELAY_BEFORE_NEXT_RETRY,
         async move || {
@@ -41,19 +41,13 @@ pub async fn gzip(path: &Path, delete: bool) -> anyhow::Result<PathBuf> {
             let mut buf = BufReader::new(input_file);
             tokio::io::copy_buf(&mut buf, &mut encoder).await?;
             encoder.shutdown().await?;
-            Ok(gzip_path)
-        },
-    )
-    .await
-    {
-        Ok(gzip_path) => {
             if delete {
                 tokio::fs::remove_file(path.as_ref()).await?;
             }
             Ok(gzip_path)
-        }
-        v @ Err(_) => v,
-    }
+        },
+    )
+    .await
 }
 #[instrument(level = "debug")]
 pub async fn ungzip(path: impl AsRef<Path> + Debug) -> anyhow::Result<String> {
