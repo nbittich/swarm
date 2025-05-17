@@ -12,6 +12,7 @@ use axum::{
 };
 use jsonwebtoken::Header;
 use mime_guess::mime::APPLICATION_OCTET_STREAM;
+use serde_json::{Value, json};
 use sparql_client::{Head, SparqlResponse, SparqlResult};
 use swarm_common::{
     TryFutureExt, debug,
@@ -52,6 +53,8 @@ pub async fn serve(
         .route("/search-configuration", get(search_configuration))
         .route("/login", post(authorize))
         .route("/scheduled-jobs/new", post(new_scheduled_job))
+        .route("/scheduled-jobs/{id}/update", post(update_scheduled_job))
+        .route("/scheduled-jobs/{id}/run", post(run_scheduled_job))
         .route("/scheduled-jobs/{id}", delete(delete_scheduled_job))
         .route("/scheduled-jobs", post(all_scheduled_jobs))
         .route("/jobs/{job_id}", get(get_job))
@@ -236,9 +239,33 @@ async fn new_scheduled_job(
     }): Json<NewScheduledJobPayload>,
 ) -> Result<Json<ScheduledJob>, ApiError> {
     let sj = manager
-        .new_scheduled_job(name, definition_id, task_definition, cron_expr)
+        .upsert_scheduled_job(name, None, definition_id, task_definition, cron_expr)
         .await?;
     Ok(Json(sj))
+}
+async fn update_scheduled_job(
+    State(manager): State<JobManagerState>,
+    _: Claims,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    Json(NewScheduledJobPayload {
+        name,
+        definition_id,
+        task_definition,
+        cron_expr,
+    }): Json<NewScheduledJobPayload>,
+) -> Result<Json<ScheduledJob>, ApiError> {
+    let sj = manager
+        .upsert_scheduled_job(name, Some(id), definition_id, task_definition, cron_expr)
+        .await?;
+    Ok(Json(sj))
+}
+async fn run_scheduled_job(
+    State(manager): State<JobManagerState>,
+    _: Claims,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    manager.run_scheduled_job_manually(id).await?;
+    Ok(Json(json!({"message": "ok usa"})))
 }
 
 async fn get_job(

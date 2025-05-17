@@ -50,7 +50,8 @@ pub enum ApiError {
     Download(String),
     NewJob(String),
     CronExpression(String),
-    NewScheduledJob(String),
+    UpsertScheduledJob(String),
+    RunScheduledJob(String),
     JobDefinitionNotFound,
 }
 
@@ -187,7 +188,8 @@ impl IntoResponse for ApiError {
             | ApiError::SparqlError(e)
             | ApiError::SearchError(e)
             | ApiError::NewJob(e)
-            | ApiError::NewScheduledJob(e)
+            | ApiError::UpsertScheduledJob(e)
+            | ApiError::RunScheduledJob(e)
             | ApiError::CronExpression(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
             ApiError::JobDefinitionNotFound => {
                 (StatusCode::NOT_FOUND, "job definition not found".to_owned())

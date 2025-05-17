@@ -354,8 +354,10 @@ impl JobManagerState {
         }
         Ok(())
     }
-    pub async fn new_scheduled_job(
+
+    pub async fn upsert_scheduled_job(
         &self,
+        id: Option<String>,
         name: Option<String>,
         definition_id: String,
         task_definition: TaskDefinition,
@@ -373,9 +375,24 @@ impl JobManagerState {
             .map_err(|e| ApiError::CronExpression(e.to_string()))?;
         let next_execution = schedule.upcoming(chrono::Local).next();
 
+        let (id, creation_date) = if let Some(id) = id {
+            let Some(sj) = self
+                .scheduled_job_repository
+                .find_by_id(&id)
+                .await
+                .map_err(|e| ApiError::UpsertScheduledJob(e.to_string()))?
+            else {
+                return Err(ApiError::UpsertScheduledJob(
+                    "scheduled job not found".to_string(),
+                ));
+            };
+            (Some(sj.id), Some(sj.creation_date))
+        } else {
+            (None, None)
+        };
         let scheduled_job = ScheduledJob {
-            id: IdGenerator.get(),
-            creation_date: Local::now(),
+            id: id.unwrap_or_else(|| IdGenerator.get()),
+            creation_date: creation_date.unwrap_or_else(|| Local::now()),
             task_definition,
             name,
             definition_id,
@@ -383,11 +400,25 @@ impl JobManagerState {
             cron_expr,
         };
         self.scheduled_job_repository
-            .insert_one(&scheduled_job)
+            .upsert(&scheduled_job.id, &scheduled_job)
             .await
-            .map_err(|e| ApiError::NewScheduledJob(e.to_string()))?;
+            .map_err(|e| ApiError::UpsertScheduledJob(e.to_string()))?;
         Ok(scheduled_job)
     }
+    pub async fn run_scheduled_job_manually(&self, sj_id: String) -> Result<(), ApiError> {
+        let Some(sj) = self
+            .scheduled_job_repository
+            .find_by_id(&sj_id)
+            .await
+            .map_err(|e| ApiError::RunScheduledJob(e.to_string()))?
+        else {
+            return Err(ApiError::RunScheduledJob("scheduled job not found".into()));
+        };
+        self.new_job(sj.definition_id, sj.name, sj.task_definition)
+            .await?;
+        Ok(())
+    }
+
     pub async fn new_job(
         &self,
         definition_id: String,
