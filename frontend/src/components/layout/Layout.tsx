@@ -9,7 +9,7 @@ import {
     HomeOutlined,
     SearchOutlined,
 } from "@ant-design/icons";
-import { App, Button, ConfigProvider, Drawer, Flex, Image, Layout, Menu, MenuProps, Switch, theme } from "antd";
+import { App, Button, ConfigProvider, Drawer, Flex, Layout, Menu, MenuProps, Switch, theme } from "antd";
 import React, { useEffect, useState } from "react";
 import MenuItem from "antd/es/menu/MenuItem";
 import { useAuth } from "@swarm/auth/authContextHook";
@@ -20,6 +20,7 @@ import { gray, } from "@ant-design/colors";
 import { useNavigate } from "react-router-dom";
 import Link from "antd/es/typography/Link";
 import { useIsMobile } from "@swarm/hooks/is-mobile";
+import FaviconIcon from "./Favicon";
 /* import frBE from 'antd/lib/locale/fr_BE'; */
 type MenuItem = Required<MenuProps>['items'][number];
 
@@ -54,6 +55,7 @@ export default function MainLayout() {
     const defaultToken = theme.useToken().token;
     const backgroundColor = darkMode ? darkToken.colorBgContainer : defaultToken.colorBgContainer;
     const handleThemeToggle = (checked: boolean) => {
+        localStorage.setItem('theme', checked + '');
         dispatch(toggleTheme(checked));
     };
 
@@ -87,7 +89,8 @@ export default function MainLayout() {
 
 
     useEffect(() => {
-        dispatch(toggleTheme(window.matchMedia('(prefers-color-scheme: dark)').matches));
+        const theme = localStorage.getItem('theme') ? localStorage.getItem('theme') === "true" : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        dispatch(toggleTheme(theme));
     }, [dispatch]);
 
     const handleNavigation = (route: string) => {
@@ -151,10 +154,7 @@ export default function MainLayout() {
                                 borderRadius: 0
                             }}
                         />
-                        <a onClick={() => handleNavigation("/")}><Image preview={false} src="/favicon.svg" width={24} height={24}
-                            style={{
-                                verticalAlign: "middle",
-                            }} /></a>
+                        <FaviconIcon handleNavigation={handleNavigation} />
                         <Switch
                             checked={darkMode}
                             style={{ padding: 0, marginRight: 10 }}

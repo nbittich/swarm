@@ -20,6 +20,18 @@ const MarkdownViewer = ({ filePath, gallery }: { filePath: string, gallery?: str
     }
 
     const darkMode = useSelector((state: RootState) => state.theme.darkMode);
+    const MarkdownComp =
+        () => (<ReactMarkdown
+            components={{
+                img: ({ src, alt, title }) => (
+                    <Image
+                        src={darkMode ? getDarkImg(src) : src}
+                        alt={alt}
+                        title={title}
+                        preview={false} />
+                ),
+            }}
+            remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>);
     useEffect(() => {
         fetch(filePath)
             .then((response) => {
@@ -35,7 +47,7 @@ const MarkdownViewer = ({ filePath, gallery }: { filePath: string, gallery?: str
     return (
 
         <Flex justify='center' align='center' vertical>
-            <Col span={isMobile ? 24 : 16}>
+            <Col span={isMobile ? 24 : 18}>
                 <Space>
                     {gallery && gallery.map(pic => <Image key={pic} preview={true} loading='lazy' src={pic}
 
@@ -43,21 +55,10 @@ const MarkdownViewer = ({ filePath, gallery }: { filePath: string, gallery?: str
                 </Space>
 
             </Col>
-            <Col span={isMobile ? 24 : 16}>
-                <Card>
-
-                    <ReactMarkdown
-                        components={{
-                            img: ({ src, alt, title }) => (
-                                <Image
-                                    src={darkMode ? getDarkImg(src) : src}
-                                    alt={alt}
-                                    title={title}
-                                    preview={false} />
-                            ),
-                        }}
-                        remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
-                </Card>
+            <Col span={isMobile ? 24 : 18}>
+                {isMobile ? <MarkdownComp /> : <Card>
+                    <MarkdownComp />
+                </Card>}
             </Col>
 
 
