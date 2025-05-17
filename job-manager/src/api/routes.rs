@@ -239,7 +239,7 @@ async fn new_scheduled_job(
     }): Json<NewScheduledJobPayload>,
 ) -> Result<Json<ScheduledJob>, ApiError> {
     let sj = manager
-        .upsert_scheduled_job(name, None, definition_id, task_definition, cron_expr)
+        .upsert_scheduled_job(None, name, definition_id, task_definition, cron_expr)
         .await?;
     Ok(Json(sj))
 }
@@ -255,7 +255,7 @@ async fn update_scheduled_job(
     }): Json<NewScheduledJobPayload>,
 ) -> Result<Json<ScheduledJob>, ApiError> {
     let sj = manager
-        .upsert_scheduled_job(name, Some(id), definition_id, task_definition, cron_expr)
+        .upsert_scheduled_job(Some(id), name, definition_id, task_definition, cron_expr)
         .await?;
     Ok(Json(sj))
 }

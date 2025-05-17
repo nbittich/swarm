@@ -6,7 +6,7 @@ import cron from 'cron-validate';
 import dayjs from 'dayjs';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@swarm/states/Store';
-import { addScheduledJob, deleteScheduledJob, fetchScheduledJobs, setPageable } from '@swarm/states/ScheduledJobSlice';
+import { addScheduledJob, runScheduledJobManually, deleteScheduledJob, fetchScheduledJobs, setPageable } from '@swarm/states/ScheduledJobSlice';
 import { fetchJobDefinitions } from '@swarm/states/JobDefinitionSlice';
 import { useDebouncedCallback } from 'use-debounce';
 import { SorterResult } from 'antd/es/table/interface';
@@ -63,6 +63,10 @@ const ScheduledJobsTable: React.FC = () => {
 
     const deleteJob = (job: ScheduledJob) => {
         dispatch(deleteScheduledJob(job._id));
+    };
+
+    const runJob = (job: ScheduledJob) => {
+        dispatch(runScheduledJobManually(job._id));
     };
 
 
@@ -156,17 +160,27 @@ const ScheduledJobsTable: React.FC = () => {
             title: 'Action',
             key: 'action',
             align: 'center',
-            render: (_, record) => (
+            render: (_, record) => (<>                <Popconfirm
+                placement='left'
+                title="Delete the scheduled job"
+                description="Are you sure to delete this scheduled job?"
+                onConfirm={() => deleteJob(record)}
+                okText="Yes"
+                cancelText="No"
+            >
+                <Button disabled={!token} type="link" shape="default" danger icon={<DeleteOutlined />} />
+            </Popconfirm>
                 <Popconfirm
-                    placement='left'
-                    title="Delete the scheduled job"
-                    description="Are you sure to delete this scheduled job?"
-                    onConfirm={() => deleteJob(record)}
+                    placement='right'
+                    title="Run the scheduled job"
+                    description="Are you sure to run this scheduled job?"
+                    onConfirm={() => runJob(record)}
                     okText="Yes"
                     cancelText="No"
                 >
                     <Button disabled={!token} type="link" shape="default" danger icon={<DeleteOutlined />} />
-                </Popconfirm>
+                </Popconfirm></>
+
             ),
         }
     ];

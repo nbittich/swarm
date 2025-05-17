@@ -68,6 +68,17 @@ export const deleteScheduledJob = createAsyncThunk(
         }
     }
 );
+export const runScheduledJobManually = createAsyncThunk(
+    'scheduledJobs/runScheduledJobManually',
+    async (jobId: string, { rejectWithValue }) => {
+        try {
+            await axios.delete(`/api/scheduled-jobs/${jobId}/run`);
+            return jobId;
+        } catch (error) {
+            return rejectWithValue(error);
+        }
+    }
+);
 export const fetchScheduledJobs = createAsyncThunk(
     'scheduledJobs/fetchScheduledJobs',
     async (pagination?: Pageable) => {
@@ -140,6 +151,18 @@ const scheduledJobsSlice = createSlice({
                 state.loading = false;
                 state.error = action.payload as string;
                 message.error("could not add scheduled job!");
+            })
+            .addCase(runScheduledJobManually.pending, (state) => {
+                state.loading = true;
+            })
+            .addCase(runScheduledJobManually.fulfilled, (state, _) => {
+                state.loading = false;
+                message.success("Scheduled job started.");
+            })
+            .addCase(runScheduledJobManually.rejected, (state, action) => {
+                state.loading = false;
+                state.error = action.payload as string;
+                message.error("could not start scheduled job!");
             })
             .addCase(deleteScheduledJob.pending, (state) => {
                 state.loading = true;
