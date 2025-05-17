@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Card, Col, Flex, Image, Space, } from 'antd';
+import { Card, Col, Flex, Image, Space, Typography, } from 'antd';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useSelector } from 'react-redux';
@@ -23,6 +23,7 @@ const MarkdownViewer = ({ filePath, gallery }: { filePath: string, gallery?: str
     const MarkdownComp =
         () => (<ReactMarkdown
             components={{
+                p: (props) => <Typography.Paragraph {...props} />,
                 img: ({ src, alt, title }) => (
                     <Image
                         src={darkMode ? getDarkImg(src) : src}
