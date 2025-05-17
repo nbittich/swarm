@@ -12,6 +12,7 @@ import { useDebouncedCallback } from 'use-debounce';
 import { SorterResult } from 'antd/es/table/interface';
 import { useAuth } from '@swarm/auth/authContextHook';
 import { useIsMobile } from '@swarm/hooks/is-mobile';
+import UpsertScheduledJob from './UpsertScheduledJob';
 const { Option } = Select;
 const ScheduledJobsTable: React.FC = () => {
     const isMobile = useIsMobile();
@@ -29,16 +30,6 @@ const ScheduledJobsTable: React.FC = () => {
     const [taskDefinition, setTaskDefinition] = useState<TaskDefinition | null>(null);
     const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
     const [form] = Form.useForm();
-
-    const handleJobDefinitionChange = (id: string) => {
-        const selectedJD = jobDefinitions.find((jd) => jd.id === id);
-
-        if (selectedJD && selectedJD.tasks.length > 0) {
-            const firstTask = selectedJD.tasks[0];
-
-            setTaskDefinition(firstTask);
-        }
-    };
 
     const toggleModal = (value: boolean) => {
         form.resetFields();
@@ -230,77 +221,11 @@ const ScheduledJobsTable: React.FC = () => {
 
                 )}
             >
-                <Form form={form} onFinish={handleAddScheduledJob} layout="vertical">
-                    <Form.Item
-                        name="jobName"
-                        label="Job Name"
-                    >
-                        <Input />
-                    </Form.Item>
-                    <Form.Item
-                        name="definitionId"
-                        label="Job Definition"
-                        rules={[{ required: true, message: 'Please select a job definition' }]}
-                    >
-                        <Select placeholder="Select Job Definition" onChange={handleJobDefinitionChange}>
-                            {jobDefinitions && jobDefinitions.map((definition) => (
-                                <Option key={definition.id} value={definition.id}>
-                                    {definition.name}
-                                </Option>
-                            ))}
-                        </Select>
-                    </Form.Item>
-
-                    {taskDefinition && taskDefinition.payload.type === "scrapeUrl" && (
-                        <Form.Item
-                            name="targetUrl"
-                            label="Target Url"
-                            rules={[
-                                { type: "url", message: "Please enter a valid url" },
-                                { required: true, message: "url is required" },
-                            ]}
-                        >
-                            <Input />
-                        </Form.Item>
-                    )}
-                    {taskDefinition && taskDefinition.payload.type === "cleanup" && (
-                        <Form.Item
-                            name="status"
-                            label="Status"
-                            rules={[{ required: true, message: "Status is required" }]}
-                        >
-                            <Select placeholder="Select status">
-                                {statusOptions.map((status) => (
-                                    <Option value={status.type} key={status.type}>
-                                        {status.type}
-                                    </Option>
-                                ))}
-                            </Select>
-                        </Form.Item>
-                    )}
-
-                    <Form.Item
-                        name="cronExpr"
-                        label="Cron Expression"
-                        rules={[{ required: true, message: 'Please set a cron expression' },
-                        () => ({
-                            validator(_, value) {
-                                if (!value?.length) {
-                                    return Promise.resolve();
-                                }
-                                const res = cron(value, { override: { useAliases: true, useYears: true, useSeconds: true } });
-                                if (res.isValid()) {
-                                    return Promise.resolve();
-                                } else {
-                                    return Promise.reject(new Error(res.getError().join(',')));
-                                }
-                            },
-                        }),
-                        ]}
-                    >
-                        <Input />
-                    </Form.Item>
-                </Form>
+                <UpsertScheduledJob form={form}
+                    jobDefinitions={jobDefinitions}
+                    onFinish={handleAddScheduledJob}
+                    taskDefinition={taskDefinition}
+                    setTaskDefinition={setTaskDefinition} />
             </Modal>
 
         </>
