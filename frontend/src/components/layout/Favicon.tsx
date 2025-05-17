@@ -1,6 +1,5 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, } from "react";
 import "./Favicon.css";
-import { Image } from 'antd';
 
 type Props = {
     handleNavigation: (path: string) => void;
