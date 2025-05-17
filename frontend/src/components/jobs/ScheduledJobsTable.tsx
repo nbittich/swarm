@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Button, Space, Modal, Form, Input, Flex, Select, TableProps, Popconfirm, Tag, PaginationProps, } from 'antd';
-import { DeleteOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined, SyncOutlined, ApiOutlined } from '@ant-design/icons';
 import { ScheduledJob, statusOptions, TaskDefinition, } from '@swarm/models/domain';
 import cron from 'cron-validate';
 import dayjs from 'dayjs';
@@ -160,16 +160,17 @@ const ScheduledJobsTable: React.FC = () => {
             title: 'Action',
             key: 'action',
             align: 'center',
-            render: (_, record) => (<>                <Popconfirm
-                placement='left'
-                title="Delete the scheduled job"
-                description="Are you sure to delete this scheduled job?"
-                onConfirm={() => deleteJob(record)}
-                okText="Yes"
-                cancelText="No"
-            >
-                <Button disabled={!token} type="link" shape="default" danger icon={<DeleteOutlined />} />
-            </Popconfirm>
+            render: (_, record) => (<>
+                <Popconfirm
+                    placement='left'
+                    title="Delete the scheduled job"
+                    description="Are you sure to delete this scheduled job?"
+                    onConfirm={() => deleteJob(record)}
+                    okText="Yes"
+                    cancelText="No"
+                >
+                    <Button disabled={!token} type="link" shape="default" danger icon={<DeleteOutlined />} />
+                </Popconfirm>
                 <Popconfirm
                     placement='right'
                     title="Run the scheduled job"
@@ -178,7 +179,7 @@ const ScheduledJobsTable: React.FC = () => {
                     okText="Yes"
                     cancelText="No"
                 >
-                    <Button disabled={!token} type="link" shape="default" danger icon={<DeleteOutlined />} />
+                    <Button disabled={!token} type="link" shape="default" icon={<ApiOutlined />} />
                 </Popconfirm></>
 
             ),

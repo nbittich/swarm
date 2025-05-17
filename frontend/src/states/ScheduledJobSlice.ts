@@ -72,7 +72,7 @@ export const runScheduledJobManually = createAsyncThunk(
     'scheduledJobs/runScheduledJobManually',
     async (jobId: string, { rejectWithValue }) => {
         try {
-            await axios.delete(`/api/scheduled-jobs/${jobId}/run`);
+            await axios.post(`/api/scheduled-jobs/${jobId}/run`);
             return jobId;
         } catch (error) {
             return rejectWithValue(error);

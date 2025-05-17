@@ -1,6 +1,5 @@
 import { RouterProvider, createBrowserRouter } from "react-router-dom";
 import { ProtectedRoute } from "./ProtectedRoute";
-import { useAuth } from "@swarm/auth/authContextHook";
 import Logout from "@swarm/components/auth/Logout";
 import Login from "@swarm/components/auth/Login";
 import NoMatch from "@swarm/components/NoMatch";
@@ -15,8 +14,6 @@ import SearchContainer from "@swarm/components/search/SearchContainer";
 import Home from "@swarm/components/pages/Home";
 
 const SwarmRoutes = () => {
-    const { token } = useAuth();
-
     const routesForPublic = [
         {
             path: "jobs",
@@ -57,7 +54,10 @@ const SwarmRoutes = () => {
             path: "/",
             element: <Home />,
         },
-
+        {
+            path: "/login",
+            element: <Login />,
+        },
         {
             path: "*",
             element: <NoMatch />
@@ -79,13 +79,7 @@ const SwarmRoutes = () => {
     ];
 
 
-    const routesForNotAuthenticatedOnly = [
 
-        {
-            path: "/login",
-            element: <Login />,
-        }
-    ];
 
     const router = createBrowserRouter([
         {
@@ -97,7 +91,7 @@ const SwarmRoutes = () => {
                         ...routesForUserRole,
 
                         ...routesForPublic,
-                        ...(!token ? routesForNotAuthenticatedOnly : []),
+                        // ...(!token ? routesForNotAuthenticatedOnly : []),
 
                     ]
                 }

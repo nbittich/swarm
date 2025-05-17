@@ -1,12 +1,17 @@
 import { useAuth } from "@swarm/auth/authContextHook";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 import { Form, Input, Button, message, Card, Flex, } from 'antd';
 import { useNavigate } from "react-router-dom";
 export default function Login() {
-    const { setToken } = useAuth();
+    const { setToken, token } = useAuth();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
+    useEffect(() => {
+        if (token) {
+            navigate('/')
+        }
+    }, [token, navigate])
     const handleLogin = async (form: { username: string; password: string }) => {
         try {
             const response = await axios.post('/api/login', { username: form.username, password: form.password });
