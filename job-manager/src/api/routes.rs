@@ -236,7 +236,10 @@ async fn pause_job_scheduler(State(manager): State<JobManagerState>, _: Claims) 
 async fn start_job_scheduler(State(manager): State<JobManagerState>, _: Claims) {
     manager.toggle_pause_scheduler(false);
 }
-async fn job_scheduler_status(State(manager): State<JobManagerState>, _: Claims) -> Json<Value> {
+async fn job_scheduler_status(
+    State(manager): State<JobManagerState>,
+    _: Option<Claims>,
+) -> Json<Value> {
     match manager
         .pause_scheduler
         .load(std::sync::atomic::Ordering::SeqCst)

@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, } from '@reduxjs/toolkit';
-import { ScheduledJob, Page, TaskDefinition, statusOptions, Pageable, } from '@swarm/models/domain';
+import { ScheduledJob, JobSchedulerStatus, Page, TaskDefinition, statusOptions, Pageable, } from '@swarm/models/domain';
 import { message } from 'antd';
 import axios from 'axios';
 
@@ -98,10 +98,18 @@ export const fetchScheduledJobs = createAsyncThunk(
         return response.data;
     }
 );
+export const fetchScheduledJobStatus = createAsyncThunk(
+    'scheduledJobs/fetchScheduledJobStatus',
+    async () => {
+        const response = await axios.post('/api/scheduled-jobs/status', {});
+        return response.data;
+    }
+);
 
 const scheduledJobsSlice = createSlice({
     name: 'scheduledJobs',
     initialState: {
+        scheduledJobStatus: undefined as JobSchedulerStatus | undefined,
         scheduledJobs: [] as ScheduledJob[],
         loading: false,
         pageable: DEFAULT_PAGEABLE,
@@ -126,6 +134,19 @@ const scheduledJobsSlice = createSlice({
     },
     extraReducers: (builder) => {
         builder
+            .addCase(fetchScheduledJobStatus.pending, (state) => {
+                state.loading = true;
+                state.error = null;
+            })
+            .addCase(fetchScheduledJobStatus.fulfilled, (state, action) => {
+                state.loading = false;
+                state.scheduledJobStatus = action.payload;
+
+            })
+            .addCase(fetchScheduledJobStatus.rejected, (state, action) => {
+                state.loading = false;
+                state.error = action.error.message || 'Failed to fetch scheduled jobs status';
+            })
             .addCase(fetchScheduledJobs.pending, (state) => {
                 state.loading = true;
                 state.error = null;

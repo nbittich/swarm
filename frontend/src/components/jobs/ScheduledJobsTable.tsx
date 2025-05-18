@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Button, Space, Input, Flex, TableProps, Popconfirm, Tag, PaginationProps, } from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined, SyncOutlined, ApiOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, PlusOutlined, PauseOutlined, PlaySquareOutlined, SyncOutlined, ApiOutlined } from '@ant-design/icons';
 import { getPayloadFromScheduledJob, ScheduledJob, TaskDefinition, } from '@swarm/models/domain';
 import dayjs from 'dayjs';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@swarm/states/Store';
-import { upsertScheduledJob, runScheduledJobManually, deleteScheduledJob, fetchScheduledJobs, setPageable } from '@swarm/states/ScheduledJobSlice';
+import { upsertScheduledJob, runScheduledJobManually, deleteScheduledJob, fetchScheduledJobs, setPageable, fetchScheduledJobStatus } from '@swarm/states/ScheduledJobSlice';
 import { fetchJobDefinitions } from '@swarm/states/JobDefinitionSlice';
 import { useDebouncedCallback } from 'use-debounce';
 import { SorterResult } from 'antd/es/table/interface';
@@ -24,7 +24,7 @@ const ScheduledJobsTable: React.FC = () => {
         500
     );
     const { jobDefinitions, loading: jobDefLoading } = useSelector((state: RootState) => state.appReducer.jobDefinitions);
-    const { scheduledJobs, pagination, loading: scheduledJobLoading, pageable } = useSelector((state: RootState) => state.appReducer.scheduledJobs);
+    const { scheduledJobs, pagination, loading: scheduledJobLoading, pageable, scheduledJobStatus } = useSelector((state: RootState) => state.appReducer.scheduledJobs);
     const [taskDefinition, setTaskDefinition] = useState<TaskDefinition | null>(null);
     const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
     const [scheduledJob, setScheduledJob] = useState<ScheduledJob | undefined>();
@@ -86,6 +86,7 @@ const ScheduledJobsTable: React.FC = () => {
 
     useEffect(() => {
         dispatch(fetchJobDefinitions());
+        dispatch(fetchScheduledJobStatus());
     }, [dispatch,]);
 
     useEffect(() => {
@@ -180,6 +181,13 @@ const ScheduledJobsTable: React.FC = () => {
             <Flex justify="space-between" >
                 <h2>Scheduled Jobs</h2>
                 {token && <Space>
+                    {scheduledJobStatus &&
+                        <Button size="large" color="default" variant="dashed"
+                            icon={scheduledJobStatus.status === 'paused' ? (<PlaySquareOutlined />) : (<PauseOutlined />)}>
+                            {isMobile ? '' : scheduledJobStatus.status === 'paused' ? 'Start scheduler' : 'Pause scheduler'}
+                        </Button>
+
+                    }
                     <Button onClick={() => setIsModalVisible(true)} size="large" color="default" variant="dashed" icon={<PlusOutlined />}>
                         {isMobile ? '' : 'New Scheduled Job'}
                     </Button>
