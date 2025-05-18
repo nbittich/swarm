@@ -298,6 +298,21 @@ pub mod index_config {
         pub name: String,
         pub paths: Vec<String>,
         pub optional: bool,
+        pub config: Option<RdfPropertyConfig>,
+    }
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[serde(rename_all = "camelCase")]
+    pub struct RdfPropertyConfig {
+        pub visible: bool,
+        pub js_type: Option<JsType>,
+    }
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[serde(rename_all = "camelCase")]
+    pub enum JsType {
+        Date,
+        String,
+        Number,
+        Url,
     }
 
     impl RdfProperty {

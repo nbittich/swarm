@@ -177,6 +177,12 @@ export interface RdfProperty {
     name: string;
     paths: string[];
     optional: boolean;
+    config?: RdfPropertyConfig;
+}
+
+export interface RdfPropertyConfig {
+    visible: boolean;
+    jsType?: "date" | "string" | "number" | "url"
 }
 
 export interface SearchQueryRequest {
