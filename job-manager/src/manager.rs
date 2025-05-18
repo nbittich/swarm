@@ -213,6 +213,7 @@ impl JobManagerState {
                 debug!("scheduler has been paused.");
                 continue;
             }
+            debug!("scheduling jobs...");
             let scheduled_jobs = self.scheduled_job_repository.find_all().await?;
             let now = Local::now();
             for mut sj in scheduled_jobs {
