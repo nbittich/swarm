@@ -8,9 +8,8 @@ type Props = {
 const FaviconIcon: React.FC<Props> = ({ handleNavigation }) => {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const imgRef = useRef<HTMLImageElement | null>(null);
-    const handleRightClick = (e: React.MouseEvent<HTMLImageElement, MouseEvent>) => {
-        e.preventDefault();
-
+    const pressTimer = useRef<NodeJS.Timeout | null>(null);
+    const handleEasterOne = () => {
         if (audioRef.current) {
             audioRef.current.currentTime = 0;
             audioRef.current.play();
@@ -22,12 +21,27 @@ const FaviconIcon: React.FC<Props> = ({ handleNavigation }) => {
             }
         }
     };
+    const handlePointerDown = () => {
+        pressTimer.current = setTimeout(() => {
+            handleEasterOne();
+        }, 1000); // 1000ms = 1 second
+    };
 
+    const clearPressTimer = () => {
+        if (pressTimer.current) {
+            clearTimeout(pressTimer.current);
+            pressTimer.current = null;
+        }
+    };
     return (
         <>
             <a onClick={() => handleNavigation("/")}>
                 <img
-                    onContextMenu={handleRightClick}
+                    onContextMenu={(e) => { e.preventDefault(); handleEasterOne() }}
+                    onPointerDown={handlePointerDown}
+                    onPointerUp={clearPressTimer}
+                    onPointerCancel={clearPressTimer}
+                    onPointerLeave={clearPressTimer}
                     className="favicon-icon"
                     ref={imgRef}
                     src="/favicon.svg"
