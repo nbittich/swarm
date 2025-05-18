@@ -53,6 +53,9 @@ pub async fn serve(
         .route("/search-configuration", get(search_configuration))
         .route("/login", post(authorize))
         .route("/scheduled-jobs/new", post(new_scheduled_job))
+        .route("/scheduled-jobs/status", post(job_scheduler_status))
+        .route("/scheduled-jobs/start", post(start_job_scheduler))
+        .route("/scheduled-jobs/pause", post(pause_job_scheduler))
         .route("/scheduled-jobs/{id}/update", post(update_scheduled_job))
         .route("/scheduled-jobs/{id}/run", post(run_scheduled_job))
         .route("/scheduled-jobs/{id}", delete(delete_scheduled_job))
@@ -227,7 +230,21 @@ async fn new_job(
         .await?;
     Ok(Json(job))
 }
-
+async fn pause_job_scheduler(State(manager): State<JobManagerState>, _: Claims) {
+    manager.toggle_pause_scheduler(true);
+}
+async fn start_job_scheduler(State(manager): State<JobManagerState>, _: Claims) {
+    manager.toggle_pause_scheduler(false);
+}
+async fn job_scheduler_status(State(manager): State<JobManagerState>, _: Claims) -> Json<Value> {
+    match manager
+        .pause_scheduler
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        true => Json(json!({"status": "paused"})),
+        false => Json(json!({"status": "running"})),
+    }
+}
 async fn new_scheduled_job(
     State(manager): State<JobManagerState>,
     _: Claims,

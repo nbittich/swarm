@@ -216,4 +216,4 @@ export function getPayloadFromScheduledJob(sj: ScheduledJob): string | Status | 
     return undefined;
 }
 
-
+export type JobSchedulerStatus = undefined | "paused" | "running";

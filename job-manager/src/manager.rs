@@ -1,5 +1,10 @@
 use std::{
-    collections::BTreeMap, env::var, mem::discriminant, str::FromStr, sync::Arc, time::Duration,
+    collections::BTreeMap,
+    env::var,
+    mem::discriminant,
+    str::FromStr,
+    sync::{Arc, atomic::AtomicBool},
+    time::Duration,
 };
 
 use anyhow::{Context, anyhow};
@@ -46,6 +51,7 @@ pub struct JobManagerState {
     pub task_repository: StoreRepository<Task>,
     pub sub_task_repository: StoreRepository<SubTask>,
     pub user_repository: StoreRepository<User>,
+    pub pause_scheduler: Arc<AtomicBool>,
     pub _mongo_client: StoreClient,
 }
 
@@ -154,8 +160,14 @@ impl JobManagerState {
             _task_event_stream: task_event_stream,
             _sub_task_event_stream: sub_task_event_stream,
             sub_task_event_consumer,
+            pause_scheduler: Arc::new(AtomicBool::new(false)),
             sparql_client: SparqlClient::new()?,
         })
+    }
+
+    pub fn toggle_pause_scheduler(&self, toggle: bool) {
+        self.pause_scheduler
+            .store(toggle, std::sync::atomic::Ordering::SeqCst);
     }
 
     pub async fn get_job(&self, job_id: &str) -> anyhow::Result<Job> {
@@ -194,6 +206,13 @@ impl JobManagerState {
         let mut interval = tokio::time::interval(Duration::from_secs(10));
         loop {
             interval.tick().await;
+            if self
+                .pause_scheduler
+                .load(std::sync::atomic::Ordering::SeqCst)
+            {
+                debug!("scheduler has been paused.");
+                continue;
+            }
             let scheduled_jobs = self.scheduled_job_repository.find_all().await?;
             let now = Local::now();
             for mut sj in scheduled_jobs {
