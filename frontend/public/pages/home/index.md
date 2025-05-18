@@ -1,18 +1,25 @@
 # Swarm
 
-Swarm is an open-source project designed to centralize and make searchable the data published by every municipality in Flanders. All data is extracted from the official websites of Flemish municipalities, where it is published as RDFa-annotated HTML. Swarm scrapes this data, processes it, and republishes it in a usable format.
+Swarm is an open-source project designed to centralize and make searchable the data published by municipalities in Flanders. 
 
-Although it's fully functional, it's not intended to replace more established tools. I use it primarily as a sandbox for trying out new ideas in data extraction and processing. For production-level work, I'd strongly recommend using a more reliable solutions.
+It takes advantage of the Flemish government's [open data initiative](https://www.vlaanderen.be/agentschap-binnenlands-bestuur/blikvangers/lokale-besluiten-als-gelinkte-open-data), which mandates local administrations to publish their decisions as linked open data since 2019.
+
+All data is extracted from the official websites of Flemish municipalities, where it is published as [RDFa](https://fr.wikipedia.org/wiki/RDFa) annotated html. Swarm scrapes this data, processes it, and republishes it in a usable format.
+
+Inspired by a similar existing project, it's **not intended** to replace any existing tools; I use it primarily as a sandbox for trying out new ideas in data extraction and processing. For production-level work, I'd strongly recommend using a more reliable solutions.
+This project poses significant challenges, as we try to scrape every page from over 300 websites using a server with only a 120gb hard drive ([Kimsufi KS-B](https://eco.ovhcloud.com/fr/kimsufi/ks-b/)). 
+
+At the time of writing, 9gb have already been used from scraping 23 websites, that is ~166k agenda items and ~16k sessions indexed, excluding additional data that are not yet configured to be indexed but can still be queried via the sparql endpoint. The system may eventually crash once I’ve exhausted every possible trick I can think of to keep the data size under control.
 
 ### How It Works
 
-Swarm works with configurable & schedulable jobs (called job definitions), each made up of a series of tasks, and each task is a microservice with a specific responsibility, communicating through events via a [NATS](https://nats.io/) message broker. This event-driven approach ensures a clean and traceable pipeline, where each task's completion triggers the next.
+Swarm works with configurable & schedulable jobs (called job definitions), each made up of a series of tasks, and each task is a microservice with a specific responsibility, communicating through events via a [NATS](https://nats.io/) message broker. This event-driven approach keeps the pipeline organized and easy to follow, where each task's completion triggers the next.
 
 The primary data processing pipeline consists of the following steps:
 
 1. **collect**: Scrapes relevant html pages from specified website urls
 2. **extract**: Parses RDFa annotations from the collected html and converts them into N-Triples
-3. **filter**: Applies SHACL shapes to validate and clean the extracted data
+3. **filter**: Applies shacl shapes to validate and clean the extracted data
 4. **add-uuid**: Assigns unique identifiers to RDF subjects for traceability and management
 5. **diff**: Compares the current job's output with the previous one to identify additions, deletions, and unchanged data
 6. **publish**: Inserts new triples and removes outdated ones in the triplestore
@@ -26,10 +33,10 @@ This pipeline is designed to be extensible, and new steps can be easily added by
 Swarm also has a dedicated microservice called `sync-consumer`, that lets third parties consume the extracted data without having to run their own Swarm instance; when a job finishes successfully, the system generates an archive containing the new triples to insert, the triples to delete, and the intersection with the previous job (for initial sync), making it straightforward to keep external triplestores in sync. 
 If you'd like to try it, please [contact me](https://bittich.be/contact) so I can send you the credentials and instructions.
 
-Swarm is primarily developed in Rust, but other languages can be used to extend it. For example, the filter step is written in Java due to the robustness of the Jena SHACL library.
+Swarm is primarily developed in Rust, but other languages can be used to extend it. For example, the filter step is written in Java, as the Jena shacl library is more robust.
 
 
-Swarm uses Virtuoso as its triplestore and Meilisearch for indexing, because it's fast and offers a great developer experience. Job and task metadata are stored in MongoDB instead of Virtuoso, since that data doesn’t really benefit from being stored as semantic data. This setup keeps the pipeline simpler and faster. That said, I might revisit this choice if a good reason to use linked data for the metadata comes up in the future.
+Swarm uses Virtuoso as its triplestore and Meilisearch for indexing, because it's fast and offers a great developer experience. Job and task metadata are stored in MongoDB, since that data doesn’t really benefit from being stored as semantic data. This setup keeps the pipeline simpler and faster, but I might revisit this choice if a good reason to use linked data for the metadata comes up in the future.
 
 ### Custom Components
 

@@ -23,6 +23,7 @@ const MarkdownViewer = ({ filePath, gallery }: { filePath: string, gallery?: str
     const MarkdownComp =
         () => (<ReactMarkdown
             components={{
+                a: ({ href, children, ...props }) => <a target="_blank" href={href} {...props} >{children}</a>,
                 p: (props) => <Typography.Paragraph {...props} />,
                 img: ({ src, alt, title }) => (
                     <Image
