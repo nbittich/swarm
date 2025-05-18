@@ -1,19 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Flex, Select, TableProps, Popconfirm, Tag, PaginationProps, } from 'antd';
-import { DeleteOutlined, PlusOutlined, SyncOutlined, ApiOutlined } from '@ant-design/icons';
-import { ScheduledJob, statusOptions, TaskDefinition, } from '@swarm/models/domain';
-import cron from 'cron-validate';
+import { Table, Button, Space, Input, Flex, TableProps, Popconfirm, Tag, PaginationProps, } from 'antd';
+import { DeleteOutlined, EditOutlined, PlusOutlined, SyncOutlined, ApiOutlined } from '@ant-design/icons';
+import { getPayloadFromScheduledJob, ScheduledJob, TaskDefinition, } from '@swarm/models/domain';
 import dayjs from 'dayjs';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@swarm/states/Store';
-import { addScheduledJob, runScheduledJobManually, deleteScheduledJob, fetchScheduledJobs, setPageable } from '@swarm/states/ScheduledJobSlice';
+import { upsertScheduledJob, runScheduledJobManually, deleteScheduledJob, fetchScheduledJobs, setPageable } from '@swarm/states/ScheduledJobSlice';
 import { fetchJobDefinitions } from '@swarm/states/JobDefinitionSlice';
 import { useDebouncedCallback } from 'use-debounce';
 import { SorterResult } from 'antd/es/table/interface';
 import { useAuth } from '@swarm/auth/authContextHook';
 import { useIsMobile } from '@swarm/hooks/is-mobile';
-import UpsertScheduledJob from './UpsertScheduledJob';
-const { Option } = Select;
+import UpsertScheduledJob, { UpsertType } from './UpsertScheduledJob';
 const ScheduledJobsTable: React.FC = () => {
     const isMobile = useIsMobile();
     const { token } = useAuth();
@@ -29,28 +27,19 @@ const ScheduledJobsTable: React.FC = () => {
     const { scheduledJobs, pagination, loading: scheduledJobLoading, pageable } = useSelector((state: RootState) => state.appReducer.scheduledJobs);
     const [taskDefinition, setTaskDefinition] = useState<TaskDefinition | null>(null);
     const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
-    const [form] = Form.useForm();
+    const [scheduledJob, setScheduledJob] = useState<ScheduledJob | undefined>();
 
-    const toggleModal = (value: boolean) => {
-        form.resetFields();
-        setTaskDefinition(null);
-        setIsModalVisible(value);
-    };
 
-    const handleAddScheduledJob = async (values: {
-        jobName?: string,
-        definitionId: string,
-        cronExpr: string,
-        targetUrl?: string,
-        status?: string,
-    }) => {
+
+    const handleUpsertScheduledJob = async (values: UpsertType) => {
         const payload = {
             ...values,
-            taskDefinition: taskDefinition
+            taskDefinition: taskDefinition,
         };
-        dispatch(addScheduledJob(payload));
-        toggleModal(false);
+        dispatch(upsertScheduledJob(payload));
+        setIsModalVisible(false);
     };
+
 
     const deleteJob = (job: ScheduledJob) => {
         dispatch(deleteScheduledJob(job._id));
@@ -94,6 +83,7 @@ const ScheduledJobsTable: React.FC = () => {
     }, [dispatch, searchName]);
 
 
+
     useEffect(() => {
         dispatch(fetchJobDefinitions());
     }, [dispatch,]);
@@ -117,12 +107,14 @@ const ScheduledJobsTable: React.FC = () => {
             dataIndex: 'payload',
             key: 'payload',
             render: (_, record) => {
-                if (record.taskDefinition.payload.type === "scrapeUrl") {
-                    const url = record.taskDefinition.payload.value;
-                    return <a href={url} target="_blank">{url} </a>;
-                } else if (record.taskDefinition.payload.type === "cleanup") {
-                    const status = record.taskDefinition.payload.value;
-                    return <Tag>{status.type}</Tag>
+                const payload = getPayloadFromScheduledJob(record);
+                if (payload) {
+                    if (typeof payload === 'string') {
+                        return <a href={payload} target="_blank">{payload} </a>;
+                    }
+                    else if ("type" in payload) {
+                        return <Tag>{payload.type}</Tag>
+                    }
                 }
             }
         },
@@ -153,6 +145,7 @@ const ScheduledJobsTable: React.FC = () => {
             align: 'center',
             render: (_, record) => (<>
                 <Popconfirm
+                    key={`${record._id}-delete`}
                     placement='left'
                     title="Delete the scheduled job"
                     description="Are you sure to delete this scheduled job?"
@@ -163,6 +156,7 @@ const ScheduledJobsTable: React.FC = () => {
                     <Button disabled={!token} type="link" shape="default" danger icon={<DeleteOutlined />} />
                 </Popconfirm>
                 <Popconfirm
+                    key={`${record._id}-run`}
                     placement='right'
                     title="Run the scheduled job"
                     description="Are you sure to run this scheduled job?"
@@ -171,7 +165,11 @@ const ScheduledJobsTable: React.FC = () => {
                     cancelText="No"
                 >
                     <Button disabled={!token} type="link" shape="default" icon={<ApiOutlined />} />
-                </Popconfirm></>
+                </Popconfirm>
+                <Button key={`${record._id}-edit`}
+                    disabled={!token} type="link" shape="default" icon={<EditOutlined />} onClick={(e) => { e.preventDefault(); setScheduledJob(record); setIsModalVisible(true) }} />
+
+            </>
 
             ),
         }
@@ -182,7 +180,7 @@ const ScheduledJobsTable: React.FC = () => {
             <Flex justify="space-between" >
                 <h2>Scheduled Jobs</h2>
                 {token && <Space>
-                    <Button onClick={() => toggleModal(true)} size="large" color="default" variant="dashed" icon={<PlusOutlined />}>
+                    <Button onClick={() => setIsModalVisible(true)} size="large" color="default" variant="dashed" icon={<PlusOutlined />}>
                         {isMobile ? '' : 'New Scheduled Job'}
                     </Button>
                     <Button onClick={() => handleTableChange({ current: 1 }, {}, {
@@ -204,29 +202,14 @@ const ScheduledJobsTable: React.FC = () => {
                 onChange={handleTableChange}
                 rowKey="_id"
             />
-
-            <Modal
-                title="New Scheduled Job"
-                open={isModalVisible}
-                onCancel={() => toggleModal(false)}
-                footer={(
-                    <Flex justify='end'>
-                        <Space>
-                            <Button onClick={(e) => {
-                                e.stopPropagation()
-                                toggleModal(false)
-                            }}>Cancel</Button>
-                            <Button onClick={() => form.submit()} type="primary">Submit</Button></Space>
-                    </Flex>
-
-                )}
-            >
-                <UpsertScheduledJob form={form}
-                    jobDefinitions={jobDefinitions}
-                    onFinish={handleAddScheduledJob}
-                    taskDefinition={taskDefinition}
-                    setTaskDefinition={setTaskDefinition} />
-            </Modal>
+            <UpsertScheduledJob key="upsert-scheduled-job"
+                jobDefinitions={jobDefinitions}
+                onFinish={handleUpsertScheduledJob}
+                taskDefinition={taskDefinition}
+                setTaskDefinition={setTaskDefinition}
+                isModalVisible={isModalVisible}
+                setIsModalVisible={setIsModalVisible}
+                scheduledJob={scheduledJob} />
 
         </>
     );

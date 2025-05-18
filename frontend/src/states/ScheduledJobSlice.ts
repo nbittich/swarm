@@ -11,9 +11,10 @@ const DEFAULT_PAGEABLE = {
         creationDate: -1
     }
 } as Pageable
-export const addScheduledJob = createAsyncThunk(
-    'scheduledJobs/addScheduledJob',
+export const upsertScheduledJob = createAsyncThunk(
+    'scheduledJobs/upsertScheduledJob',
     async (payload: {
+        __id?: string;
         definitionId: string;
         jobName?: string;
         cronExpr: string;
@@ -46,10 +47,15 @@ export const addScheduledJob = createAsyncThunk(
                     },
                 };
             } else {
-                throw new Error("Invalid payload");
+                throw new Error("Invalid payload " + JSON.stringify(payload));
+            }
+            let response;
+            if (payload.__id) {
+                response = await axios.post(`/api/scheduled-jobs/${payload.__id}/update`, jobPayload);
+            } else {
+                response = await axios.post('/api/scheduled-jobs/new', jobPayload);
             }
 
-            const response = await axios.post('/api/scheduled-jobs/new', jobPayload);
             return response.data;
         } catch (error) {
             return rejectWithValue(error);
@@ -138,19 +144,19 @@ const scheduledJobsSlice = createSlice({
                 state.loading = false;
                 state.error = action.error.message || 'Failed to fetch scheduled jobs';
             })
-            .addCase(addScheduledJob.pending, (state) => {
+            .addCase(upsertScheduledJob.pending, (state) => {
                 state.loading = true;
             })
-            .addCase(addScheduledJob.fulfilled, (state, _) => {
+            .addCase(upsertScheduledJob.fulfilled, (state, _) => {
                 state.loading = false;
                 state.pagination = { pageSize: state.pagination.pageSize, current: 1 };
                 state.pageable = { ...DEFAULT_PAGEABLE }; // trick; do not change unless you know what you do
-                message.success("Scheduled job added");
+                message.success("Scheduled job added or modified");
             })
-            .addCase(addScheduledJob.rejected, (state, action) => {
+            .addCase(upsertScheduledJob.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload as string;
-                message.error("could not add scheduled job!");
+                message.error("could not upsert scheduled job!");
             })
             .addCase(runScheduledJobManually.pending, (state) => {
                 state.loading = true;

@@ -207,3 +207,13 @@ export interface SearchQueryResponse {
     limit?: number;
 }
 
+export function getPayloadFromScheduledJob(sj: ScheduledJob): string | Status | undefined {
+    if (sj.taskDefinition.payload.type === "scrapeUrl") {
+        return sj.taskDefinition.payload.value;
+    } else if (sj.taskDefinition.payload.type === "cleanup") {
+        return sj.taskDefinition.payload.value;
+    }
+    return undefined;
+}
+
+
