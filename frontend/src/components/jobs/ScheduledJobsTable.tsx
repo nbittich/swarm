@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Button, Space, Input, Flex, TableProps, Popconfirm, Tag, PaginationProps, } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, PauseOutlined, PlaySquareOutlined, SyncOutlined, ApiOutlined } from '@ant-design/icons';
-import { getPayloadFromScheduledJob, JobSchedulerStatus, ScheduledJob, TaskDefinition, } from '@swarm/models/domain';
+import { getPayloadFromScheduledJob, ScheduledJob, TaskDefinition, } from '@swarm/models/domain';
 import dayjs from 'dayjs';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@swarm/states/Store';

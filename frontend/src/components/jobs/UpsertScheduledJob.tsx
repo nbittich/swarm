@@ -17,7 +17,7 @@ export type UpsertType = {
 
 
 const UpsertScheduledJob = ({ scheduledJob, setIsModalVisible, isModalVisible, onFinish, jobDefinitions, taskDefinition, setTaskDefinition }: {
-    jobDefinitions: JobDefinition[], onFinish: (values: UpsertType) => Promise<void>
+    jobDefinitions: JobDefinition[], onFinish: (values: UpsertType) => void,
     taskDefinition: TaskDefinition | null, setTaskDefinition: (def: TaskDefinition | null) => void, scheduledJob?: ScheduledJob,
     isModalVisible: boolean | undefined, setIsModalVisible: (v: boolean) => void,
 }) => {
