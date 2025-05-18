@@ -8,9 +8,9 @@ type Props = {
 const FaviconIcon: React.FC<Props> = ({ handleNavigation }) => {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const imgRef = useRef<HTMLImageElement | null>(null);
-    const pressTimer = useRef<NodeJS.Timeout | null>(null);
+    const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const handleEasterOne = () => {
-        if (audioRef.current) {
+        if (audioRef.current && audioRef.current.paused) {
             audioRef.current.currentTime = 0;
             audioRef.current.play();
 
@@ -24,7 +24,7 @@ const FaviconIcon: React.FC<Props> = ({ handleNavigation }) => {
     const handlePointerDown = () => {
         pressTimer.current = setTimeout(() => {
             handleEasterOne();
-        }, 1000); // 1000ms = 1 second
+        }, 1000);
     };
 
     const clearPressTimer = () => {

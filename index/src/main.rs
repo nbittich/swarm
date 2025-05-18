@@ -29,7 +29,7 @@ use swarm_common::{
     nats_client::{self, NatsClient},
     setup_tracing,
 };
-use tokio::io::AsyncBufReadExt;
+use tokio::{io::AsyncBufReadExt, task::JoinSet};
 use tortank::turtle::turtle_doc::{Node, Statement, TurtleDoc};
 use tortank::utils::{
     DATE_FORMATS, XSD_BOOLEAN, XSD_DATE, XSD_DATE_TIME, XSD_DECIMAL, XSD_DOUBLE, XSD_INTEGER,
@@ -305,6 +305,7 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
         let mut manifest =
             tokio::io::BufReader::new(retry_fs::open_file(diff_manifest_file_path).await?).lines();
         let mut errors = vec![];
+        let mut tasks = JoinSet::new();
         while let Ok(Some(line)) = manifest.next_line().await {
             if line.trim().is_empty() {
                 continue;
@@ -312,9 +313,14 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
             debug!("handling line {line}");
 
             let config = config.clone();
-            match index(&line, &config).await.map_err(|e| anyhow!("{e}")) {
-                Err(e) => {
-                    errors.push(format!("error during indexing!  error: {e:?}"));
+            tasks.spawn(async move { index(&line, &config).await });
+            // sleep for a while
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        while let Some(handle) = tasks.join_next().await {
+            match handle.map_err(|e| anyhow!("{e}")) {
+                Err(e) | Ok(Err(e)) => {
+                    errors.push(format!("error during indexing!  error: {e}"));
                 }
                 _ => {}
             }
