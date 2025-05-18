@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Button, Space, Input, Flex, TableProps, Popconfirm, Tag, PaginationProps, } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, PauseOutlined, PlaySquareOutlined, SyncOutlined, ApiOutlined } from '@ant-design/icons';
-import { getPayloadFromScheduledJob, ScheduledJob, TaskDefinition, } from '@swarm/models/domain';
+import { getPayloadFromScheduledJob, JobSchedulerStatus, ScheduledJob, TaskDefinition, } from '@swarm/models/domain';
 import dayjs from 'dayjs';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@swarm/states/Store';
-import { upsertScheduledJob, runScheduledJobManually, deleteScheduledJob, fetchScheduledJobs, setPageable, fetchScheduledJobStatus } from '@swarm/states/ScheduledJobSlice';
+import { upsertScheduledJob, runScheduledJobManually, deleteScheduledJob, fetchScheduledJobs, setPageable, fetchScheduledJobStatus, toggleScheduledJobStatus } from '@swarm/states/ScheduledJobSlice';
 import { fetchJobDefinitions } from '@swarm/states/JobDefinitionSlice';
 import { useDebouncedCallback } from 'use-debounce';
 import { SorterResult } from 'antd/es/table/interface';
@@ -31,7 +31,13 @@ const ScheduledJobsTable: React.FC = () => {
 
 
 
-    const handleUpsertScheduledJob = async (values: UpsertType) => {
+    const toggleSchedulerStatus = () => {
+        dispatch(toggleScheduledJobStatus(scheduledJobStatus!));
+        dispatch(fetchScheduledJobStatus());
+
+    }
+
+    const handleUpsertScheduledJob = (values: UpsertType) => {
         const payload = {
             ...values,
             taskDefinition: taskDefinition,
@@ -182,7 +188,7 @@ const ScheduledJobsTable: React.FC = () => {
                 <h2>Scheduled Jobs</h2>
                 {token && <Space>
                     {scheduledJobStatus &&
-                        <Button size="large" color="default" variant="dashed"
+                        <Button onClick={toggleSchedulerStatus} size="large" color="default" variant="dashed"
                             icon={scheduledJobStatus.status === 'paused' ? (<PlaySquareOutlined />) : (<PauseOutlined />)}>
                             {isMobile ? '' : scheduledJobStatus.status === 'paused' ? 'Start scheduler' : 'Pause scheduler'}
                         </Button>

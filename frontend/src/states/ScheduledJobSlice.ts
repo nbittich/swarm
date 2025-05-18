@@ -105,7 +105,13 @@ export const fetchScheduledJobStatus = createAsyncThunk(
         return response.data;
     }
 );
-
+export const toggleScheduledJobStatus = createAsyncThunk(
+    'scheduledJobs/toggleScheduledJobStatus',
+    async (status: JobSchedulerStatus) => {
+        await axios.post(`/api/scheduled-jobs/${status.status === 'running' ? 'pause' : 'start'}`, {});
+        return status;
+    }
+);
 const scheduledJobsSlice = createSlice({
     name: 'scheduledJobs',
     initialState: {
@@ -134,6 +140,19 @@ const scheduledJobsSlice = createSlice({
     },
     extraReducers: (builder) => {
         builder
+            .addCase(toggleScheduledJobStatus.pending, (state) => {
+                state.loading = true;
+                state.error = null;
+            })
+            .addCase(toggleScheduledJobStatus.fulfilled, (state, action) => {
+                state.loading = false;
+                state.scheduledJobStatus = action.payload;
+
+            })
+            .addCase(toggleScheduledJobStatus.rejected, (state, action) => {
+                state.loading = false;
+                state.error = action.error.message || 'Failed to to toggle scheduled job status';
+            })
             .addCase(fetchScheduledJobStatus.pending, (state) => {
                 state.loading = true;
                 state.error = null;
