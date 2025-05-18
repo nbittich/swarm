@@ -28,7 +28,7 @@ function formatValue(indexConfig: IndexConfiguration | undefined, key: string, v
         case "number":
         case "string": return <>{String(value)}</>;
         case "url": return (<a target="_blank" href={String(value)}>{String(value)}</a>);
-        case "date": return <>{dayjs(new Date(Number(value))).format('DD/MM/YYYY HH:mm:ss')}</>
+        case "date": return <>{dayjs(new Date(Number(value) * 1000)).format('DD/MM/YYYY HH:mm:ss')}</>
     }
 
 }
