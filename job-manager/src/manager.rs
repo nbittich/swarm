@@ -412,7 +412,7 @@ impl JobManagerState {
         };
         let scheduled_job = ScheduledJob {
             id: id.unwrap_or_else(|| IdGenerator.get()),
-            creation_date: creation_date.unwrap_or_else(|| Local::now()),
+            creation_date: creation_date.unwrap_or_else(Local::now),
             task_definition,
             name,
             definition_id,

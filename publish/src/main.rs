@@ -226,7 +226,7 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
                 intersect_triple_file_path.to_path_buf(),
                 failed_query_file_path.to_path_buf(),
             );
-            match publish(
+            if let Err(e) = publish(
                 &line,
                 &config,
                 &removed_triple_file_path,
@@ -234,12 +234,8 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
                 &intersect_triple_file_path,
                 &failed_query_file_path,
             )
-            .await
-            {
-                Err(e) => {
-                    errors.push(format!("error during publishing!  error: {e:?}"));
-                }
-                _ => {}
+            .await {
+                errors.push(format!("error during publishing!  error: {e:?}"));
             }
         }
 

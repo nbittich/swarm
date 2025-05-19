@@ -12,10 +12,10 @@ use std::collections::BTreeMap;
 use std::{borrow::Cow, env::var, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 use swarm_common::compress::ungzip;
 use swarm_common::constant::{
-    CHUNK_SIZE, INDEX_MAX_TOTAL_HITS, INDEX_MAX_WAIT_FOR_TASK, RESET_INDEX, RESET_INDEX_NAME,
+    CHUNK_SIZE, INDEX_DELAY_BEFORE_NEXT_RETRY, INDEX_MAX_RETRY, INDEX_MAX_TOTAL_HITS,
+    INDEX_MAX_WAIT_FOR_TASK, RESET_INDEX, RESET_INDEX_NAME,
 };
 use swarm_common::domain::index_config::{INDEX_ID_KEY, IndexConfiguration};
-use swarm_common::retry_fs;
 use swarm_common::{
     StreamExt,
     constant::{
@@ -29,6 +29,7 @@ use swarm_common::{
     nats_client::{self, NatsClient},
     setup_tracing,
 };
+use swarm_common::{retry_fs, retryable_fut};
 use tokio::{io::AsyncBufReadExt, task::JoinSet};
 use tortank::turtle::turtle_doc::{Node, Statement, TurtleDoc};
 use tortank::utils::{
@@ -47,6 +48,8 @@ struct Config {
     uuid_predicate: String,
     index_config: Arc<Vec<IndexConfiguration>>,
     index_max_wait_for_task: Option<Duration>,
+    index_max_retry: u64,
+    index_delay_before_next_retry: u64,
     chunk_size: usize,
 }
 
@@ -81,6 +84,16 @@ async fn main() -> anyhow::Result<()> {
         .last()
         .or(Some(3600))
         .map(Duration::from_secs);
+    let index_max_retry = var(INDEX_MAX_RETRY)
+        .iter()
+        .flat_map(|r| r.parse::<u64>())
+        .last()
+        .unwrap_or(5);
+    let index_delay_before_next_retry = var(INDEX_DELAY_BEFORE_NEXT_RETRY)
+        .iter()
+        .flat_map(|r| r.parse::<u64>())
+        .last()
+        .unwrap_or(30);
     let reset_index_name = var(RESET_INDEX_NAME).ok();
 
     let index_config = {
@@ -134,6 +147,8 @@ async fn main() -> anyhow::Result<()> {
         index_config,
         search_client,
         chunk_size,
+        index_max_retry,
+        index_delay_before_next_retry,
         index_max_wait_for_task,
         sparql_client: SparqlClient::new()?,
     };
@@ -151,16 +166,30 @@ async fn main() -> anyhow::Result<()> {
             })
         {
             info!("reseting {}...", ic.name);
-            let delete_task_info = config
-                .search_client
-                .index(&ic.name)
-                .delete_all_documents()
-                .await?;
+            let delete_task_info = retryable_fut(
+                config.index_max_retry,
+                config.index_delay_before_next_retry,
+                async || {
+                    config
+                        .search_client
+                        .index(&ic.name)
+                        .delete_all_documents()
+                        .await
+                },
+            )
+            .await?;
             info!("deleting. this might take a while. {delete_task_info:?}");
-            config
-                .search_client
-                .wait_for_task(delete_task_info, None, index_max_wait_for_task)
-                .await?;
+            retryable_fut(
+                config.index_max_retry,
+                config.index_delay_before_next_retry,
+                async || {
+                    config
+                        .search_client
+                        .wait_for_task(&delete_task_info, None, index_max_wait_for_task)
+                        .await
+                },
+            )
+            .await?;
             info!("deleting done. Start reindexing...");
             let rdf_types = ic.rdf_type.iter().map(|t| format!("<{t}>")).join("\n");
             let mut res = config
@@ -201,17 +230,31 @@ async fn main() -> anyhow::Result<()> {
                 documents.push(doc_data);
             }
             for chunk in documents.chunks(config.chunk_size) {
-                let task = config
-                    .search_client
-                    .index(&ic.name)
-                    .add_documents(chunk, Some(INDEX_ID_KEY))
-                    .await?;
+                let task = retryable_fut(
+                    config.index_max_retry,
+                    config.index_delay_before_next_retry,
+                    async || {
+                        config
+                            .search_client
+                            .index(&ic.name)
+                            .add_documents(chunk, Some(INDEX_ID_KEY))
+                            .await
+                    },
+                )
+                .await?;
                 debug!("{task:?}");
                 debug!("waiting for task to complete...");
-                config
-                    .search_client
-                    .wait_for_task(task, None, config.index_max_wait_for_task)
-                    .await?;
+                retryable_fut(
+                    config.index_max_retry,
+                    config.index_delay_before_next_retry,
+                    async || {
+                        config
+                            .search_client
+                            .wait_for_task(&task, None, config.index_max_wait_for_task)
+                            .await
+                    },
+                )
+                .await?;
             }
         }
 
@@ -562,11 +605,12 @@ async fn gather_properties(
         if res.is_empty() {
             continue;
         }
-        if res.len() == 1 {
-            doc_data.insert(prop.name.clone(), res.remove(0));
+        let value = if res.len() == 1 {
+            res.remove(0)
         } else {
-            doc_data.insert(prop.name.clone(), Value::Array(res));
-        }
+            Value::Array(res)
+        };
+        doc_data.insert(prop.name.clone(), value);
     }
     Ok(true)
 }
