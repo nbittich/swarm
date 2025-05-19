@@ -221,7 +221,7 @@ impl JobManagerState {
                 debug!("scheduler has been paused.");
                 continue;
             }
-            let number_of_running_jobs = self
+            let mut number_of_running_jobs = self
                 .job_repository
                 .count(Some(doc! {
                      "status.type": {"$in": ["busy","scheduled"]},
@@ -250,7 +250,7 @@ impl JobManagerState {
                     warn!("no upcoming schedule for expression {schedule}");
                     continue;
                 };
-                if upcoming <= now {
+                if upcoming <= now && number_of_running_jobs < self.max_concurrent_job {
                     sj = ScheduledJob {
                         next_execution: upcomings.next(),
                         ..sj
@@ -259,6 +259,7 @@ impl JobManagerState {
                     self.new_job(sj.definition_id, sj.name, sj.task_definition)
                         .await
                         .map_err(|e| anyhow!("{e:?}"))?;
+                    number_of_running_jobs += 1;
                 }
             }
         }

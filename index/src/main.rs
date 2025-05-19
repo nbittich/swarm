@@ -255,6 +255,8 @@ async fn main() -> anyhow::Result<()> {
                     },
                 )
                 .await?;
+                debug!("sleep a little bit before indexing next chunk.");
+                tokio::time::sleep(Duration::from_millis(50));
             }
         }
 
