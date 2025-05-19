@@ -16,10 +16,11 @@ use sparql_client::SparqlClient;
 use swarm_common::{
     IdGenerator, REGEX_CLEAN_JSESSIONID, REGEX_CLEAN_S_UUID, StreamExt,
     constant::{
-        INDEX_CONFIG_PATH, JOB_COLLECTION, JOB_MANAGER_CONSUMER, MEILISEARCH_KEY, MEILISEARCH_URL,
-        PUBLIC_TENANT, SCHEDULED_JOB_COLLECTION, SUB_TASK_COLLECTION, SUB_TASK_EVENT_STREAM,
-        SUB_TASK_STATUS_CHANGE_SUBJECT, TASK_COLLECTION, TASK_EVENT_STREAM,
-        TASK_STATUS_CHANGE_EVENT, TASK_STATUS_CHANGE_SUBJECT, USER_COLLECTION,
+        INDEX_CONFIG_PATH, JOB_COLLECTION, JOB_MANAGER_CONSUMER, MAX_CONCURRENT_JOB,
+        MEILISEARCH_KEY, MEILISEARCH_URL, PUBLIC_TENANT, SCHEDULED_JOB_COLLECTION,
+        SUB_TASK_COLLECTION, SUB_TASK_EVENT_STREAM, SUB_TASK_STATUS_CHANGE_SUBJECT,
+        TASK_COLLECTION, TASK_EVENT_STREAM, TASK_STATUS_CHANGE_EVENT, TASK_STATUS_CHANGE_SUBJECT,
+        USER_COLLECTION,
     },
     debug,
     domain::{
@@ -53,6 +54,7 @@ pub struct JobManagerState {
     pub user_repository: StoreRepository<User>,
     pub pause_scheduler: Arc<AtomicBool>,
     pub _mongo_client: StoreClient,
+    pub max_concurrent_job: u64,
 }
 
 impl JobManagerState {
@@ -118,7 +120,12 @@ impl JobManagerState {
 
         let nc = nats_client::connect().await?;
         let search_client = SearchClient::new(meilisearch_url, Some(meilisearch_key))?;
-
+        let max_concurrent_job = std::env::var(MAX_CONCURRENT_JOB)
+            .unwrap_or_else(|_| "5".into())
+            .parse::<u64>()
+            .ok()
+            .filter(|c| c > &0)
+            .unwrap_or(5);
         // set all existing busy / scheduled jobs and tasks to failed
         // as we restarted the server, we probably want to stop them
         job_repository
@@ -153,6 +160,7 @@ impl JobManagerState {
             task_repository,
             search_client,
             index_config,
+            max_concurrent_job,
             scheduled_job_repository,
             user_repository,
             sub_task_repository,
@@ -211,6 +219,18 @@ impl JobManagerState {
                 .load(std::sync::atomic::Ordering::SeqCst)
             {
                 debug!("scheduler has been paused.");
+                continue;
+            }
+            let number_of_running_jobs = self
+                .job_repository
+                .count(Some(doc! {
+                     "status.type": {"$in": ["busy","scheduled"]},
+                }))
+                .await?;
+            if number_of_running_jobs >= self.max_concurrent_job {
+                debug!(
+                    "max concurrent job reached! current job running: {number_of_running_jobs} waiting for jobs to complete..."
+                );
                 continue;
             }
             debug!("scheduling jobs...");

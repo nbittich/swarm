@@ -26,6 +26,7 @@ in the different readme's.
 | `MEILISEARCH_KEY`      | `String` | API key used to authenticate with Meilisearch                                             | `N/A`                       |
 | `INDEX_CONFIG_PATH`    | `String` | Path to the JSON configuration file describing search indexing rules and schema           | `N/A`                       |
 | `SCHEDULE_START_DELAY` | `number` | Delay in seconds before starting the job scheduler                                        | `300`                       |
+| `MAX_CONCURRENT_JOB`    | `number`| Maximum concurrent scheduled job                                                          | `5`                         |
 
 ## Endpoints
 
