@@ -111,17 +111,19 @@ pub struct IndexStats {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Task {
-    pub uid: u64,
-    pub index_uid: String,
-    pub status: String,
-    pub task_type: String,
+    pub uid: Option<u64>,
+    pub index_uid: Option<String>,
+    pub status: Option<String>,
+    pub batch_uid: Option<u32>,
+    #[serde(rename = "type")]
+    pub task_type: Option<String>,
     pub canceled_by: Option<u64>,
     pub details: Option<serde_json::Value>,
     pub error: Option<serde_json::Value>,
-    pub duration: String,
-    pub enqueued_at: String,
-    pub started_at: String,
-    pub finished_at: String,
+    pub duration: Option<String>,
+    pub enqueued_at: Option<String>,
+    pub started_at: Option<String>,
+    pub finished_at: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
