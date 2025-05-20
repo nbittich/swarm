@@ -4,13 +4,11 @@
 use anyhow::anyhow;
 use chrono::{DateTime, Local};
 use itertools::Itertools;
-use meilisearch_sdk::client::Client as MeiliSearchClient;
-use meilisearch_sdk::settings::PaginationSetting;
 use serde_json::{Number, Value};
 use sparql_client::{SparqlClient, SparqlUpdateType};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::{borrow::Cow, env::var, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
-use swarm_common::compress::ungzip;
+use swarm_common::compress::{gzip_str, ungzip};
 use swarm_common::constant::{
     CHUNK_SIZE, INDEX_DELAY_BEFORE_NEXT_RETRY, INDEX_MAX_RETRY, INDEX_MAX_TOTAL_HITS,
     INDEX_MAX_WAIT_FOR_TASK, RESET_INDEX, RESET_INDEX_NAME,
@@ -30,6 +28,8 @@ use swarm_common::{
     setup_tracing,
 };
 use swarm_common::{retry_fs, retryable_fut};
+use swarm_meilisearch_client::MeilisearchClient;
+use swarm_meilisearch_client::domain::{ContentType, Encoding, PaginationSetting, TaskInfo};
 use tokio::{io::AsyncBufReadExt, task::JoinSet};
 use tortank::turtle::turtle_doc::{Node, Statement, TurtleDoc};
 use tortank::utils::{
@@ -44,7 +44,7 @@ pub const NS_TYPE: Node = Node::Iri(Cow::Borrowed(
 struct Config {
     nc: NatsClient,
     sparql_client: SparqlClient,
-    search_client: MeiliSearchClient,
+    search_client: MeilisearchClient,
     uuid_predicate: String,
     index_config: Arc<Vec<IndexConfiguration>>,
     index_max_wait_for_task: Option<Duration>,
@@ -66,7 +66,7 @@ async fn main() -> anyhow::Result<()> {
         .iter()
         .flat_map(|r| r.parse::<usize>())
         .last()
-        .unwrap_or(100);
+        .unwrap_or(255);
     let index_max_total_hits = var(INDEX_MAX_TOTAL_HITS)
         .iter()
         .flat_map(|r| r.parse::<usize>())
@@ -104,7 +104,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let nc = nats_client::connect().await?;
-    let search_client = MeiliSearchClient::new(meilisearch_url, Some(meilisearch_key))?;
+    let search_client = MeilisearchClient::new(meilisearch_url, meilisearch_key)?;
 
     while search_client.health().await.is_err() {
         error!("Meilisearch is not available yet. Sleeping for a sec before retrying");
@@ -114,14 +114,16 @@ async fn main() -> anyhow::Result<()> {
     // initialize the index with filterable attributes
     info!("initializing index with filterable attributes");
     for ic in index_config.iter() {
-        let index = search_client.index(&ic.name);
-        index
-            .set_filterable_attributes(ic.properties.iter().map(|p| &p.name))
+        search_client
+            .set_filterable_attributes(&ic.name, ic.properties.iter().map(|p| &p.name))
             .await?;
-        index
-            .set_pagination(PaginationSetting {
-                max_total_hits: index_max_total_hits,
-            })
+        search_client
+            .set_pagination(
+                &ic.name,
+                PaginationSetting {
+                    max_total_hits: index_max_total_hits,
+                },
+            )
             .await?;
     }
 
@@ -166,16 +168,10 @@ async fn main() -> anyhow::Result<()> {
             })
         {
             info!("reseting {}...", ic.name);
-            let delete_task_info = retryable_fut(
+            let delete_task_info: TaskInfo = retryable_fut(
                 config.index_max_retry,
                 config.index_delay_before_next_retry,
-                async || {
-                    config
-                        .search_client
-                        .index(&ic.name)
-                        .delete_all_documents()
-                        .await
-                },
+                async || config.search_client.delete_all_documents(&ic.name).await,
             )
             .await?;
             info!("deleting. this might take a while. {delete_task_info:?}");
@@ -185,7 +181,7 @@ async fn main() -> anyhow::Result<()> {
                 async || {
                     config
                         .search_client
-                        .wait_for_task(&delete_task_info, None, index_max_wait_for_task)
+                        .wait_for_task(delete_task_info.task_uid, None, index_max_wait_for_task)
                         .await
                 },
             )
@@ -229,35 +225,8 @@ async fn main() -> anyhow::Result<()> {
                 }
                 documents.push(doc_data);
             }
-            for chunk in documents.chunks(config.chunk_size) {
-                let task = retryable_fut(
-                    config.index_max_retry,
-                    config.index_delay_before_next_retry,
-                    async || {
-                        config
-                            .search_client
-                            .index(&ic.name)
-                            .add_documents(chunk, Some(INDEX_ID_KEY))
-                            .await
-                    },
-                )
-                .await?;
-                debug!("{task:?}");
-                debug!("waiting for task to complete...");
-                retryable_fut(
-                    config.index_max_retry,
-                    config.index_delay_before_next_retry,
-                    async || {
-                        config
-                            .search_client
-                            .wait_for_task(&task, None, config.index_max_wait_for_task)
-                            .await
-                    },
-                )
-                .await?;
-                debug!("sleep a little bit before indexing next chunk.");
-                tokio::time::sleep(Duration::from_millis(50));
-            }
+
+            add_or_replace_documents(&config, &ic.name, documents).await?;
         }
 
         info!(
@@ -351,16 +320,26 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
             tokio::io::BufReader::new(retry_fs::open_file(diff_manifest_file_path).await?).lines();
         let mut errors = vec![];
         let mut tasks = JoinSet::new();
+        let mut lines_buffer = Vec::with_capacity(config.chunk_size);
         while let Ok(Some(line)) = manifest.next_line().await {
             if line.trim().is_empty() {
                 continue;
             }
             debug!("handling line {line}");
 
+            lines_buffer.push(line);
+            if lines_buffer.len() == config.chunk_size {
+                let config = config.clone();
+                let lines = lines_buffer.drain(..).collect_vec();
+                tasks.spawn(async move { index(&lines, &config).await });
+                // sleep for a while
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        }
+        if !lines_buffer.is_empty() {
             let config = config.clone();
-            tasks.spawn(async move { index(&line, &config).await });
-            // sleep for a while
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            let lines = lines_buffer.drain(..).collect_vec();
+            tasks.spawn(async move { index(&lines, &config).await });
         }
         while let Some(handle) = tasks.join_next().await {
             match handle.map_err(|e| anyhow!("{e}")) {
@@ -384,24 +363,63 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
     Ok(None)
 }
 
-async fn index(line: &str, config: &Config) -> anyhow::Result<()> {
-    let payload = DiffResult::deserialize(line)?;
+async fn index(lines: &[String], config: &Config) -> anyhow::Result<()> {
+    let mut delete_documents = HashMap::new();
+    let mut insert_documents = HashMap::new();
+    for line in lines {
+        let payload = DiffResult::deserialize(line)?;
+        if let Some(to_remove) = payload.to_remove_path.as_ref() {
+            let to_remove = to_remove.clone();
+            let config = config.clone();
+            update(
+                config,
+                &mut insert_documents,
+                &mut delete_documents,
+                to_remove,
+                SparqlUpdateType::Delete,
+            )
+            .await?;
+        }
+        if let Some(to_insert) = payload.new_insert_path.as_ref() {
+            let to_insert = to_insert.clone();
+            let config = config.clone();
+            update(
+                config,
+                &mut insert_documents,
+                &mut delete_documents,
+                to_insert,
+                SparqlUpdateType::Insert,
+            )
+            .await?;
+        }
+    }
+    for (idx, docs) in insert_documents {
+        add_or_replace_documents(&config, &idx, docs).await?;
+    }
+    for (idx, uuids) in delete_documents {
+        debug!(
+            "deleting the following documents in index {}: {uuids:?}",
+            idx
+        );
+        let task = config
+            .search_client
+            .delete_documents(&idx, &uuids.into_iter().collect_vec())
+            .await?;
+        debug!("{task:?}");
+        debug!("waiting for task to complete...");
+        config
+            .search_client
+            .wait_for_task(task.task_uid, None, config.index_max_wait_for_task)
+            .await?;
+    }
 
-    if let Some(to_remove) = payload.to_remove_path.as_ref() {
-        let to_remove = to_remove.clone();
-        let config = config.clone();
-        update(config, to_remove, SparqlUpdateType::Delete).await?;
-    }
-    if let Some(to_insert) = payload.new_insert_path.as_ref() {
-        let to_insert = to_insert.clone();
-        let config = config.clone();
-        update(config, to_insert, SparqlUpdateType::Insert).await?;
-    }
     Ok(())
 }
 
 async fn update(
     config: Config,
+    insert_documents: &mut HashMap<String, Vec<BTreeMap<String, Value>>>,
+    delete_documents: &mut HashMap<String, HashSet<String>>,
     triples_path: PathBuf,
     update_type: SparqlUpdateType,
 ) -> anyhow::Result<()> {
@@ -423,38 +441,23 @@ async fn update(
         match update_type {
             SparqlUpdateType::Delete => {
                 // we only need the uuid to delete
-                let uuids = updates
-                    .into_iter()
-                    .flat_map(|u| {
-                        doc.list_statements(
-                            Some(&u.subject),
-                            Some(&Node::Iri(Cow::Borrowed(&config.uuid_predicate))),
-                            None,
-                        )
-                    })
-                    .map(|e| e.object.clone())
-                    .map(|o| remove_datatype_xsd_string(o))
-                    .map(|o| o.to_string().replace('"', ""))
-                    .dedup()
-                    .collect_vec();
-
-                for chunk in uuids.chunks(config.chunk_size) {
-                    debug!(
-                        "deleting the following documents in index {}: {chunk:?}",
-                        ic.name
-                    );
-                    let task = config
-                        .search_client
-                        .index(&ic.name)
-                        .delete_documents(chunk)
-                        .await?;
-                    debug!("{task:?}");
-                    debug!("waiting for task to complete...");
-                    config
-                        .search_client
-                        .wait_for_task(task, None, config.index_max_wait_for_task)
-                        .await?;
-                }
+                let deletes_for_idx = delete_documents
+                    .entry(ic.name.clone())
+                    .or_insert(HashSet::new());
+                deletes_for_idx.extend(
+                    updates
+                        .into_iter()
+                        .flat_map(|u| {
+                            doc.list_statements(
+                                Some(&u.subject),
+                                Some(&Node::Iri(Cow::Borrowed(&config.uuid_predicate))),
+                                None,
+                            )
+                        })
+                        .map(|e| e.object.clone())
+                        .map(|o| remove_datatype_xsd_string(o))
+                        .map(|o| o.to_string().replace('"', "")),
+                );
             }
             SparqlUpdateType::Insert => {
                 // inserting is a bit more work
@@ -501,24 +504,47 @@ async fn update(
                     }
                     documents.push(doc_data);
                 }
-                for chunk in documents.chunks(config.chunk_size) {
-                    let task = config
-                        .search_client
-                        .index(&ic.name)
-                        .add_or_update(chunk, Some(INDEX_ID_KEY))
-                        .await?;
-                    debug!("{task:?}");
-                    debug!("waiting for task to complete...");
-                    config
-                        .search_client
-                        .wait_for_task(task, None, config.index_max_wait_for_task)
-                        .await?;
-                }
+                let inserts_for_idx = insert_documents
+                    .entry(ic.name.clone())
+                    .or_insert(Vec::new());
+                inserts_for_idx.extend(documents.into_iter());
             }
             SparqlUpdateType::NoOp => info!("index update: no op"),
         }
     }
 
+    Ok(())
+}
+async fn add_or_replace_documents(
+    config: &Config,
+    index: &str,
+    mut documents: Vec<BTreeMap<String, Value>>,
+) -> anyhow::Result<()> {
+    if documents.is_empty() {
+        return Ok(());
+    }
+    let documents = &documents
+        .drain(..)
+        .filter_map(|d| serde_json::to_string(&d).ok())
+        .join("\n");
+    debug!("documents:{documents}");
+    let documents = gzip_str(documents).await?;
+    let task: TaskInfo = config
+        .search_client
+        .add_or_replace_documents(
+            index,
+            INDEX_ID_KEY,
+            documents,
+            Some(ContentType::ApplicationNdJson),
+            Some(Encoding::Gzip),
+        )
+        .await?;
+    debug!("{task:?}");
+    debug!("waiting for task to complete...");
+    config
+        .search_client
+        .wait_for_task(task.task_uid, None, config.index_max_wait_for_task)
+        .await?;
     Ok(())
 }
 

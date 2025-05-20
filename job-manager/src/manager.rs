@@ -10,7 +10,6 @@ use std::{
 use anyhow::{Context, anyhow};
 use chrono::Local;
 use cron::Schedule;
-use meilisearch_sdk::{client::Client as SearchClient, search::SearchResults};
 use serde_json::Value;
 use sparql_client::SparqlClient;
 use swarm_common::{
@@ -33,6 +32,7 @@ use swarm_common::{
     nats_client::{self, NatsClient, PullConsumer, Stream},
     retry_fs, warn,
 };
+use swarm_meilisearch_client::{MeilisearchClient, domain::SearchResults};
 
 use crate::domain::{ApiError, ROOT_OUTPUT_DIR_PB};
 
@@ -40,7 +40,7 @@ use crate::domain::{ApiError, ROOT_OUTPUT_DIR_PB};
 pub struct JobManagerState {
     pub nc: NatsClient,
     pub sparql_client: SparqlClient,
-    pub search_client: SearchClient,
+    pub search_client: MeilisearchClient,
     pub index_config: Arc<Vec<IndexConfiguration>>,
     pub task_event_consumer: PullConsumer,
     pub _task_event_stream: Stream,
@@ -119,7 +119,7 @@ impl JobManagerState {
         };
 
         let nc = nats_client::connect().await?;
-        let search_client = SearchClient::new(meilisearch_url, Some(meilisearch_key))?;
+        let search_client = MeilisearchClient::new(meilisearch_url, meilisearch_key)?;
         let max_concurrent_job = std::env::var(MAX_CONCURRENT_JOB)
             .unwrap_or_else(|_| "5".into())
             .parse::<u64>()
@@ -563,37 +563,46 @@ impl JobManagerState {
     pub async fn search(
         &self,
         index: &str,
-        req: &SearchQueryRequest,
+        req: &mut SearchQueryRequest,
     ) -> anyhow::Result<SearchQueryResponse> {
         let config = self
             .index_config
             .iter()
             .find(|ic| ic.name == index)
             .context(format!("index config doesn't exist for {index}"))?;
-        let index = self.search_client.index(&config.name);
-
         let q = req.get_formatted_query();
-        let mut search_builder = index.search();
-        debug!("req: {req:?}");
-        search_builder
-            .with_hits_per_page(if req.limit == 0 { 10 } else { req.limit })
-            .with_page(if req.page == 0 { 1 } else { req.page });
-        if let Some(filters) = req.filters.as_ref() {
-            search_builder.with_filter(filters);
-        }
-        if let Some(query) = q.as_ref() {
-            search_builder.with_query(query);
-        }
-        let sort = req.get_formatted_sort();
-        let sort_arr: &[&str] = &[sort.as_str()];
-        if !sort.is_empty() {
-            search_builder.with_sort(sort_arr);
-        }
+        let sort = {
+            let sort = req.get_formatted_sort();
+            if sort.is_empty() {
+                None
+            } else {
+                Some(vec![sort])
+            }
+        };
+        let search_req = swarm_meilisearch_client::domain::SearchQuery {
+            hits_per_page: (if req.limit == 0 {
+                Some(10)
+            } else {
+                Some(req.limit)
+            }),
+            page: if req.page == 0 {
+                Some(1)
+            } else {
+                Some(req.page)
+            },
+            filter: req.filters.take(),
+            q,
+            sort,
+            ..Default::default()
+        };
 
-        let mut res: SearchResults<BTreeMap<String, Value>> = search_builder.execute().await?;
+        debug!("req: {search_req:?}");
+
+        let mut res: SearchResults<BTreeMap<String, Value>> =
+            self.search_client.search(&config.name, &search_req).await?;
 
         Ok(SearchQueryResponse {
-            hits: res.hits.drain(..).map(|r| r.result).collect(),
+            hits: res.hits.drain(..).collect(),
             total_hits: res.total_hits.or(res.estimated_total_hits),
             total_pages: res.total_pages.or(res.estimated_total_hits),
             page: res.page,

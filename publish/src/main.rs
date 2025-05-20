@@ -234,7 +234,8 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
                 &intersect_triple_file_path,
                 &failed_query_file_path,
             )
-            .await {
+            .await
+            {
                 errors.push(format!("error during publishing!  error: {e:?}"));
             }
         }

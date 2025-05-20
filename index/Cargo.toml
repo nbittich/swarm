@@ -19,4 +19,6 @@ sparql_client.workspace=true
 serde = { workspace = true, features = ["derive"] }
 itertools = {workspace =true, features= []}
 serde_json.workspace = true
-meilisearch-sdk.workspace = true
+swarm_meilisearch_client.workspace = true
+reqwest = { workspace = true, features = ["json"] }
+serde_urlencoded.workspace=true

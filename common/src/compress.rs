@@ -13,6 +13,23 @@ use tracing::instrument;
 use crate::retry_fs;
 
 #[instrument(level = "debug")]
+pub async fn gzip_str<'a>(s: &'a str) -> anyhow::Result<Vec<u8>> {
+    use async_compression::tokio::write::GzipEncoder;
+
+    if s.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut gzipped_s = Vec::with_capacity(std::cmp::max(32, s.len() / 8));
+    let mut encoder = GzipEncoder::new(&mut gzipped_s);
+
+    encoder.write_all(s.as_bytes()).await?;
+    encoder.shutdown().await?;
+
+    Ok(gzipped_s)
+}
+
+#[instrument(level = "debug")]
 pub async fn gzip(path: &Path, delete: bool) -> anyhow::Result<PathBuf> {
     if path.extension().is_some_and(|ext| ext == "gz") {
         return Ok(path.to_path_buf()); // no op, nothing to do

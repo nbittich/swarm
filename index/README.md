@@ -10,7 +10,7 @@
 | `INDEX_MAX_WAIT_FOR_TASK`         | Maximum time in seconds to wait for a meilisearch task. Default to 3600 sec.                                       | No       | `3600`                                   |
 | `RESET_INDEX`                     | If set to true, forces re-creation of the Meilisearch index.                                                       | No       | `true`                                   |
 | `RESET_INDEX_NAME`                | Optional custom name for the Meilisearch index to reset. It must be defined in the index config                    | No       | `custom_index_name`                      |
-| `CHUNK_SIZE`                      | Size of each batch tasks                                                                                           | No       | `100`                                    |
+| `CHUNK_SIZE`                      | Size of each batch tasks                                                                                           | No       | `255`                                    |
 | `INDEX_MAX_TOTAL_HITS`            | Max total hits (https://www.meilisearch.com/docs/reference/api/settings#pagination)                                | No       | `50000`                                  |
 | `INDEX_MAX_RETRY`                 | Max retry for indexing                                                                                             | No       | `5`                                  |
 | `INDEX_DELAY_BEFORE_NEXT_RETRY`   | Delay (in seconds) before next retry                                                                               | No       | `30`                                  |

@@ -15,8 +15,7 @@ pub static SPARQL_MAX_RETRY: &str = "SPARQL_MAX_RETRY";
 pub static SPARQL_RETRY_DELAY_MILLIS: &str = "SPARQL_RETRY_DELAY_MILLIS";
 pub static SPARQL_RESULT_JSON: &str = "application/sparql-results+json";
 pub static SPARQL_UPDATE: &str = "application/sparql-update; charset=utf-8";
-static REQUEST_TIMEOUT_SEC: &str = "REQUEST_TIMEOUT_SEC";
-
+pub static REQUEST_TIMEOUT_SEC: &str = "REQUEST_TIMEOUT_SEC";
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SparqlResponse {
     pub head: Head,

@@ -70,6 +70,7 @@ pub async fn serve(
         .route("/job-definitions", get(all_job_definitions))
         .route("/publications", post(get_last_publications))
         .layer(DefaultBodyLimit::max(body_size_limit))
+        .layer(tower_http::trace::TraceLayer::new_for_http())
         .with_state(manager_state)
         .fallback(fallback);
     info!("listening on {:?}", addr);
@@ -458,10 +459,10 @@ async fn search_configuration(
 async fn search(
     State(manager): State<JobManagerState>,
     axum::extract::Path(index): axum::extract::Path<String>,
-    Json(req): Json<SearchQueryRequest>,
+    Json(mut req): Json<SearchQueryRequest>,
 ) -> Result<Json<SearchQueryResponse>, ApiError> {
     manager
-        .search(&index, &req)
+        .search(&index, &mut req)
         .await
         .map(Json)
         .map_err(|e| ApiError::SearchError(e.to_string()))
@@ -472,8 +473,7 @@ async fn index_stats(
 ) -> Result<Json<IndexStatistics>, ApiError> {
     manager
         .search_client
-        .index(index)
-        .get_stats()
+        .get_stats(index.as_str())
         .await
         .map(|st| {
             Json(IndexStatistics {
