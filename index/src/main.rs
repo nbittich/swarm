@@ -394,7 +394,7 @@ async fn index(lines: &[String], config: &Config) -> anyhow::Result<()> {
         }
     }
     for (idx, docs) in insert_documents {
-        add_or_replace_documents(&config, &idx, docs).await?;
+        add_or_replace_documents(config, &idx, docs).await?;
     }
     for (idx, uuids) in delete_documents {
         debug!(
@@ -443,7 +443,7 @@ async fn update(
                 // we only need the uuid to delete
                 let deletes_for_idx = delete_documents
                     .entry(ic.name.clone())
-                    .or_insert(HashSet::new());
+                    .or_default();
                 deletes_for_idx.extend(
                     updates
                         .into_iter()
@@ -506,7 +506,7 @@ async fn update(
                 }
                 let inserts_for_idx = insert_documents
                     .entry(ic.name.clone())
-                    .or_insert(Vec::new());
+                    .or_default();
                 inserts_for_idx.extend(documents.into_iter());
             }
             SparqlUpdateType::NoOp => info!("index update: no op"),
