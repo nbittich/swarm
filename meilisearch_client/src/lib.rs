@@ -161,7 +161,7 @@ impl MeilisearchClient {
         let mut ticker = tokio::time::interval(interval);
         while timeout > elapsed_time {
             match self.get_task(task_id).await {
-                Ok(ref task) => match task.status.as_ref().map(|s| s.as_str()) {
+                Ok(ref task) => match task.status.as_deref() {
                     Some("failed") => {
                         return Err(anyhow::anyhow!(serde_json::to_string(&task.error)?));
                     }
