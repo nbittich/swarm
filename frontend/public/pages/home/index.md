@@ -6,7 +6,7 @@ It takes advantage of the Flemish government's [open data initiative](https://ww
 
 All data is extracted from the official websites of Flemish municipalities, where it is published as [RDFa](https://fr.wikipedia.org/wiki/RDFa) annotated html. Swarm scrapes this data, processes it, and republishes it in a usable format.
 
-Inspired by a similar existing project, it's **not intended** to replace any existing tools; I use it primarily as a sandbox for trying out new ideas in data extraction and processing. For production-level work, I'd strongly recommend using a more reliable solutions.
+Largely inspired by a similar existing project, it's **not intended** to replace any existing tools; I use it primarily as a sandbox for trying out new ideas in data extraction and processing. For production-level work, I'd strongly recommend using a more reliable solutions.
 This project poses significant challenges, as we try to scrape every page from over 300 websites using a server with only a 120gb hard drive ([Kimsufi KS-B](https://eco.ovhcloud.com/fr/kimsufi/ks-b/)). 
 
 At the time of writing, 9gb have already been used from scraping 23 websites, that is ~166k agenda items and ~16k sessions indexed, excluding additional data that are not yet configured to be indexed but can still be queried via the sparql endpoint. The system may eventually crash once I’ve exhausted every possible trick I can think of to keep the data size under control.

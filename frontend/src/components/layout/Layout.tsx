@@ -6,8 +6,8 @@ import {
     ConsoleSqlOutlined,
     LoginOutlined,
     CalendarOutlined,
-    HomeOutlined,
     SearchOutlined,
+    QuestionOutlined,
 } from "@ant-design/icons";
 import { App, Button, ConfigProvider, Drawer, Flex, Layout, Menu, MenuProps, Switch, theme } from "antd";
 import React, { useEffect, useState } from "react";
@@ -74,11 +74,11 @@ export default function MainLayout() {
             </Sider>)
         }
     }
-    items.push(getItem((<Link onClick={() => handleNavigation("/")}>Home</Link>), '/', <HomeOutlined />));
+    items.push(getItem((<Link onClick={() => handleNavigation("/search")}>Search</Link>), '/search', <SearchOutlined />));
     items.push(getItem((<Link onClick={() => handleNavigation("/jobs")}>Jobs</Link>), '/jobs', <ThunderboltOutlined />));
     items.push(getItem((<Link onClick={() => handleNavigation("/scheduled-jobs")}>Scheduled Jobs</Link>), '/scheduled-jobs', <CalendarOutlined />));
-    items.push(getItem((<Link onClick={() => handleNavigation("/yasgui")}>Sparql</Link>), '/yasgui', <ConsoleSqlOutlined />));
-    items.push(getItem((<Link onClick={() => handleNavigation("/search")}>Search</Link>), '/search', <SearchOutlined />));
+    items.push(getItem((<Link onClick={() => handleNavigation("/yasgui")}>SPARQL</Link>), '/yasgui', <ConsoleSqlOutlined />));
+    items.push(getItem((<Link onClick={() => handleNavigation("/about")}>About</Link>), '/about', <QuestionOutlined />));
     items.push({ type: 'divider' });
     if (token) {
         items.push(getItem((<a onClick={() => handleNavigation("/logout")}>Logout</a>), '', <LogoutOutlined />));

@@ -1,5 +1,5 @@
 import { AppDispatch, RootState } from "@swarm/states/Store";
-import { Alert, Button, Col, Divider, Flex, Input, List, Pagination, Row, Select, Space, Spin, Typography, } from "antd";
+import { Alert, Button, Col, Divider, Empty, Flex, Input, List, Pagination, Select, Space, Spin, Typography, } from "antd";
 import { ReactElement, useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import FilterBuilder from "./FilterBuilder";
@@ -48,8 +48,10 @@ const SearchContainer: React.FC = () => {
     const [limit, _] = useState(5);
     const [filters, setFilters] = useState<{ key: string, operator: string, joiner: string, value: string }[]>([]);
 
+    useEffect(() => {
+        dispatch(fetchSearchConfigurations());
+    }, [dispatch]);
 
-    useEffect(() => { dispatch(fetchSearchConfigurations()) }, [dispatch]);
     useEffect(() => {
         dispatch(clearSearchResult());
     }, [selectedIndex, dispatch]);
@@ -81,16 +83,22 @@ const SearchContainer: React.FC = () => {
     }
 
     return (<>
-        <h2>SEARCH</h2>
+        <Typography.Title style={{ textAlign: 'center' }}>
+            <span style={{ color: '#8ecae6' }}>S</span>
+            <span style={{ color: '#219ebc' }}>W</span>
+            <span style={{ color: '#ffb703' }}>A</span>
+            <span style={{ color: '#fb8500' }}>R</span>
+            <span style={{ color: '#ff5d8f' }}>M</span>
+        </Typography.Title>
         <Flex justify="center" >
-            <Col span={isMobile ? 24 : 18}>
 
+
+            <Col span={isMobile ? 24 : 14}>
                 <Flex vertical={isMobile} gap="middle" >
                     <Select
                         size="large"
-
-
                         placeholder="Select type"
+                        value={selectedIndex}
                         onChange={value => { updateIndex(value); setFilters([]); setQuery(undefined) }}
                         options={indexConfigs.map(ic => ({ value: ic.name, label: ic.name }))}
                     />
@@ -106,6 +114,10 @@ const SearchContainer: React.FC = () => {
                     />
                     <Button size="large" disabled={!selectedIndex} type="dashed" danger onClick={() => setFilters([...filters, { key: '', operator: '=', value: '', joiner: 'AND' }])}>
                         Add Filter
+                    </Button>
+
+                    <Button size="large" disabled={!selectedIndex} type="dashed" onClick={() => updateIndex(undefined)}>
+                        Clear
                     </Button>
                 </Flex >
                 {indexStats && (<Typography.Text type="secondary">(~{new Intl.NumberFormat("nl-BE").format(
@@ -133,7 +145,7 @@ const SearchContainer: React.FC = () => {
             />
         }
         <Flex justify="center">
-            <Col span={isMobile ? 24 : 18}>
+            <Col span={isMobile ? 24 : 14}>
                 <Spin spinning={loading || searching}>
                     {searchResults && selectedIndex && (<>
                         {searchResults.hits.map((hit) => (
@@ -196,6 +208,20 @@ const SearchContainer: React.FC = () => {
                 </Spin >
             </Col>
 
+        </Flex>
+        <Flex justify="center">
+            <Col span={isMobile ? 24 : 14}>
+                {!searchResults?.hits?.length && !loading && !searching && (
+                    <Empty
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        description={
+                            <div>
+                                <p>Use the dropdown above to select a dataset, then press search to begin.</p>
+                            </div>
+                        }
+                    />
+                )}
+            </Col>
         </Flex>
 
 

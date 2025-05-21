@@ -1,4 +1,4 @@
-import { RouterProvider, createBrowserRouter } from "react-router-dom";
+import { Navigate, RouterProvider, createBrowserRouter } from "react-router-dom";
 import { ProtectedRoute } from "./ProtectedRoute";
 import Logout from "@swarm/components/auth/Logout";
 import Login from "@swarm/components/auth/Login";
@@ -51,8 +51,12 @@ const SwarmRoutes = () => {
             element: <ScheduledJobsTable />,
         },
         {
-            path: "/",
+            path: "/about",
             element: <Home />,
+        },
+        {
+            path: "/",
+            element: <Navigate to="/search" />
         },
         {
             path: "/login",

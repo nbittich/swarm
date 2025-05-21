@@ -166,7 +166,7 @@ const JobsTable: React.FC = () => {
             },
         },
         {
-            title: 'Tasks',
+            title: 'Details',
             key: 'tasks',
             align: 'center',
             render: (_, record) => (

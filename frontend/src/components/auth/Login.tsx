@@ -9,7 +9,7 @@ export default function Login() {
     const [loading, setLoading] = useState(false);
     useEffect(() => {
         if (token) {
-            navigate('/')
+            navigate('/search')
         }
     }, [token, navigate])
     const handleLogin = async (form: { username: string; password: string }) => {
@@ -23,7 +23,7 @@ export default function Login() {
                 }
                 setToken(jwt);
                 // message.success('Login successful!');
-                navigate("/", { replace: true });
+                navigate("/search", { replace: true });
 
             } else {
                 message.error(`Could not connect: ${response.status}`);
