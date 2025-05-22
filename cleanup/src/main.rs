@@ -163,15 +163,20 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<()> {
                 .delete_by_id(&task_to_clean.id)
                 .await?;
             debug!("deleting task directory {:?}...", task_to_clean.output_dir);
-            if let Err(e) = retry_fs::remove_dir_all(&task_to_clean.output_dir).await {
-                error!("could not delete task directory: {e}");
+            if task_to_clean.output_dir.exists() {
+                if let Err(e) = retry_fs::remove_dir_all(&task_to_clean.output_dir).await {
+                    error!("could not delete task directory: {e}");
+                }
+                debug!("directory task {:?} deleted.", task_to_clean.output_dir);
             }
-            debug!("directory task {:?} deleted.", task_to_clean.output_dir);
         }
-        debug!("deleting job directory {:?}...", job_to_clean.root_dir);
-        if let Err(e) = retry_fs::remove_dir_all(&job_to_clean.root_dir).await {
-            error!("could not delete job directory: {e}");
+        if job_to_clean.root_dir.exists() {
+            debug!("deleting job directory {:?}...", job_to_clean.root_dir);
+            if let Err(e) = retry_fs::remove_dir_all(&job_to_clean.root_dir).await {
+                error!("could not delete job directory: {e}");
+            }
         }
+
         debug!("job directory {:?} deleted.", job_to_clean.root_dir);
         config.job_repository.delete_by_id(&job_to_clean.id).await?;
     }
