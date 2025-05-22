@@ -204,9 +204,11 @@ impl JobManagerState {
             self.task_repository.delete_by_id(&ot.id).await?;
         }
         if job.root_dir.exists() {
-            if let Err(e) = retry_fs::remove_dir_all(job.root_dir).await {
-                error!("could not delete directory {e}");
-            }
+            tokio::spawn(async {
+                if let Err(e) = retry_fs::remove_dir_all(job.root_dir).await {
+                    error!("could not delete directory {e}");
+                }
+            });
         }
 
         self.job_repository.delete_by_id(&job.id).await?;
