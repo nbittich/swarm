@@ -9,7 +9,7 @@ All data is extracted from the official websites of Flemish municipalities, wher
 Largely inspired by a similar existing project, it's **not intended** to replace any existing tools; I use it primarily as a sandbox for trying out new ideas in data extraction and processing. For production-level work, I'd strongly recommend using a more reliable solutions.
 This project poses significant challenges, as we try to scrape every page from over 300 websites using a server with only a 120gb hard drive ([Kimsufi KS-B](https://eco.ovhcloud.com/fr/kimsufi/ks-b/)). 
 
-At the time of writing, 9gb have already been used from scraping 23 websites, that is ~166k agenda items and ~16k sessions indexed, excluding additional data that are not yet configured to be indexed but can still be queried via the sparql endpoint. The system may eventually crash once I’ve exhausted every possible trick I can think of to keep the data size under control.
+It is currently running on a [KS-2](https://eco.ovhcloud.com/fr/kimsufi/ks-2/) server with ~5TB disk drives, 32 GB of RAM, and an Intel Xeon-D 1540 (8 core, 16 threads) CPU. At the time of writing, 2 million agenda items have been extracted.
 
 ### How It Works
 
@@ -62,7 +62,8 @@ If you have suggestions for improvement or encounter any issues, please don't he
 
 ### Future Directions
 
-Extending the pipeline to add more processing steps, like converting the extracted triples into datasets that are suitable for [fine-tuning AI models](https://en.wikipedia.org/wiki/Fine-tuning_(deep_learning)). 
+- Extending the pipeline to add more processing steps, like converting the extracted triples into datasets that are suitable for [fine-tuning AI models](https://en.wikipedia.org/wiki/Fine-tuning_(deep_learning)). 
+- Write a parser for [Microdata](https://html.spec.whatwg.org/multipage/microdata.html)
 
 ### Request for Removal
 
