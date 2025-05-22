@@ -222,12 +222,6 @@ pub async fn crawl_website(
                 }
             }
         }
-        let random_delay = random_delay_millis(config.min_delay_millis, config.max_delay_millis)?;
-        debug!(
-            "sleeping {} milliseconds before next batch...",
-            random_delay.as_millis()
-        );
-        tokio::time::sleep(random_delay).await;
     }
     visited_urls.clear();
     Ok(TaskResult::ScrapeWebsite {
