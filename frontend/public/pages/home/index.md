@@ -7,7 +7,6 @@ It takes advantage of the Flemish government's [open data initiative](https://ww
 All data is extracted from the official websites of Flemish municipalities, where it is published as [RDFa](https://fr.wikipedia.org/wiki/RDFa) annotated html. Swarm scrapes this data, processes it, and republishes it in a usable format.
 
 Largely inspired by a similar existing project, it's **not intended** to replace any existing tools; I use it primarily as a sandbox for trying out new ideas in data extraction and processing. For production-level work, I'd strongly recommend using a more reliable solutions.
-This project poses significant challenges, as we try to scrape every page from over 300 websites using a server with only a 120gb hard drive ([Kimsufi KS-B](https://eco.ovhcloud.com/fr/kimsufi/ks-b/)). 
 
 It is currently running on a [KS-2](https://eco.ovhcloud.com/fr/kimsufi/ks-2/) server with ~5TB disk drives, 32 GB of RAM, and an Intel Xeon-D 1540 (8 core, 16 threads) CPU. At the time of writing, 2 million agenda items have been extracted.
 
