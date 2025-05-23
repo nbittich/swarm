@@ -8,8 +8,6 @@ All data is extracted from the official websites of Flemish municipalities, wher
 
 Largely inspired by a similar existing project, it's **not intended** to replace any existing tools; I use it primarily as a sandbox for trying out new ideas in data extraction and processing. For production-level work, I'd strongly recommend using a more reliable solutions.
 
-It is currently running on a [KS-2](https://eco.ovhcloud.com/fr/kimsufi/ks-2/) server with ~5TB disk drives, 32 GB of RAM, and an Intel Xeon-D 1540 (8 core, 16 threads) CPU. At the time of writing, 2 million agenda items have been extracted.
-
 ### How It Works
 
 Swarm works with configurable & schedulable jobs (called job definitions), each made up of a series of tasks, and each task is a microservice with a specific responsibility, communicating through events via a [NATS](https://nats.io/) message broker. This event-driven approach keeps the pipeline organized and easy to follow, where each task's completion triggers the next.

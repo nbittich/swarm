@@ -153,7 +153,7 @@ impl MeilisearchClient {
         interval: Option<Duration>,
         timeout: Option<Duration>,
     ) -> anyhow::Result<()> {
-        let interval = interval.unwrap_or_else(|| Duration::from_millis(100));
+        let interval = interval.unwrap_or_else(|| Duration::from_millis(1000));
         let timeout = timeout.unwrap_or_else(|| Duration::from_millis(30_000));
 
         let mut elapsed_time = Duration::new(0, 0);

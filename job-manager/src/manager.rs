@@ -216,7 +216,20 @@ impl JobManagerState {
     }
 
     pub async fn start_scheduled_job_executor(&self) -> anyhow::Result<()> {
+        // reset next execution after restart
+        debug!("reset all scheduled jobs after a restart...");
+        self.scheduled_job_repository
+            .update_many(
+                doc! {},
+                doc! {
+                    "$set": {
+                        "nextExecution": null
+                    }
+                },
+            )
+            .await?;
         let mut interval = tokio::time::interval(Duration::from_secs(10));
+
         loop {
             interval.tick().await;
             if self

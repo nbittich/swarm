@@ -10,8 +10,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::{borrow::Cow, env::var, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 use swarm_common::compress::{gzip_str, ungzip};
 use swarm_common::constant::{
-    CHUNK_SIZE, INDEX_DELAY_BEFORE_NEXT_RETRY, INDEX_MAX_RETRY, INDEX_MAX_TOTAL_HITS,
-    INDEX_MAX_WAIT_FOR_TASK, RESET_INDEX, RESET_INDEX_NAME,
+    CHUNK_SIZE, INDEX_DELAY_BEFORE_NEXT_RETRY, INDEX_INTERVAL_WAIT_FOR_TASK, INDEX_MAX_RETRY,
+    INDEX_MAX_TOTAL_HITS, INDEX_MAX_WAIT_FOR_TASK, RESET_INDEX, RESET_INDEX_NAME,
 };
 use swarm_common::domain::index_config::{INDEX_ID_KEY, IndexConfiguration};
 use swarm_common::{
@@ -48,6 +48,7 @@ struct Config {
     uuid_predicate: String,
     index_config: Arc<Vec<IndexConfiguration>>,
     index_max_wait_for_task: Option<Duration>,
+    index_interval_wait_for_task: Option<Duration>,
     index_max_retry: u64,
     index_delay_before_next_retry: u64,
     chunk_size: usize,
@@ -83,6 +84,13 @@ async fn main() -> anyhow::Result<()> {
         .flat_map(|r| r.parse::<u64>())
         .last()
         .or(Some(3600))
+        .map(Duration::from_secs);
+
+    let index_interval_wait_for_task = var(INDEX_INTERVAL_WAIT_FOR_TASK)
+        .iter()
+        .flat_map(|r| r.parse::<u64>())
+        .last()
+        .or(Some(30))
         .map(Duration::from_secs);
     let index_max_retry = var(INDEX_MAX_RETRY)
         .iter()
@@ -148,6 +156,7 @@ async fn main() -> anyhow::Result<()> {
         uuid_predicate,
         index_config,
         search_client,
+        index_interval_wait_for_task,
         chunk_size,
         index_max_retry,
         index_delay_before_next_retry,
@@ -181,7 +190,11 @@ async fn main() -> anyhow::Result<()> {
                 async || {
                     config
                         .search_client
-                        .wait_for_task(delete_task_info.task_uid, None, index_max_wait_for_task)
+                        .wait_for_task(
+                            delete_task_info.task_uid,
+                            index_interval_wait_for_task,
+                            index_max_wait_for_task,
+                        )
                         .await
                 },
             )
@@ -393,24 +406,40 @@ async fn index(lines: &[String], config: &Config) -> anyhow::Result<()> {
             .await?;
         }
     }
-    for (idx, docs) in insert_documents {
-        add_or_replace_documents(config, &idx, docs).await?;
-    }
+
+    let mut tasks = JoinSet::new();
     for (idx, uuids) in delete_documents {
-        debug!(
-            "deleting the following documents in index {}: {uuids:?}",
-            idx
-        );
-        let task = config
-            .search_client
-            .delete_documents(&idx, &uuids.into_iter().collect_vec())
-            .await?;
-        debug!("{task:?}");
-        debug!("waiting for task to complete...");
-        config
-            .search_client
-            .wait_for_task(task.task_uid, None, config.index_max_wait_for_task)
-            .await?;
+        let config = config.clone();
+        tasks.spawn(async move {
+            debug!(
+                "deleting the following documents in index {}: {uuids:?}",
+                idx
+            );
+            let task = config
+                .search_client
+                .delete_documents(&idx, &uuids.into_iter().collect_vec())
+                .await?;
+            debug!("{task:?}");
+            debug!("waiting for task to complete...");
+            config
+                .search_client
+                .wait_for_task(
+                    task.task_uid,
+                    config.index_interval_wait_for_task,
+                    config.index_max_wait_for_task,
+                )
+                .await
+        });
+        while let Some(task) = tasks.join_next().await {
+            task??;
+        }
+    }
+    for (idx, docs) in insert_documents {
+        let config = config.clone();
+        tasks.spawn(async move { add_or_replace_documents(&config, &idx, docs).await });
+    }
+    while let Some(task) = tasks.join_next().await {
+        task??;
     }
 
     Ok(())
@@ -441,9 +470,7 @@ async fn update(
         match update_type {
             SparqlUpdateType::Delete => {
                 // we only need the uuid to delete
-                let deletes_for_idx = delete_documents
-                    .entry(ic.name.clone())
-                    .or_default();
+                let deletes_for_idx = delete_documents.entry(ic.name.clone()).or_default();
                 deletes_for_idx.extend(
                     updates
                         .into_iter()
@@ -504,9 +531,7 @@ async fn update(
                     }
                     documents.push(doc_data);
                 }
-                let inserts_for_idx = insert_documents
-                    .entry(ic.name.clone())
-                    .or_default();
+                let inserts_for_idx = insert_documents.entry(ic.name.clone()).or_default();
                 inserts_for_idx.extend(documents.into_iter());
             }
             SparqlUpdateType::NoOp => info!("index update: no op"),
@@ -543,7 +568,11 @@ async fn add_or_replace_documents(
     debug!("waiting for task to complete...");
     config
         .search_client
-        .wait_for_task(task.task_uid, None, config.index_max_wait_for_task)
+        .wait_for_task(
+            task.task_uid,
+            config.index_interval_wait_for_task,
+            config.index_max_wait_for_task,
+        )
         .await?;
     Ok(())
 }
