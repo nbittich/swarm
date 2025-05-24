@@ -172,7 +172,12 @@ impl MeilisearchClient {
                     }
                     status => return Err(anyhow::anyhow!("invalid status {status:?}")),
                 },
-                Err(error) => return Err(error),
+                Err(error) => {
+                    // if there's an error, we just tick and try again later
+                    tracing::error!("wait_for_task: {error}");
+                    tokio::time::sleep(self.delay_before_next_retry).await;
+                    elapsed_time += self.delay_before_next_retry;
+                }
             };
         }
 
