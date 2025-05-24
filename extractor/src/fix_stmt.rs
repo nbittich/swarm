@@ -51,6 +51,7 @@ fn fix_term(mut term: Node<'_>) -> Option<Node<'_>> {
                                 .map(Node::Literal)
                         } else if iri.as_ref() == &Node::Iri(Cow::Owned(RDFS("Literal")))
                             || iri.as_ref() == &Node::Iri(Cow::Owned(RDF("langString")))
+                            || iri.as_ref() == &Node::Iri(Cow::Owned(RDF("XMLLiteral")))
                         {
                             *datatype = Some(Box::new(Node::Iri(Cow::Owned(XSD("string")))));
                             return Some(term);
