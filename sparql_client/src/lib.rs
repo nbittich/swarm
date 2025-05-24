@@ -180,7 +180,16 @@ impl SparqlClient {
 
         let q = make_update_query(target_graph, operation, triples);
         debug!("Executing query: \n{q}\n");
-        match self._update(q).await {
+        match self
+            .client
+            .post(self.endpoint.as_str())
+            .header(ACCEPT, SPARQL_RESULT_JSON)
+            .header(CONTENT_TYPE, SPARQL_UPDATE)
+            .body(q.to_string())
+            .send()
+            .await
+            .and_then(|response| response.error_for_status())
+        {
             Ok(_) => Ok(()),
             Err(_) if triples.len() == 1 => {
                 Err(anyhow!("Could not execute bulk update for {triples:?}"))
