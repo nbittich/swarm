@@ -9,7 +9,7 @@ use swarm_common::{
     IdGenerator, StreamExt,
     compress::{gzip, ungzip},
     constant::{
-        ADD_UUID_CONSUMER, APPLICATION_NAME, MANIFEST_FILE_NAME, PUBLIC_TENANT,
+        ADD_UUID_CONSUMER, APPLICATION_NAME, CACHE_SIZE, MANIFEST_FILE_NAME, PUBLIC_TENANT,
         SUB_TASK_EVENT_STREAM, SUB_TASK_STATUS_CHANGE_EVENT, SUB_TASK_STATUS_CHANGE_SUBJECT,
         TASK_EVENT_STREAM, TASK_STATUS_CHANGE_EVENT, TASK_STATUS_CHANGE_SUBJECT, UUID_COLLECTION,
         UUID_COMPLEMENT_PREDICATE,
@@ -54,7 +54,12 @@ async fn main() -> anyhow::Result<()> {
     let mongo_client = StoreClient::new(app_name.to_string()).await?;
     let uuid_repository: StoreRepository<UuidSubject> =
         StoreRepository::get_repository(&mongo_client, UUID_COLLECTION, PUBLIC_TENANT);
-    let cache = moka::future::Cache::new(50_000);
+    let cache = moka::future::Cache::new(
+        var(CACHE_SIZE)
+            .ok()
+            .and_then(|cs| cs.parse::<u64>().ok())
+            .unwrap_or(100_000),
+    );
 
     let mut messages = task_event_consumer.messages().await?;
 

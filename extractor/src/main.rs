@@ -2,7 +2,13 @@
 //pub use swarm_common::alloc;
 
 use std::{
-    borrow::Cow, env::var, error::Error, fmt::Display, path::Path, sync::Arc, time::Duration,
+    borrow::Cow,
+    env::var,
+    error::Error,
+    fmt::Display,
+    path::Path,
+    sync::{Arc, LazyLock},
+    time::Duration,
 };
 mod fix_stmt;
 use chrono::Local;
@@ -12,9 +18,9 @@ use swarm_common::{
     IdGenerator, StreamExt,
     compress::{gzip, ungzip},
     constant::{
-        APPLICATION_NAME, EXTRACTOR_CONSUMER, MANIFEST_FILE_NAME, PROV, SUB_TASK_EVENT_STREAM,
-        SUB_TASK_STATUS_CHANGE_EVENT, SUB_TASK_STATUS_CHANGE_SUBJECT, TASK_EVENT_STREAM,
-        TASK_STATUS_CHANGE_EVENT, TASK_STATUS_CHANGE_SUBJECT,
+        APPLICATION_NAME, EXTRACTOR_CONSUMER, MANIFEST_FILE_NAME, MAX_CONCURRENT_JOB, PROV,
+        SUB_TASK_EVENT_STREAM, SUB_TASK_STATUS_CHANGE_EVENT, SUB_TASK_STATUS_CHANGE_SUBJECT,
+        TASK_EVENT_STREAM, TASK_STATUS_CHANGE_EVENT, TASK_STATUS_CHANGE_SUBJECT,
     },
     debug,
     domain::{
@@ -119,6 +125,13 @@ pub async fn append_entry_manifest_file(
     Ok(())
 }
 
+static MAX_CONCURRENT_JOB_VALUE: LazyLock<usize> = LazyLock::new(|| {
+    var(MAX_CONCURRENT_JOB)
+        .ok()
+        .and_then(|mcj| mcj.parse::<usize>().ok())
+        .unwrap_or(2048)
+});
+
 async fn handle_task(nc: &NatsClient, task: &mut Task) -> anyhow::Result<Option<()>> {
     if let Payload::FromPreviousStep {
         payload: Some(TaskResult::ScrapeWebsite {
@@ -137,6 +150,40 @@ async fn handle_task(nc: &NatsClient, task: &mut Task) -> anyhow::Result<Option<
             tokio::io::BufReader::new(retry_fs::open_file(manifest_file_path).await?).lines();
         let mut tasks = JoinSet::new();
 
+        // we limit max concurrent job in the joinset, thus we extract this bit of the code that
+        // processes the tasks
+        type JoinSetExtractResult = JoinSet<Result<(SubTask, NTripleResult), (SubTask, String)>>;
+        let mut finish_task = async |tasks: &mut JoinSetExtractResult, nc: &NatsClient| {
+            while let Some(handle) = tasks.join_next().await {
+                let mut sub_task = match handle? {
+                    Ok((mut sub_task, res @ NTripleResult { len: 0, .. })) => {
+                        sub_task.status = Status::Failed(vec!["did not extract any data".into()]);
+                        sub_task.result = Some(SubTaskResult::NTriple(res));
+                        failure_count += 1;
+                        sub_task
+                    }
+                    Ok((mut sub_task, triples)) => {
+                        append_entry_manifest_file(&task.output_dir, &triples).await?;
+                        success_count += 1;
+                        sub_task.status = Status::Success;
+                        sub_task.result = Some(SubTaskResult::NTriple(triples));
+                        sub_task
+                    }
+
+                    Err((mut sub_task, e)) => {
+                        failure_count += 1;
+                        sub_task.status =
+                            Status::Failed(vec![format!("error during extraction! {e:?}")]);
+                        sub_task
+                    }
+                };
+                sub_task.modified_date = Some(Local::now());
+                let _ = nc
+                    .publish(SUB_TASK_STATUS_CHANGE_EVENT(&sub_task.id), &sub_task)
+                    .await;
+            }
+            Ok(()) as anyhow::Result<()>
+        };
         while let Ok(Some(line)) = manifest.next_line().await {
             if line.trim().is_empty() {
                 continue;
@@ -168,36 +215,13 @@ async fn handle_task(nc: &NatsClient, task: &mut Task) -> anyhow::Result<Option<
                 }
             });
             // sleep just a little to avoid using all the cpu
-            tokio::time::sleep(Duration::from_millis(20)).await;
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            // process tasks in chunks
+            if tasks.len() >= *MAX_CONCURRENT_JOB_VALUE {
+                finish_task(&mut tasks, nc).await?;
+            }
         }
-        while let Some(handle) = tasks.join_next().await {
-            let mut sub_task = match handle? {
-                Ok((mut sub_task, res @ NTripleResult { len: 0, .. })) => {
-                    sub_task.status = Status::Failed(vec!["did not extract any data".into()]);
-                    sub_task.result = Some(SubTaskResult::NTriple(res));
-                    failure_count += 1;
-                    sub_task
-                }
-                Ok((mut sub_task, triples)) => {
-                    append_entry_manifest_file(&task.output_dir, &triples).await?;
-                    success_count += 1;
-                    sub_task.status = Status::Success;
-                    sub_task.result = Some(SubTaskResult::NTriple(triples));
-                    sub_task
-                }
-
-                Err((mut sub_task, e)) => {
-                    failure_count += 1;
-                    sub_task.status =
-                        Status::Failed(vec![format!("error during extraction! {e:?}")]);
-                    sub_task
-                }
-            };
-            sub_task.modified_date = Some(Local::now());
-            let _ = nc
-                .publish(SUB_TASK_STATUS_CHANGE_EVENT(&sub_task.id), &sub_task)
-                .await;
-        }
+        finish_task(&mut tasks, nc).await?;
         task.modified_date = Some(Local::now());
         if success_count == 0 && failure_count > 0 {
             task.status = Status::Failed(vec![format!(

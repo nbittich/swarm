@@ -46,6 +46,7 @@ pub static RESET_INDEX: &str = "RESET_INDEX";
 pub static RESET_INDEX_NAME: &str = "RESET_INDEX_NAME";
 pub static SCHEDULE_START_DELAY: &str = "SCHEDULE_START_DELAY";
 pub static MAX_CONCURRENT_JOB: &str = "MAX_CONCURRENT_JOB";
+pub static CACHE_SIZE: &str = "CACHE_SIZE";
 
 /* COLLECTION NAME */
 pub static TASK_COLLECTION: &str = "tasks";
