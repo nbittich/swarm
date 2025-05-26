@@ -286,11 +286,11 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
 
     #[instrument(level = "debug")]
     async fn delete_by_id(&self, id: &str) -> Result<Option<T>, StoreError> {
-        self.delete_by_query(doc! {"_id": id}).await
+        self.delete_one_by_query(doc! {"_id": id}).await
     }
 
     #[instrument(level = "debug")]
-    async fn delete_by_query(&self, query: Document) -> Result<Option<T>, StoreError> {
+    async fn delete_one_by_query(&self, query: Document) -> Result<Option<T>, StoreError> {
         let collection = self.get_collection();
         let res = collection
             .find_one_and_delete(query)
