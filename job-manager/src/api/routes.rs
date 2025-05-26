@@ -436,19 +436,38 @@ async fn restart_task(
     debug!("jobId {job_id}, taskId {task_id}, task {task:?}");
     match task {
         Some(mut task) if matches!(task.status, Status::Failed(_)) => {
+            let message = format!("task with id {} will be restarted", task.id);
+
             task.status = Status::Scheduled;
+            debug!("update status...");
             manager
                 .task_repository
                 .upsert(&task.id, &task)
                 .await
                 .map_err(|e| ApiError::RestartTask(e.to_string()))?;
-            manager
-                .nc
-                .publish(TASK_STATUS_CHANGE_EVENT(&task.id), &task)
-                .await
-                .map_err(|e| ApiError::RestartTask(e.to_string()))?;
+            tokio::spawn(async move {
+                debug!("delete all sub tasks...");
+                manager
+                    .sub_task_repository
+                    .delete_by_query(doc! {
+                        "taskId": &task.id
+                    })
+                    .await?;
+                debug!("delete all sub tasks done");
+                if task.output_dir.exists() {
+                    debug!("recreate output dir for task...");
+                    retry_fs::remove_dir_all(&task.output_dir).await?;
+                    retry_fs::create_dir_all(&task.output_dir).await?;
+                    debug!("recreate output dir for task done");
+                }
+                debug!("notify tasks handlers...");
+                manager
+                    .nc
+                    .publish(TASK_STATUS_CHANGE_EVENT(&task.id), &task)
+                    .await?;
+                Ok(()) as anyhow::Result<()>
+            });
 
-            let message = format!("task with id {} will be restarted", task.id);
             Ok(Json(json! ({"message": message})))
         }
         e => {
