@@ -449,9 +449,9 @@ async fn restart_task(
                 debug!("delete all sub tasks...");
                 manager
                     .sub_task_repository
-                    .delete_by_query(doc! {
+                    .delete_many(Some(doc! {
                         "taskId": &task.id
-                    })
+                    }))
                     .await?;
                 debug!("delete all sub tasks done");
                 if task.output_dir.exists() {
