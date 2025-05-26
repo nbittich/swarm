@@ -4,7 +4,7 @@ import { Button, Flex, Space, Table, TableProps, Tag, Typography, message } from
 import { useNavigate, useParams } from 'react-router-dom';  // for accessing the dynamic route parameter
 import axios from 'axios';
 import { colorForStatus, Job, Status, Task, } from '@swarm/models/domain';
-import { ArrowLeftOutlined, DownloadOutlined, RightSquareOutlined, SyncOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, DownloadOutlined, RightSquareOutlined, CiOutlined, SyncOutlined, ReloadOutlined } from "@ant-design/icons";
 import { download } from '@swarm/states/file/Api';
 import dayjs from 'dayjs';
 import { useAuth } from '@swarm/auth/authContextHook';
@@ -35,6 +35,17 @@ const TasksTable: React.FC = () => {
             message.error('Failed to fetch tasks. Check the logs');
         } finally {
             setLoading(false);
+        }
+    };
+    const restartTask = async (task: Task) => {
+        setLoading(true);
+        try {
+            const response = await axios.post(`/api/jobs/${task.jobId}/tasks/${task._id}`);
+            message.success(response.data?.message);
+            fetchTasks(task.jobId);
+        } catch (err) {
+            console.error(err);
+            message.error('Failed to restart task. Check the logs');
         }
     };
     useEffect(() => {
@@ -141,6 +152,7 @@ const TasksTable: React.FC = () => {
                 </>
             },
         },
+
         {
             title: 'SubTasks',
             key: 'subTasks',
@@ -153,6 +165,18 @@ const TasksTable: React.FC = () => {
                 } else {
                     return 'N/A'
                 }
+            },
+        },
+        {
+            title: 'Action',
+            dataIndex: 'action',
+            key: 'action',
+            render: (_, record) => {
+                return <>
+
+                    <Button disabled={record.status.type !== 'failed'} type="link" onClick={() => restartTask(record)} icon={<ReloadOutlined />} />
+
+                </>
             },
         },
     ];
