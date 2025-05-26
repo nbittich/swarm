@@ -1,10 +1,10 @@
 
 import React, { useEffect, useState } from 'react';
-import { Button, Flex, Space, Table, TableProps, Tag, Typography, message } from 'antd';
+import { Button, Flex, Space, Table, TableProps, Tag, message } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';  // for accessing the dynamic route parameter
 import axios from 'axios';
 import { colorForStatus, Job, Status, Task, } from '@swarm/models/domain';
-import { ArrowLeftOutlined, DownloadOutlined, RightSquareOutlined, CiOutlined, SyncOutlined, ReloadOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, DownloadOutlined, RightSquareOutlined, SyncOutlined, ReloadOutlined } from "@ant-design/icons";
 import { download } from '@swarm/states/file/Api';
 import dayjs from 'dayjs';
 import { useAuth } from '@swarm/auth/authContextHook';
