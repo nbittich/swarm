@@ -15,9 +15,11 @@ use mime_guess::mime::APPLICATION_OCTET_STREAM;
 use serde_json::{Value, json};
 use sparql_client::{Head, SparqlResponse, SparqlResult};
 use swarm_common::{
-    TryFutureExt, debug,
+    TryFutureExt,
+    constant::TASK_STATUS_CHANGE_EVENT,
+    debug,
     domain::{
-        AuthBody, AuthPayload, Job, JobDefinition, ScheduledJob, SubTask, Task, User,
+        AuthBody, AuthPayload, Job, JobDefinition, ScheduledJob, Status, SubTask, Task, User,
         index_config::{
             IndexConfiguration, IndexStatistics, SearchQueryRequest, SearchQueryResponse,
         },
@@ -63,6 +65,7 @@ pub async fn serve(
         .route("/jobs/{job_id}", get(get_job))
         .route("/jobs/{job_id}", delete(delete_job))
         .route("/jobs/{job_id}/download", get(download))
+        .route("/jobs/{job_id}/tasks/{task_id}", post(restart_task))
         .route("/jobs/{job_id}/tasks/{task_id}/subtasks", get(all_subtasks))
         .route("/jobs/{job_id}/tasks", get(all_tasks))
         .route("/jobs/new", post(new_job))
@@ -417,7 +420,44 @@ async fn all_tasks(
         .map_err(|e| ApiError::AllTasks(e.to_string()))?;
     Ok(Json(tasks))
 }
+async fn restart_task(
+    State(manager): State<JobManagerState>,
+    _: Option<Claims>,
+    axum::extract::Path((job_id, task_id)): axum::extract::Path<(String, String)>,
+) -> Result<Json<Value>, ApiError> {
+    let task = manager
+        .task_repository
+        .find_one(Some(doc! {
+            "jobId": &job_id,
+            "_id": &task_id,
+        }))
+        .await
+        .map_err(|e| ApiError::RestartTask(e.to_string()))?;
+    debug!("jobId {job_id}, taskId {task_id}, task {task:?}");
+    match task {
+        Some(mut task) if matches!(task.status, Status::Failed(_)) => {
+            task.status = Status::Scheduled;
+            manager
+                .task_repository
+                .upsert(&task.id, &task)
+                .await
+                .map_err(|e| ApiError::RestartTask(e.to_string()))?;
+            manager
+                .nc
+                .publish(TASK_STATUS_CHANGE_EVENT(&task.id), &task)
+                .await
+                .map_err(|e| ApiError::RestartTask(e.to_string()))?;
 
+            let message = format!("task with id {} will be restarted", task.id);
+            Ok(Json(json! ({"message": message})))
+        }
+        e => {
+            let m = format!("cannot restart the task: {e:?}");
+
+            Ok(Json(json! ({"message": m})))
+        }
+    }
+}
 async fn get_last_publications(
     State(manager): State<JobManagerState>,
     _: Claims,
