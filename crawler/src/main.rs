@@ -194,7 +194,9 @@ pub async fn crawl_website(
                             let _ = nc.publish(SUB_TASK_STATUS_CHANGE_EVENT(&st.id), &st).await;
                             success_count += 1;
                             for nu in next_urls {
-                                urls.insert(nu);
+                                if !visited_urls.contains(&nu) {
+                                    urls.insert(nu);
+                                }
                             }
                         } else if let UrlProcessingResult::Ignored(url) = result {
                             // we don't want to persist these, they will be filtered later
