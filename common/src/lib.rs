@@ -1,4 +1,4 @@
-use std::sync::LazyLock;
+use std::{collections::HashSet, sync::LazyLock};
 
 use chrono::Local;
 use tracing::Level;
@@ -49,7 +49,22 @@ pub fn chunk_drain<T>(arr: &mut Vec<T>, chunk_size: usize) -> Vec<Vec<T>> {
     }
     chunks
 }
+pub fn chunk_drain_set<T>(arr: &mut HashSet<T>, chunk_size: usize) -> Vec<Vec<T>> {
+    let mut chunks = Vec::with_capacity((arr.len() / chunk_size) + 1);
 
+    let mut chunk = Vec::with_capacity(chunk_size);
+    for o in arr.drain() {
+        chunk.push(o);
+        if chunk.len() == chunk_size {
+            chunks.push(chunk);
+            chunk = Vec::with_capacity(chunk_size);
+        }
+    }
+    if !chunk.is_empty() {
+        chunks.push(chunk);
+    }
+    chunks
+}
 pub static REGEX_CLEAN_JSESSIONID: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(";jsessionid=[a-zA-Z;0-9]*").expect("could not compile regex")
 });

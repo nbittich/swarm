@@ -4,9 +4,9 @@
 use chrono::Local;
 use rand::distr::{Distribution, Uniform};
 use reqwest::{Client, Url, header::CONTENT_TYPE};
-use std::{env::var, path::Path, str::FromStr, sync::Arc, time::Duration};
+use std::{collections::HashSet, env::var, path::Path, str::FromStr, sync::Arc, time::Duration};
 use swarm_common::{
-    IdGenerator, REGEX_CLEAN_JSESSIONID, REGEX_CLEAN_S_UUID, StreamExt, chunk_drain,
+    IdGenerator, REGEX_CLEAN_JSESSIONID, REGEX_CLEAN_S_UUID, StreamExt, chunk_drain_set,
     compress::gzip,
     constant::{
         APPLICATION_NAME, CRAWLER_CONSUMER, MANIFEST_FILE_NAME, SUB_TASK_EVENT_STREAM,
@@ -144,21 +144,18 @@ pub async fn crawl_website(
     client: Client,
 ) -> anyhow::Result<TaskResult> {
     let config = make_config(client, path.to_path_buf()).await?;
-    let url = REGEX_CLEAN_JSESSIONID
-        .replace_all(REGEX_CLEAN_S_UUID.replace_all(url, "").trim(), "")
-        .trim()
-        .to_string();
+    let url = clean_url(url);
     let mut success_count = 0;
     let mut failure_count = 0;
-    let mut visited_urls = Vec::with_capacity(1500);
-    let mut urls = Vec::with_capacity(1500);
+    let mut visited_urls = HashSet::with_capacity(1500);
+    let mut urls = HashSet::with_capacity(1500);
     let mut tasks = JoinSet::new();
-    urls.push(url);
+    urls.insert(url);
 
     while !urls.is_empty() {
-        for url_jobs in chunk_drain(&mut urls, config.max_concurrent_job) {
+        for url_jobs in chunk_drain_set(&mut urls, config.max_concurrent_job) {
             for url in url_jobs {
-                if visited_urls.iter().any(|k| k == &url) {
+                if visited_urls.contains(&url) {
                     debug!("skipping {url} as it was already visited");
                     continue;
                 }
@@ -166,7 +163,7 @@ pub async fn crawl_website(
                 debug!("got url = {}", url);
 
                 let config = config.clone();
-                visited_urls.push(url.clone());
+                visited_urls.insert(url.clone());
 
                 tasks.spawn(async move {
                     let random_delay =
@@ -184,7 +181,7 @@ pub async fn crawl_website(
             while let Some(handle) = tasks.join_next().await {
                 match handle? {
                     Ok(result) => {
-                        if let UrlProcessingResult::Processed((page_res, mut next_urls)) = result {
+                        if let UrlProcessingResult::Processed((page_res, next_urls)) = result {
                             append_entry_manifest_file(path, &page_res).await?;
                             let st = SubTask {
                                 id: IdGenerator.get(),
@@ -196,10 +193,8 @@ pub async fn crawl_website(
                             };
                             let _ = nc.publish(SUB_TASK_STATUS_CHANGE_EVENT(&st.id), &st).await;
                             success_count += 1;
-                            for nu in next_urls.drain(..) {
-                                if !visited_urls.iter().any(|k| k == &nu) {
-                                    urls.push(nu);
-                                }
+                            for nu in next_urls {
+                                urls.insert(nu);
                             }
                         } else if let UrlProcessingResult::Ignored(url) = result {
                             // we don't want to persist these, they will be filtered later
@@ -236,15 +231,22 @@ fn random_delay_millis(min_delay: u64, max_delay: u64) -> anyhow::Result<Duratio
     let mut rng = rand::rng();
     Ok(Duration::from_millis(range.sample(&mut rng)))
 }
-async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlProcessingResult> {
-    let task_url = REGEX_CLEAN_JSESSIONID
+
+fn clean_url(url: &str) -> String {
+    REGEX_CLEAN_JSESSIONID
         .replace_all(REGEX_CLEAN_S_UUID.replace_all(url, "").trim(), "")
         .trim()
-        .to_string();
+        .to_string()
+}
+
+async fn crawl(
+    task_url: &str,
+    configuration: Configuration,
+) -> anyhow::Result<UrlProcessingResult> {
     debug!("processing {task_url}");
 
     let base_iri = {
-        let base = Url::parse(&task_url)?;
+        let base = Url::parse(task_url)?;
         let base = if let Some(domain) = base.host_str() {
             format!("{}://{}", base.scheme(), domain)
         } else {
@@ -261,7 +263,7 @@ async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlPro
 
     for ignore_extension in configuration.ignore_extensions.iter() {
         if task_url.ends_with(ignore_extension) {
-            return Ok(UrlProcessingResult::Ignored(task_url));
+            return Ok(UrlProcessingResult::Ignored(task_url.into()));
         }
     }
 
@@ -269,7 +271,7 @@ async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlPro
 
     while attempt < configuration.max_retry {
         attempt += 1;
-        match configuration.client.get(&task_url).send().await {
+        match configuration.client.get(task_url).send().await {
             Ok(response)
                 if response.status().is_success() || response.status().is_redirection() =>
             {
@@ -289,12 +291,12 @@ async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlPro
                         "bad content type {:?}",
                         response.headers().get(CONTENT_TYPE)
                     );
-                    return Ok(UrlProcessingResult::Ignored(task_url));
+                    return Ok(UrlProcessingResult::Ignored(task_url.into()));
                 }
 
                 let html = response.text_with_charset("utf-8").await?;
                 if html.trim().is_empty() {
-                    return Ok(UrlProcessingResult::Ignored(task_url));
+                    return Ok(UrlProcessingResult::Ignored(task_url.into()));
                 }
 
                 // debug!("saving url {task_url} to file");
@@ -309,7 +311,7 @@ async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlPro
 
                 let document = scraper::Html::parse_document(&html);
 
-                let mut next_urls = Vec::with_capacity(configuration.buffer);
+                let mut next_urls = HashSet::with_capacity(configuration.buffer);
                 // html redirect using meta refresh
                 if let Some(url_part) = document
                     .select(&configuration.redirect_selector)
@@ -319,7 +321,7 @@ async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlPro
                 {
                     let redirect_url = url_part.trim();
                     debug!("Redirect URL found: {}", redirect_url);
-                    next_urls.push(redirect_url.to_string());
+                    next_urls.insert(clean_url(redirect_url));
                 }
 
                 for a_property in document.select(&configuration.href_selector) {
@@ -340,12 +342,12 @@ async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlPro
                     match a_property.attr("href").map(str::to_owned) {
                         Some(url) => match Url::parse(&url) {
                             Ok(iri) if iri.scheme() == "https" || iri.scheme() == "http" => {
-                                next_urls.push(url);
+                                next_urls.insert(clean_url(&url));
                             }
                             Ok(iri) if !iri.has_host() => {
                                 debug!("does not have a host {url}");
                                 if let Ok(iri) = base_iri.join(&url) {
-                                    next_urls.push(iri.to_string());
+                                    next_urls.insert(clean_url(iri.as_str()));
                                 }
                             }
                             Ok(iri) => {
@@ -357,7 +359,7 @@ async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlPro
                                 );
                                 if let Ok(iri) = base_iri.join(&url) {
                                     debug!("url could be resolved as {iri:?}");
-                                    next_urls.push(iri.to_string());
+                                    next_urls.insert(clean_url(iri.as_str()));
                                 }
                             }
                         },
@@ -367,7 +369,7 @@ async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlPro
 
                 return Ok(UrlProcessingResult::Processed((
                     ScrapeResult {
-                        base_url: task_url,
+                        base_url: task_url.into(),
                         path,
                         creation_date: Local::now(),
                     },
@@ -395,10 +397,10 @@ async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlPro
         )?)
         .await;
     }
-    Ok(UrlProcessingResult::Ignored(task_url))
+    Ok(UrlProcessingResult::Ignored(task_url.into()))
 }
 
 enum UrlProcessingResult {
-    Processed((ScrapeResult, Vec<String>)),
+    Processed((ScrapeResult, HashSet<String>)),
     Ignored(String),
 }
