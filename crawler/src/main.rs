@@ -251,12 +251,13 @@ async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlPro
             base.to_string()
         };
         if base.ends_with("/") {
-            debug!("{}", &base[0..base.len() - 1]);
             Url::from_str(&base[0..base.len() - 1])?
         } else {
             Url::from_str(&base)?
         }
     };
+
+    debug!("base: {base_iri}");
 
     for ignore_extension in configuration.ignore_extensions.iter() {
         if task_url.ends_with(ignore_extension) {
@@ -310,14 +311,15 @@ async fn crawl(url: &str, configuration: Configuration) -> anyhow::Result<UrlPro
 
                 let mut next_urls = Vec::with_capacity(configuration.buffer);
                 // html redirect using meta refresh
-                if let Some(element) = document.select(&configuration.redirect_selector).next() {
-                    if let Some(content) = element.value().attr("content") {
-                        if let Some(url_part) = content.split("url=").nth(1) {
-                            let redirect_url = url_part.trim();
-                            debug!("Redirect URL found: {}", redirect_url);
-                            next_urls.push(redirect_url.to_string());
-                        }
-                    }
+                if let Some(url_part) = document
+                    .select(&configuration.redirect_selector)
+                    .next()
+                    .and_then(|element| element.value().attr("content"))
+                    .and_then(|content| content.split("url=").nth(1))
+                {
+                    let redirect_url = url_part.trim();
+                    debug!("Redirect URL found: {}", redirect_url);
+                    next_urls.push(redirect_url.to_string());
                 }
 
                 for a_property in document.select(&configuration.href_selector) {
