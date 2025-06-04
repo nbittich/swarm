@@ -13,7 +13,7 @@ use axum::{
 use jsonwebtoken::Header;
 use mime_guess::mime::APPLICATION_OCTET_STREAM;
 use serde_json::{Value, json};
-use sparql_client::{Head, SparqlResponse, SparqlResult};
+use sparql_client::{Head, SparqlClient, SparqlResponse, SparqlResult};
 use swarm_common::{
     TryFutureExt,
     constant::TASK_STATUS_CHANGE_EVENT,
@@ -185,11 +185,14 @@ async fn sparql(
         return Err(ApiError::SparqlError("illegal access".into()));
     }
     if is_update {
-        manager
-            .sparql_client
-            .update(query)
-            .await
-            .map_err(|e| ApiError::SparqlError(e.to_string()))?;
+        // i was lazy
+        SparqlClient::_update(
+            &manager.sparql_client.client,
+            &manager.sparql_client.endpoint,
+            query.as_str(),
+        )
+        .await
+        .map_err(|e| ApiError::SparqlError(e.to_string()))?;
         Ok(Json(SparqlResponse {
             head: Head {
                 link: None,

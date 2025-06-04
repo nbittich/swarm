@@ -8,8 +8,8 @@ use swarm_common::{
     IdGenerator, StreamExt,
     compress::{gzip, ungzip},
     constant::{
-        APPLICATION_NAME, DIFF_CONSUMER, JOB_COLLECTION, MANIFEST_FILE_NAME, PUBLIC_TENANT,
-        SUB_TASK_COLLECTION, SUB_TASK_EVENT_STREAM, SUB_TASK_STATUS_CHANGE_EVENT,
+        APPLICATION_NAME, CHUNK_SIZE, DIFF_CONSUMER, JOB_COLLECTION, MANIFEST_FILE_NAME,
+        PUBLIC_TENANT, SUB_TASK_COLLECTION, SUB_TASK_EVENT_STREAM, SUB_TASK_STATUS_CHANGE_EVENT,
         SUB_TASK_STATUS_CHANGE_SUBJECT, TASK_COLLECTION, TASK_EVENT_STREAM,
         TASK_STATUS_CHANGE_EVENT, TASK_STATUS_CHANGE_SUBJECT,
     },
@@ -29,6 +29,7 @@ use tortank::turtle::turtle_doc::TurtleDoc;
 #[derive(Clone)]
 struct Config {
     task_repository: StoreRepository<Task>,
+    chunk_size: usize,
     sub_task_repository: StoreRepository<SubTask>,
     job_repository: StoreRepository<Job>,
     nc: NatsClient,
@@ -37,7 +38,11 @@ struct Config {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     setup_tracing();
-
+    let chunk_size = var(CHUNK_SIZE) //INDEX_MAX_TOTAL_HITS
+        .iter()
+        .flat_map(|r| r.parse::<usize>())
+        .last()
+        .unwrap_or(64);
     let app_name = var(APPLICATION_NAME).unwrap_or_else(|_| "diff".into());
     let nc = nats_client::connect().await?;
 
@@ -69,6 +74,7 @@ async fn main() -> anyhow::Result<()> {
         job_repository,
         sub_task_repository,
         task_repository,
+        chunk_size,
         nc,
     };
     let mut messages = task_event_consumer.messages().await?;
@@ -238,19 +244,45 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
             };
             let out_dir = task.output_dir.clone();
             let old_diff_task_id = old_diff_task.id.clone();
-            let config = config.clone();
+            let config_clone = config.clone();
             let _ = config
                 .nc
                 .publish(SUB_TASK_STATUS_CHANGE_EVENT(&sub_task.id), &sub_task)
                 .await;
             tasks.spawn(async move {
-                match diff(&line, &old_diff_task_id, &config, &out_dir).await {
+                match diff(&line, &old_diff_task_id, &config_clone, &out_dir).await {
                     Ok(diff) => Ok((sub_task, diff)),
                     Err(e) => Err((sub_task, e)),
                 }
             });
             // sleep just a little to avoid using all the cpu
-            tokio::time::sleep(Duration::from_millis(20)).await;
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            if tasks.len() >= config.chunk_size {
+                // flush
+                while let Some(handle) = tasks.join_next().await {
+                    let mut sub_task = match handle? {
+                        Ok((mut sub_task, diff)) => {
+                            append_entry_manifest_file(&task.output_dir, &diff).await?;
+                            success_count += 1;
+                            sub_task.status = Status::Success;
+                            sub_task.result = Some(SubTaskResult::Diff(diff));
+                            sub_task
+                        }
+
+                        Err((mut sub_task, e)) => {
+                            failure_count += 1;
+                            sub_task.status =
+                                Status::Failed(vec![format!("error during diffing! {e:?}")]);
+                            sub_task
+                        }
+                    };
+                    sub_task.modified_date = Some(Local::now());
+                    let _ = config
+                        .nc
+                        .publish(SUB_TASK_STATUS_CHANGE_EVENT(&sub_task.id), &sub_task)
+                        .await;
+                }
+            }
         }
         while let Some(handle) = tasks.join_next().await {
             let mut sub_task = match handle? {

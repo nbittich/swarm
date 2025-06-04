@@ -75,17 +75,19 @@ impl SparqlClient {
             delay_before_next_retry,
         })
     }
-    pub async fn _query<T>(
+    async fn _query<T>(
         &self,
         query: String,
         accept_header: Option<String>,
+        retry: bool,
         transform: impl AsyncFn(Response) -> anyhow::Result<T> + Send + Sync,
     ) -> anyhow::Result<T> {
         debug!("{query}");
         let client = self.client.clone();
         let endpoint = self.endpoint.clone();
+        let max_retry = if retry { self.max_retry } else { 1 };
         retryable_fut(
-            self.max_retry as u64,
+            max_retry as u64,
             self.delay_before_next_retry.as_secs(),
             async move || {
                 let client = &client;
@@ -108,20 +110,21 @@ impl SparqlClient {
 
     #[instrument(level = "debug")]
     pub async fn query(&self, query: String) -> anyhow::Result<SparqlResponse> {
-        self._query(query, None, async |response| {
+        self._query(query, None, true, async |response| {
             let r = response.json::<SparqlResponse>().await?;
             Ok(r)
         })
         .await
     }
 
+    /// this variation doesn't retry
     #[instrument(level = "debug")]
     pub async fn query_with_accept_header(
         &self,
         query: String,
         accept_header: Option<String>,
     ) -> anyhow::Result<(String, String)> {
-        self._query(query, accept_header, async |response| {
+        self._query(query, accept_header, false, async |response| {
             let ct = response
                 .headers()
                 .get(CONTENT_TYPE)
@@ -133,7 +136,7 @@ impl SparqlClient {
         })
         .await
     }
-    async fn _update(&self, query: String) -> anyhow::Result<()> {
+    async fn _update_retry(&self, query: String) -> anyhow::Result<()> {
         debug!("{query}");
         let client = self.client.clone();
         let endpoint = self.endpoint.clone();
@@ -142,23 +145,30 @@ impl SparqlClient {
             self.delay_before_next_retry.as_secs(),
             async move || {
                 let client = &client;
-                let _ = client
-                    .post(endpoint.as_str())
-                    .header(ACCEPT, SPARQL_RESULT_JSON)
-                    .header(CONTENT_TYPE, SPARQL_UPDATE)
-                    .body(query.to_string())
-                    .send()
-                    .await
-                    .and_then(|response| response.error_for_status())?;
-                Ok(())
+                Self::_update(client, endpoint.as_str(), query.as_str()).await
             },
         )
         .await
     }
 
+    /// this variation doesn't retry
+    #[instrument(level = "debug")]
+    pub async fn _update(client: &Client, endpoint: &str, query: &str) -> anyhow::Result<()> {
+        let client = &client;
+        let _ = client
+            .post(endpoint)
+            .header(ACCEPT, SPARQL_RESULT_JSON)
+            .header(CONTENT_TYPE, SPARQL_UPDATE)
+            .body(query.to_string())
+            .send()
+            .await
+            .and_then(|response| response.error_for_status())?;
+        Ok(())
+    }
+
     #[instrument(level = "debug")]
     pub async fn update(&self, query: String) -> anyhow::Result<()> {
-        self._update(query).await
+        self._update_retry(query).await
     }
 
     #[instrument(level = "debug")]
@@ -180,16 +190,7 @@ impl SparqlClient {
 
         let q = make_update_query(target_graph, operation, triples);
         debug!("Executing query: \n{q}\n");
-        match self
-            .client
-            .post(self.endpoint.as_str())
-            .header(ACCEPT, SPARQL_RESULT_JSON)
-            .header(CONTENT_TYPE, SPARQL_UPDATE)
-            .body(q.to_string())
-            .send()
-            .await
-            .and_then(|response| response.error_for_status())
-        {
+        match Self::_update(&self.client, &self.endpoint, q.as_str()).await {
             Ok(_) => Ok(()),
             Err(_) if triples.len() == 1 => {
                 Err(anyhow!("Could not execute bulk update for {triples:?}"))
