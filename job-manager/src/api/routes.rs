@@ -448,6 +448,21 @@ async fn restart_task(
                 .upsert(&task.id, &task)
                 .await
                 .map_err(|e| ApiError::RestartTask(e.to_string()))?;
+            manager
+                .job_repository
+                .update_many(
+                    doc! {
+                        "_id": &task.job_id
+                    },
+                    doc! {
+                        "$set": {
+                            "status": {"type": "busy"}
+                        }
+                    },
+                )
+                .await
+                .map_err(|e| ApiError::RestartTask(e.to_string()))?;
+
             tokio::spawn(async move {
                 debug!("delete all sub tasks...");
                 manager
