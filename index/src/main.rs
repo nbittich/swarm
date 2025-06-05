@@ -6,7 +6,7 @@ use chrono::{DateTime, Local};
 use itertools::Itertools;
 use serde_json::{Number, Value};
 use sparql_client::{SparqlClient, SparqlUpdateType};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::BTreeMap;
 use std::{borrow::Cow, env::var, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 use swarm_common::compress::{gzip_str, ungzip};
 use swarm_common::constant::{
@@ -332,7 +332,6 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
         let mut manifest =
             tokio::io::BufReader::new(retry_fs::open_file(diff_manifest_file_path).await?).lines();
         let mut errors = vec![];
-        let mut tasks = JoinSet::new();
         let mut lines_buffer = Vec::with_capacity(config.chunk_size);
         while let Ok(Some(line)) = manifest.next_line().await {
             if line.trim().is_empty() {
@@ -344,22 +343,16 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
             if lines_buffer.len() == config.chunk_size {
                 let config = config.clone();
                 let lines = lines_buffer.drain(..).collect_vec();
-                tasks.spawn(async move { index(&lines, &config).await });
-                // sleep for a while
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                if let Err(e) = index(&lines, &config).await {
+                    errors.push(format!("error during indexing!  error: {e}"));
+                }
             }
         }
         if !lines_buffer.is_empty() {
             let config = config.clone();
             let lines = lines_buffer.drain(..).collect_vec();
-            tasks.spawn(async move { index(&lines, &config).await });
-        }
-        while let Some(handle) = tasks.join_next().await {
-            match handle.map_err(|e| anyhow!("{e}")) {
-                Err(e) | Ok(Err(e)) => {
-                    errors.push(format!("error during indexing!  error: {e}"));
-                }
-                _ => {}
+            if let Err(e) = index(&lines, &config).await {
+                errors.push(format!("error during indexing!  error: {e}"));
             }
         }
 
@@ -377,67 +370,28 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
 }
 
 async fn index(lines: &[String], config: &Config) -> anyhow::Result<()> {
-    let mut delete_documents = HashMap::new();
-    let mut insert_documents = HashMap::new();
+    let mut tasks = JoinSet::new();
     for line in lines {
-        let payload = DiffResult::deserialize(line)?;
-        if let Some(to_remove) = payload.to_remove_path.as_ref() {
-            let to_remove = to_remove.clone();
-            let config = config.clone();
-            update(
-                config,
-                &mut insert_documents,
-                &mut delete_documents,
-                to_remove,
-                SparqlUpdateType::Delete,
-            )
-            .await?;
-        }
-        if let Some(to_insert) = payload.new_insert_path.as_ref() {
-            let to_insert = to_insert.clone();
-            let config = config.clone();
-            update(
-                config,
-                &mut insert_documents,
-                &mut delete_documents,
-                to_insert,
-                SparqlUpdateType::Insert,
-            )
-            .await?;
+        let payload = DiffResult::deserialize(line).map_err(|e| anyhow!("{e}"))?;
+        let config_clone = config.clone();
+        tasks.spawn(async move {
+            if let Some(to_remove) = payload.to_remove_path.as_ref() {
+                let to_remove = to_remove.clone();
+                update(&config_clone, to_remove, SparqlUpdateType::Delete).await?;
+            }
+            if let Some(to_insert) = payload.new_insert_path.as_ref() {
+                let to_insert = to_insert.clone();
+                update(&config_clone, to_insert, SparqlUpdateType::Insert).await?;
+            }
+            Ok(()) as anyhow::Result<()>
+        });
+        if tasks.len() >= config.chunk_size {
+            while let Some(task) = tasks.join_next().await {
+                task??;
+            }
         }
     }
 
-    let mut tasks = JoinSet::new();
-    for (idx, uuids) in delete_documents {
-        let config = config.clone();
-        tasks.spawn(async move {
-            debug!(
-                "deleting the following documents in index {}: {uuids:?}",
-                idx
-            );
-            let task = config
-                .search_client
-                .delete_documents(&idx, &uuids.into_iter().collect_vec())
-                .await?;
-            debug!("{task:?}");
-            debug!("waiting for task to complete...");
-            config
-                .search_client
-                .wait_for_task(
-                    task.task_uid,
-                    config.index_interval_wait_for_task,
-                    config.index_max_wait_for_task,
-                )
-                .await
-        });
-        while let Some(task) = tasks.join_next().await {
-            task??;
-        }
-    }
-    for (idx, docs) in insert_documents {
-        let config = config.clone();
-        tasks.spawn(async move { add_or_replace_documents(&config, &idx, docs).await });
-    }
     while let Some(task) = tasks.join_next().await {
         task??;
     }
@@ -446,9 +400,7 @@ async fn index(lines: &[String], config: &Config) -> anyhow::Result<()> {
 }
 
 async fn update(
-    config: Config,
-    insert_documents: &mut HashMap<String, Vec<BTreeMap<String, Value>>>,
-    delete_documents: &mut HashMap<String, HashSet<String>>,
+    config: &Config,
     triples_path: PathBuf,
     update_type: SparqlUpdateType,
 ) -> anyhow::Result<()> {
@@ -458,6 +410,7 @@ async fn update(
     let doc = TurtleDoc::try_from((turtle_str.as_str(), None)).map_err(|e| anyhow!("{e}"))?;
 
     for ic in config.index_config.iter() {
+        let idx = &ic.name;
         let mut updates: Vec<&Statement> = Vec::with_capacity(doc.len());
         // we first filter the subjects based on the rdf type
         for t in ic.rdf_type.iter() {
@@ -470,21 +423,34 @@ async fn update(
         match update_type {
             SparqlUpdateType::Delete => {
                 // we only need the uuid to delete
-                let deletes_for_idx = delete_documents.entry(ic.name.clone()).or_default();
-                deletes_for_idx.extend(
-                    updates
-                        .into_iter()
-                        .flat_map(|u| {
-                            doc.list_statements(
-                                Some(&u.subject),
-                                Some(&Node::Iri(Cow::Borrowed(&config.uuid_predicate))),
-                                None,
-                            )
-                        })
-                        .map(|e| e.object.clone())
-                        .map(|o| remove_datatype_xsd_string(o))
-                        .map(|o| o.to_string().replace('"', "")),
+                let uuids = updates
+                    .into_iter()
+                    .flat_map(|u| {
+                        doc.list_statements(
+                            Some(&u.subject),
+                            Some(&Node::Iri(Cow::Borrowed(&config.uuid_predicate))),
+                            None,
+                        )
+                    })
+                    .map(|e| e.object.clone())
+                    .map(|o| remove_datatype_xsd_string(o))
+                    .map(|o| o.to_string().replace('"', ""))
+                    .collect_vec();
+                debug!(
+                    "deleting the following documents in index {}: {uuids:?}",
+                    idx
                 );
+                let task = config.search_client.delete_documents(idx, &uuids).await?;
+                debug!("{task:?}");
+                debug!("waiting for task to complete...");
+                config
+                    .search_client
+                    .wait_for_task(
+                        task.task_uid,
+                        config.index_interval_wait_for_task,
+                        config.index_max_wait_for_task,
+                    )
+                    .await?;
             }
             SparqlUpdateType::Insert => {
                 // inserting is a bit more work
@@ -531,8 +497,7 @@ async fn update(
                     }
                     documents.push(doc_data);
                 }
-                let inserts_for_idx = insert_documents.entry(ic.name.clone()).or_default();
-                inserts_for_idx.extend(documents.into_iter());
+                add_or_replace_documents(config, idx, documents).await?;
             }
             SparqlUpdateType::NoOp => info!("index update: no op"),
         }
