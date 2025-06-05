@@ -12,6 +12,7 @@ use swarm_common::compress::{gzip_str, ungzip};
 use swarm_common::constant::{
     CHUNK_SIZE, INDEX_DELAY_BEFORE_NEXT_RETRY, INDEX_INTERVAL_WAIT_FOR_TASK, INDEX_MAX_RETRY,
     INDEX_MAX_TOTAL_HITS, INDEX_MAX_WAIT_FOR_TASK, RESET_INDEX, RESET_INDEX_NAME,
+    SLEEP_BEFORE_NEXT_TASK, SLEEP_BEFORE_NEXT_VIRTUOSO_QUERY,
 };
 use swarm_common::domain::index_config::{INDEX_ID_KEY, IndexConfiguration};
 use swarm_common::{
@@ -27,7 +28,7 @@ use swarm_common::{
     nats_client::{self, NatsClient},
     setup_tracing,
 };
-use swarm_common::{retry_fs, retryable_fut};
+use swarm_common::{retry_fs, retryable_fut, trace};
 use swarm_meilisearch_client::MeilisearchClient;
 use swarm_meilisearch_client::domain::{ContentType, Encoding, PaginationSetting, TaskInfo};
 use tokio::{io::AsyncBufReadExt, task::JoinSet};
@@ -54,6 +55,8 @@ struct Config {
     index_config: Arc<Vec<IndexConfiguration>>,
     index_max_wait_for_task: Option<Duration>,
     index_interval_wait_for_task: Option<Duration>,
+    sleep_before_next_virtuoso_query: Duration,
+    sleep_before_next_task: Duration,
     index_max_retry: u64,
     index_delay_before_next_retry: u64,
     chunk_size: usize,
@@ -84,6 +87,19 @@ async fn main() -> anyhow::Result<()> {
         .last()
         .unwrap_or(false);
 
+    let sleep_before_next_virtuoso_query = var(SLEEP_BEFORE_NEXT_VIRTUOSO_QUERY)
+        .iter()
+        .flat_map(|r| r.parse::<u64>())
+        .last()
+        .map(Duration::from_millis)
+        .unwrap_or_else(|| Duration::from_millis(30));
+
+    let sleep_before_next_task = var(SLEEP_BEFORE_NEXT_TASK)
+        .iter()
+        .flat_map(|r| r.parse::<u64>())
+        .last()
+        .map(Duration::from_millis)
+        .unwrap_or_else(|| Duration::from_millis(30));
     let index_max_wait_for_task = var(INDEX_MAX_WAIT_FOR_TASK)
         .iter()
         .flat_map(|r| r.parse::<u64>())
@@ -166,6 +182,8 @@ async fn main() -> anyhow::Result<()> {
         index_max_retry,
         index_delay_before_next_retry,
         index_max_wait_for_task,
+        sleep_before_next_task,
+        sleep_before_next_virtuoso_query,
         sparql_client: SparqlClient::new()?,
     };
 
@@ -238,7 +256,7 @@ async fn main() -> anyhow::Result<()> {
                     INDEX_ID_KEY.to_string(),
                     Value::from_str(uuid).unwrap_or_else(|_| Value::String(uuid.to_string())),
                 );
-                if !gather_properties(&config.sparql_client, subject, ic, &mut doc_data).await? {
+                if !gather_properties(&config, subject, ic, &mut doc_data).await? {
                     continue 'sub;
                 }
                 documents.push(doc_data);
@@ -452,6 +470,7 @@ async fn index(lines: &[String], config: &Config) -> anyhow::Result<()> {
                 Ok(vec![]) as anyhow::Result<Vec<MeiliSearchUpdateType>>
             }
         });
+        tokio::time::sleep(config.sleep_before_next_task).await;
         if virtuoso_tasks.len() >= config.chunk_size {
             virtuoso_tasks_consumer(config, &mut virtuoso_tasks, &mut meilisearch_tasks).await?;
         }
@@ -557,8 +576,7 @@ async fn prepare_update_for_meilisearch_task(
                         INDEX_ID_KEY.to_string(),
                         Value::from_str(&uuid).unwrap_or_else(|_| Value::String(uuid)),
                     );
-                    if !gather_properties(&config.sparql_client, subject, ic, &mut doc_data).await?
-                    {
+                    if !gather_properties(config, subject, ic, &mut doc_data).await? {
                         continue 'sub;
                     }
                     documents.push(doc_data);
@@ -587,18 +605,19 @@ async fn add_or_replace_documents(
     if documents.is_empty() {
         return Ok(());
     }
-    let documents = &documents
+    let documents = documents
         .drain(..)
         .filter_map(|d| serde_json::to_string(&d).ok())
         .join("\n");
-    debug!("documents:{documents}");
-    let documents = gzip_str(documents).await?;
+    trace!("documents:{documents}");
+    let gzipped_documents = gzip_str(&documents).await?;
+    drop(documents);
     let task: TaskInfo = config
         .search_client
         .add_or_replace_documents(
             index,
             INDEX_ID_KEY,
-            documents,
+            gzipped_documents,
             Some(ContentType::ApplicationNdJson),
             Some(Encoding::Gzip),
         )
@@ -617,7 +636,7 @@ async fn add_or_replace_documents(
 }
 
 async fn gather_properties(
-    sparql_cli: &SparqlClient,
+    config: &Config,
     subject: &str,
     ic: &IndexConfiguration,
     doc_data: &mut BTreeMap<String, Value>,
@@ -634,7 +653,7 @@ async fn gather_properties(
                         "#,
             prop.name
         );
-        let res = sparql_cli.query(query).await?;
+        let res = config.sparql_client.query(query).await?;
         if res.results.bindings.is_empty()
             || res
                 .results
@@ -707,6 +726,8 @@ async fn gather_properties(
             Value::Array(res)
         };
         doc_data.insert(prop.name.clone(), value);
+        // sleep a little bit to avoid choking virtuoso
+        tokio::time::sleep(config.sleep_before_next_virtuoso_query).await;
     }
     Ok(true)
 }
