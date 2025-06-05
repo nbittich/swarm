@@ -150,7 +150,7 @@ pub struct BatchResponse {
 #[serde(rename_all = "camelCase")]
 pub struct Batch {
     pub uid: u64,
-    pub details: Details,
+    pub details: Value,
     pub stats: Stats,
     pub duration: String,
     pub started_at: String,

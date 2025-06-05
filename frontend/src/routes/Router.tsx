@@ -1,4 +1,8 @@
-import { Navigate, RouterProvider, createBrowserRouter } from "react-router-dom";
+import {
+  Navigate,
+  RouterProvider,
+  createBrowserRouter,
+} from "react-router-dom";
 import { ProtectedRoute } from "./ProtectedRoute";
 import Logout from "@swarm/components/auth/Logout";
 import Login from "@swarm/components/auth/Login";
@@ -12,99 +16,104 @@ import ScheduledJobsTable from "@swarm/components/jobs/ScheduledJobsTable";
 import Sparql from "@swarm/components/sparql/Sparql";
 import SearchContainer from "@swarm/components/search/SearchContainer";
 import Home from "@swarm/components/pages/Home";
+import BatchTable from "@swarm/components/search/BatchTable";
 
 const SwarmRoutes = () => {
-    const routesForPublic = [
+  const routesForPublic = [
+    {
+      path: "jobs",
+      children: [
         {
-            path: "jobs",
-            children: [
-                {
-                    path: "",
-                    element: <JobsTable />,
-                }
-                ,
-                {
-                    path: ":id/tasks",
-                    children: [
-                        {
-                            path: "",
-                            element: <TasksTable />
-                        },
-                        {
-                            path: ":taskId/:taskName",
-                            element: <SubTasksTable />
-                        }
-                    ]
-                },
-            ]
-        },
-
-        {
-            path: "yasgui",
-            element: <Sparql />,
-        }, {
-            path: "search",
-            element: <SearchContainer />,
+          path: "",
+          element: <JobsTable />,
         },
         {
-            path: "scheduled-jobs",
-            element: <ScheduledJobsTable />,
+          path: ":id/tasks",
+          children: [
+            {
+              path: "",
+              element: <TasksTable />,
+            },
+            {
+              path: ":taskId/:taskName",
+              element: <SubTasksTable />,
+            },
+          ],
         },
+      ],
+    },
+
+    {
+      path: "yasgui",
+      element: <Sparql />,
+    },
+    {
+      path: "search",
+      element: <SearchContainer />,
+    },
+    {
+      path: "scheduled-jobs",
+      element: <ScheduledJobsTable />,
+    },
+    {
+      path: "/about",
+      element: <Home />,
+    },
+    {
+      path: "/",
+      element: <Navigate to="/search" />,
+    },
+    {
+      path: "/login",
+      element: <Login />,
+    },
+    {
+      path: "*",
+      element: <NoMatch />,
+    },
+  ];
+
+  const routesForUserRole = [
+    {
+      path: "/search-batches",
+      element: <ProtectedRoute />,
+      children: [
         {
-            path: "/about",
-            element: <Home />,
+          path: "",
+          element: <BatchTable />,
         },
+      ],
+    },
+    {
+      path: "/logout",
+      element: <ProtectedRoute />,
+      children: [
         {
-            path: "/",
-            element: <Navigate to="/search" />
+          path: "",
+          element: <Logout />,
         },
+      ],
+    },
+  ];
+
+  const router = createBrowserRouter([
+    {
+      element: <ForbiddenInterceptor />,
+      children: [
         {
-            path: "/login",
-            element: <Login />,
+          element: <Layout />,
+          children: [
+            ...routesForUserRole,
+
+            ...routesForPublic,
+            // ...(!token ? routesForNotAuthenticatedOnly : []),
+          ],
         },
-        {
-            path: "*",
-            element: <NoMatch />
-        }
-    ];
+      ],
+    },
+  ]);
 
-
-    const routesForUserRole = [
-        {
-            path: "/logout",
-            element: <ProtectedRoute />, // Wrap the component in ProtectedRoute
-            children: [
-                {
-                    path: "",
-                    element: <Logout />,
-                },
-            ],
-        }
-    ];
-
-
-
-
-    const router = createBrowserRouter([
-        {
-            element: <ForbiddenInterceptor />,
-            children: [
-                {
-                    element: <Layout />,
-                    children: [
-                        ...routesForUserRole,
-
-                        ...routesForPublic,
-                        // ...(!token ? routesForNotAuthenticatedOnly : []),
-
-                    ]
-                }
-            ]
-        }
-    ]
-    );
-
-    return <RouterProvider router={router} />;
+  return <RouterProvider router={router} />;
 };
 
 export default SwarmRoutes;

@@ -11,6 +11,7 @@ import axios from "axios";
 
 interface SearchState {
   configurations: IndexConfiguration[];
+  batches: Batch[];
   loading: boolean;
   searchResult: SearchQueryResponse | undefined;
   searching: boolean;
@@ -20,6 +21,7 @@ interface SearchState {
 
 const initialState: SearchState = {
   configurations: [],
+  batches: [],
   loading: false,
   searchResult: undefined,
   searching: false,
@@ -31,7 +33,7 @@ export const fetchSearchBatches = createAsyncThunk(
   "fetchSearchBatches",
   async (statuses?: BatchStatus[]) => {
     const response = await axios.post<Batch[]>("/api/search/batches", {
-      statuses,
+      statuses: statuses || null,
     });
     return response.data;
   },
@@ -100,6 +102,22 @@ const searchSlice = createSlice({
       .addCase(fetchSearchConfigurations.rejected, (state, action) => {
         state.loading = false;
         state.error = action.error.message || "Error fetching configurations";
+      })
+      // fetchSearchBatches
+      .addCase(fetchSearchBatches.pending, (state) => {
+        state.loading = true;
+        state.error = undefined;
+      })
+      .addCase(
+        fetchSearchBatches.fulfilled,
+        (state, action: PayloadAction<Batch[]>) => {
+          state.batches = action.payload;
+          state.loading = false;
+        },
+      )
+      .addCase(fetchSearchBatches.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message || "Error fetching batches";
       })
       // fetchIndexStatistics
       .addCase(fetchIndexStatistics.pending, (state) => {
