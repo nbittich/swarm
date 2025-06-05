@@ -145,7 +145,7 @@ export default function MainLayout() {
         <a onClick={() => handleNavigation("/search-batches")}>
           Search Batches
         </a>,
-        "",
+        "/search-batches",
         <NodeIndexOutlined />,
       ),
     );

@@ -267,12 +267,12 @@ export interface SearchQueryResponse {
 
 export interface Batch {
   uid: number;
-  details: Details | unknown;
+  details?: Details | unknown;
   stats: Stats;
   duration: string;
   startedAt: string;
   finishedAt: string;
-  progress: Progress;
+  progress?: Progress;
 }
 
 export interface Details {

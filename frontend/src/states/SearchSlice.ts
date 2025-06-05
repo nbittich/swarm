@@ -35,7 +35,11 @@ export const fetchSearchBatches = createAsyncThunk(
     const response = await axios.post<Batch[]>("/api/search/batches", {
       statuses: statuses || null,
     });
-    return response.data;
+    const sortedByStartedAt = response.data.sort(
+      (a, b) =>
+        new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
+    );
+    return sortedByStartedAt;
   },
 );
 

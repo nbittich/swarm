@@ -1,5 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { Alert, Button, Flex, Space, Table, TableProps, Tag } from "antd";
+import {
+  Alert,
+  Button,
+  Col,
+  Flex,
+  Row,
+  Select,
+  Space,
+  Table,
+  TableProps,
+  Tag,
+} from "antd";
 import { useNavigate } from "react-router-dom"; // for accessing the dynamic route parameter
 import {
   Batch,
@@ -7,17 +18,30 @@ import {
   colorForBatchStatus,
   labelForBatchStatus,
 } from "@swarm/models/domain";
-import { ArrowLeftOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, SyncOutlined } from "@ant-design/icons";
 import { useIsMobile } from "@swarm/hooks/is-mobile";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@swarm/states/Store";
 import { fetchSearchBatches } from "@swarm/states/SearchSlice";
-
+import dayjs from "dayjs";
+const batchStatusOptions: BatchStatus[] = [
+  "enqueued",
+  "processing",
+  "succeeded",
+  "failed",
+  "canceled",
+];
 const BatchTable: React.FC = () => {
   const isMobile = useIsMobile();
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
-  const [statuses, setStatuses] = useState<BatchStatus[] | undefined>();
+  const [statuses, setStatuses] = useState<BatchStatus[] | undefined>([
+    "enqueued",
+    "failed",
+    "processing",
+    "canceled",
+    "succeeded",
+  ]);
   const batches = useSelector(
     (state: RootState) => state.appReducer.search.batches,
   );
@@ -34,13 +58,53 @@ const BatchTable: React.FC = () => {
 
   const columns: TableProps<Batch>["columns"] = [
     {
+      title: "Start",
+      dataIndex: "startedAt",
+      key: "startedAt",
+      render: (_, record) => {
+        return (
+          <>{dayjs(new Date(record.startedAt)).format("DD/MM/YYYY HH:mm:ss")}</>
+        );
+      },
+    },
+    {
+      title: "Finish",
+      dataIndex: "finishedAt",
+      key: "finishedAt",
+      render: (_, record) => {
+        return (
+          <>
+            {record.finishedAt
+              ? dayjs(new Date(record.finishedAt)).format("DD/MM/YYYY HH:mm:ss")
+              : "N/A"}
+          </>
+        );
+      },
+    },
+    {
+      title: "Total tasks",
+      dataIndex: "totalNbTasks",
+      key: "totalNbTasks",
+      render: (_, record) => {
+        return <>{record.stats.totalNbTasks}</>;
+      },
+    },
+    {
+      title: "Types",
+      dataIndex: "types",
+      key: "types",
+      render: (_, record) => {
+        return <pre>{JSON.stringify(record.stats.types)} </pre>;
+      },
+    },
+    {
       title: "Progress",
       dataIndex: "progress",
       key: "progress",
       render: (_, record) => {
         return (
           <>
-            <Tag>{record.progress.percentage}%</Tag>
+            <Tag>{record.progress?.percentage || 100}%</Tag>
           </>
         );
       },
@@ -81,19 +145,32 @@ const BatchTable: React.FC = () => {
             closable
           />
         )}
-        <Space>
-          <Button
-            onClick={() => navigate("/")}
-            icon={<ArrowLeftOutlined />}
-            size="large"
-            color="default"
-            variant="dashed"
-          >
-            {!isMobile && "Back"}
-          </Button>
-        </Space>
+        <Button
+          onClick={() => setStatuses([...(statuses || [])])}
+          size="large"
+          color="default"
+          variant="dashed"
+          icon={<SyncOutlined />}
+        >
+          {!isMobile && "Refresh"}
+        </Button>
       </Flex>
-
+      <Row>
+        <Select
+          mode="multiple"
+          allowClear
+          style={{ width: "100%" }}
+          placeholder="Select batch statuses"
+          value={statuses}
+          onChange={(value) => setStatuses(value as BatchStatus[])}
+        >
+          {batchStatusOptions.map((status) => (
+            <Select.Option key={status} value={status}>
+              {status}
+            </Select.Option>
+          ))}
+        </Select>
+      </Row>
       <Table
         bordered
         dataSource={batches}
