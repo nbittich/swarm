@@ -62,8 +62,8 @@ async fn main() -> anyhow::Result<()> {
         .eviction_policy(EvictionPolicy::tiny_lfu())
         .build();
     info!(
-        "prepopulate at most 70% of the cache capacity ({}) with data from mongo...",
-        cache_size * 70 / 100
+        "prepopulate at most 80% of the cache capacity ({}) with data from mongo...",
+        cache_size * 80 / 100
     );
     for (subject_hash, id) in uuid_repository
         .find_page_large_collection_batched(
