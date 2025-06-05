@@ -31,6 +31,8 @@ use swarm_common::{
 use swarm_common::{chunk_drain, retry_fs, retryable_fut, trace};
 use swarm_meilisearch_client::MeilisearchClient;
 use swarm_meilisearch_client::domain::{ContentType, Encoding, PaginationSetting, TaskInfo};
+use tokio::fs::File;
+use tokio::io::{BufReader, Lines};
 use tokio::{io::AsyncBufReadExt, task::JoinSet};
 use tortank::turtle::turtle_doc::{Node, Statement, TurtleDoc};
 use tortank::utils::{
@@ -360,47 +362,24 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
             retry_fs::remove_dir_all(&task.output_dir).await?;
         }
         retry_fs::create_dir_all(&task.output_dir).await?;
-        let mut manifest =
+        let manifest =
             tokio::io::BufReader::new(retry_fs::open_file(diff_manifest_file_path).await?).lines();
-        let mut errors = vec![];
-        let mut lines_buffer = Vec::with_capacity(config.chunk_size);
-        while let Ok(Some(line)) = manifest.next_line().await {
-            if line.trim().is_empty() {
-                continue;
-            }
-            debug!("handling line {line}");
-
-            lines_buffer.push(line);
-            if lines_buffer.len() == config.chunk_size {
-                let config = config.clone();
-                let lines = lines_buffer.drain(..).collect_vec();
-                if let Err(e) = index(&lines, &config).await {
-                    errors.push(format!("error during indexing!  error: {e}"));
-                }
-            }
-        }
-        if !lines_buffer.is_empty() {
-            let config = config.clone();
-            let lines = lines_buffer.drain(..).collect_vec();
-            if let Err(e) = index(&lines, &config).await {
-                errors.push(format!("error during indexing!  error: {e}"));
-            }
+        if let Err(e) = index(manifest, config).await {
+            task.status = Status::Failed(vec![format!("error during indexing!  error: {e}")]);
+        } else {
+            task.status = Status::Success;
         }
 
         task.modified_date = Some(Local::now());
 
-        task.result = None; // FIXME, just pure laziness, at least a manifest with the meilisearch task uid
-        task.status = if errors.is_empty() {
-            Status::Success
-        } else {
-            Status::Failed(errors)
-        };
+        task.result = None; // FIXME, just pure laziness
+
         return Ok(Some(()));
     }
     Ok(None)
 }
 
-async fn index(lines: &[String], config: &Config) -> anyhow::Result<()> {
+async fn index(mut manifest: Lines<BufReader<File>>, config: &Config) -> anyhow::Result<()> {
     // OPTIMIZATION
     // virtuoso_tasks will gather properties from virtuoso in parallel (by default, 255 tasks)
     // we then reduce it to a single meilisearch task.
@@ -434,8 +413,14 @@ async fn index(lines: &[String], config: &Config) -> anyhow::Result<()> {
 
             Ok(()) as anyhow::Result<()>
         };
-    for line in lines {
-        let payload = DiffResult::deserialize(line).map_err(|e| anyhow!("{e}"))?;
+
+    while let Ok(Some(line)) = manifest.next_line().await {
+        if line.trim().is_empty() {
+            continue;
+        }
+        debug!("handling line {line}");
+
+        let payload = DiffResult::deserialize(&line).map_err(|e| anyhow!("{e}"))?;
         let config_clone = config.clone();
         virtuoso_tasks.spawn(async move {
             if let Some(to_remove) = payload.to_remove_path.as_ref() {
