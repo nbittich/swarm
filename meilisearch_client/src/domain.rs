@@ -150,12 +150,12 @@ pub struct BatchResponse {
 #[serde(rename_all = "camelCase")]
 pub struct Batch {
     pub uid: u64,
-    pub details: Value,
-    pub stats: Stats,
-    pub duration: String,
-    pub started_at: String,
-    pub finished_at: String,
-    pub progress: Progress,
+    pub details: Option<Value>,
+    pub stats: Option<Stats>,
+    pub duration: Option<String>,
+    pub started_at: Option<String>,
+    pub finished_at: Option<String>,
+    pub progress: Option<Progress>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -170,11 +170,11 @@ pub struct Details {
 pub struct Stats {
     pub total_nb_tasks: u64,
     pub status: Status,
-    pub types: Value,
-    pub index_uids: HashMap<String, u64>,
-    pub progress_trace: Value,
-    pub write_channel_congestion: Value,
-    pub internal_database_sizes: Value,
+    pub types: Option<Value>,
+    pub index_uids: Option<HashMap<String, u64>>,
+    pub progress_trace: Option<Value>,
+    pub write_channel_congestion: Option<Value>,
+    pub internal_database_sizes: Option<Value>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -187,9 +187,9 @@ pub struct Progress {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Step {
-    pub current_step: String,
-    pub finished: u64,
-    pub total: u64,
+    pub current_step: Option<String>,
+    pub finished: Option<u64>,
+    pub total: Option<u64>,
 }
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
