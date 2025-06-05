@@ -213,6 +213,58 @@ export interface SearchQueryResponse {
     limit?: number;
 }
 
+export interface Batch {
+  uid: number;
+  details: Details;
+  stats: Stats;
+  duration: string;
+  startedAt: string;
+  finishedAt: string;
+  progress: Progress;
+}
+
+export interface Details {
+  receivedDocuments: number;
+  indexedDocuments: number;
+}
+
+export interface Stats {
+  totalNbTasks: number;
+  status: SearchBatchStatus;
+  types: JSONObject; 
+    indexUids: Record<string, number>;
+  progressTrace: JSONObject;
+  writeChannelCongestion: JSONObject;
+  internalDatabaseSizes: JSONObject;
+}
+
+export interface Progress {
+  steps: Step[];
+  percentage: number;
+}
+
+export interface Step {
+  currentStep: string;
+  finished: number;
+  total: number;
+}
+
+export interface SearchBatchStatus {
+  enqueued?: number;
+  processing?: number;
+  succeeded?: number;
+  failed?: number;
+  canceled?: number;
+}
+
+export type BatchStatus =
+  | "enqueued"
+  | "processing"
+  | "succeeded"
+  | "failed"
+  | "canceled";
+
+
 export function getPayloadFromScheduledJob(sj: ScheduledJob): string | Status | undefined {
     if (sj.taskDefinition.payload.type === "scrapeUrl") {
         return sj.taskDefinition.payload.value;
