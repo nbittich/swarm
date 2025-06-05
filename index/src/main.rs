@@ -12,7 +12,7 @@ use swarm_common::compress::{gzip_str, ungzip};
 use swarm_common::constant::{
     CHUNK_SIZE, INDEX_DELAY_BEFORE_NEXT_RETRY, INDEX_INTERVAL_WAIT_FOR_TASK, INDEX_MAX_RETRY,
     INDEX_MAX_TOTAL_HITS, INDEX_MAX_WAIT_FOR_TASK, RESET_INDEX, RESET_INDEX_NAME,
-    SLEEP_BEFORE_NEXT_TASK, SLEEP_BEFORE_NEXT_VIRTUOSO_QUERY,
+    SLEEP_BEFORE_NEXT_MEILISEARCH_BATCH, SLEEP_BEFORE_NEXT_TASK, SLEEP_BEFORE_NEXT_VIRTUOSO_QUERY,
 };
 use swarm_common::domain::index_config::{INDEX_ID_KEY, IndexConfiguration};
 use swarm_common::{
@@ -28,7 +28,7 @@ use swarm_common::{
     nats_client::{self, NatsClient},
     setup_tracing,
 };
-use swarm_common::{retry_fs, retryable_fut, trace};
+use swarm_common::{chunk_drain, retry_fs, retryable_fut, trace};
 use swarm_meilisearch_client::MeilisearchClient;
 use swarm_meilisearch_client::domain::{ContentType, Encoding, PaginationSetting, TaskInfo};
 use tokio::{io::AsyncBufReadExt, task::JoinSet};
@@ -57,6 +57,7 @@ struct Config {
     index_interval_wait_for_task: Option<Duration>,
     sleep_before_next_virtuoso_query: Duration,
     sleep_before_next_task: Duration,
+    sleep_before_next_meilisearch_task: Duration,
     index_max_retry: u64,
     index_delay_before_next_retry: u64,
     chunk_size: usize,
@@ -100,13 +101,19 @@ async fn main() -> anyhow::Result<()> {
         .last()
         .map(Duration::from_millis)
         .unwrap_or_else(|| Duration::from_millis(30));
+    let sleep_before_next_meilisearch_task = var(SLEEP_BEFORE_NEXT_MEILISEARCH_BATCH)
+        .iter()
+        .flat_map(|r| r.parse::<u64>())
+        .last()
+        .map(Duration::from_millis)
+        .unwrap_or_else(|| Duration::from_millis(60_000));
+
     let index_max_wait_for_task = var(INDEX_MAX_WAIT_FOR_TASK)
         .iter()
         .flat_map(|r| r.parse::<u64>())
         .last()
         .or(Some(3600))
         .map(Duration::from_secs);
-
     let index_interval_wait_for_task = var(INDEX_INTERVAL_WAIT_FOR_TASK)
         .iter()
         .flat_map(|r| r.parse::<u64>())
@@ -184,6 +191,7 @@ async fn main() -> anyhow::Result<()> {
         index_max_wait_for_task,
         sleep_before_next_task,
         sleep_before_next_virtuoso_query,
+        sleep_before_next_meilisearch_task,
         sparql_client: SparqlClient::new()?,
     };
 
@@ -396,15 +404,14 @@ async fn index(lines: &[String], config: &Config) -> anyhow::Result<()> {
     // OPTIMIZATION
     // virtuoso_tasks will gather properties from virtuoso in parallel (by default, 255 tasks)
     // we then reduce it to a single meilisearch task.
-    // So 255 virtuoso task = 1 meilisearch task
+    // So 255 virtuoso task = 1 meilisearch task (255*255 lines)
     // We can thus do more work in parallel without (hopefully) choking neither meilisearch nor
     // virtuoso
     let mut virtuoso_tasks = JoinSet::new();
-    let mut meilisearch_tasks = JoinSet::new();
+    let mut meilisearch_tasks_batch = Vec::with_capacity(config.chunk_size);
     let virtuoso_tasks_consumer =
-        async |config: &Config,
-               tasks: &mut JoinSet<anyhow::Result<Vec<MeiliSearchUpdateType>>>,
-               meilisearch_tasks: &mut JoinSet<anyhow::Result<()>>| {
+        async |tasks: &mut JoinSet<anyhow::Result<Vec<MeiliSearchUpdateType>>>,
+               meilisearch_tasks: &mut Vec<MeiliSearchUpdateType>| {
             let mut delete_ops = HashMap::new();
             let mut insert_ops = HashMap::new();
             while let Some(task) = tasks.join_next().await {
@@ -420,29 +427,10 @@ async fn index(lines: &[String], config: &Config) -> anyhow::Result<()> {
                     }
                 }
             }
-            let config = config.clone();
-            meilisearch_tasks.spawn(async move {
-                for (idx, delete_op) in delete_ops {
-                    let task = config
-                        .search_client
-                        .delete_documents(&idx, &delete_op.into_iter().collect_vec())
-                        .await?;
-                    debug!("{task:?}");
-                    debug!("waiting for task to complete...");
-                    config
-                        .search_client
-                        .wait_for_task(
-                            task.task_uid,
-                            config.index_interval_wait_for_task,
-                            config.index_max_wait_for_task,
-                        )
-                        .await?;
-                }
-                for (idx, insert_op) in insert_ops {
-                    add_or_replace_documents(&config, &idx, insert_op.into_iter().collect()).await?
-                }
-                Ok(()) as anyhow::Result<()>
-            });
+            meilisearch_tasks.extend([
+                MeiliSearchUpdateType::Deletes(delete_ops),
+                MeiliSearchUpdateType::Inserts(insert_ops),
+            ]);
 
             Ok(()) as anyhow::Result<()>
         };
@@ -472,19 +460,54 @@ async fn index(lines: &[String], config: &Config) -> anyhow::Result<()> {
         });
         tokio::time::sleep(config.sleep_before_next_task).await;
         if virtuoso_tasks.len() >= config.chunk_size {
-            virtuoso_tasks_consumer(config, &mut virtuoso_tasks, &mut meilisearch_tasks).await?;
-        }
-        if meilisearch_tasks.len() >= config.chunk_size {
-            while let Some(task) = meilisearch_tasks.join_next().await {
-                task??;
-            }
+            virtuoso_tasks_consumer(&mut virtuoso_tasks, &mut meilisearch_tasks_batch).await?;
         }
     }
 
-    virtuoso_tasks_consumer(config, &mut virtuoso_tasks, &mut meilisearch_tasks).await?;
-    while let Some(task) = meilisearch_tasks.join_next().await {
-        task??;
+    virtuoso_tasks_consumer(&mut virtuoso_tasks, &mut meilisearch_tasks_batch).await?;
+    for batch in chunk_drain(&mut meilisearch_tasks_batch, config.chunk_size) {
+        let (deletes, inserts) = batch.into_iter().fold(
+            (HashMap::new(), HashMap::new()),
+            |(mut deletes, mut inserts), a| {
+                match a {
+                    MeiliSearchUpdateType::Deletes(d) => deletes.extend(d.into_iter()),
+                    MeiliSearchUpdateType::Inserts(i) => inserts.extend(i.into_iter()),
+                };
+                (deletes, inserts)
+            },
+        );
+        let config_clone = config.clone();
+        let mut meilisearch_tasks = JoinSet::new();
+        meilisearch_tasks.spawn(async move {
+            for (idx, delete_op) in deletes {
+                let task = config_clone
+                    .search_client
+                    .delete_documents(&idx, &delete_op.into_iter().collect_vec())
+                    .await?;
+                debug!("{task:?}");
+                debug!("waiting for task to complete...");
+                config_clone
+                    .search_client
+                    .wait_for_task(
+                        task.task_uid,
+                        config_clone.index_interval_wait_for_task,
+                        config_clone.index_max_wait_for_task,
+                    )
+                    .await?;
+            }
+            for (idx, insert_op) in inserts {
+                add_or_replace_documents(&config_clone, &idx, insert_op.into_iter().collect())
+                    .await?
+            }
+            Ok(()) as anyhow::Result<()>
+        });
+        debug!(
+            "sleeping {} millis before next meilisearch task.",
+            config.sleep_before_next_meilisearch_task.as_millis()
+        );
+        tokio::time::sleep(config.sleep_before_next_meilisearch_task).await;
     }
+
     Ok(())
 }
 

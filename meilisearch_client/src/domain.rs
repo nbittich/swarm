@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use std::collections::HashMap;
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -135,4 +136,88 @@ pub struct TaskInfo {
     #[serde(rename = "type")]
     pub task_type: String,
     pub enqueued_at: String,
+}
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchResponse {
+    pub results: Vec<Batch>,
+    pub total: Option<u64>, // total number of batches matching the filter or query
+    pub limit: Option<u64>, // Number of batches returned
+    pub from: Option<u64>,  // uid of the first batch returned
+    pub next: Option<u64>, // Value passed to from to view the next “page” of results. When the value of next is null, there are no more tasks to view
+}
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Batch {
+    pub uid: u64,
+    pub details: Details,
+    pub stats: Stats,
+    pub duration: String,
+    pub started_at: String,
+    pub finished_at: String,
+    pub progress: Progress,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Details {
+    pub received_documents: u64,
+    pub indexed_documents: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Stats {
+    pub total_nb_tasks: u64,
+    pub status: Status,
+    pub types: Value,
+    pub index_uids: HashMap<String, u64>,
+    pub progress_trace: Value,
+    pub write_channel_congestion: Value,
+    pub internal_database_sizes: Value,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Progress {
+    pub steps: Vec<Step>,
+    pub percentage: f64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Step {
+    pub current_step: String,
+    pub finished: u64,
+    pub total: u64,
+}
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Status {
+    enqueued: Option<u64>,
+    processing: Option<u64>,
+    succeeded: Option<u64>,
+    failed: Option<u64>,
+    canceled: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub enum BatchStatus {
+    Enqueued,
+    Processing,
+    Succeeded,
+    Failed,
+    Canceled,
+}
+impl std::fmt::Display for BatchStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BatchStatus::Enqueued => write!(f, "enqueued"),
+            BatchStatus::Processing => write!(f, "processing"),
+            BatchStatus::Succeeded => write!(f, "succeeded"),
+            BatchStatus::Failed => write!(f, "failed"),
+            BatchStatus::Canceled => write!(f, "canceled"),
+        }
+    }
 }

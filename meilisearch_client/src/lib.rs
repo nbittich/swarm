@@ -14,6 +14,8 @@ use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Middleware, Next, 
 use serde::de::DeserializeOwned;
 use tracing::debug;
 
+use crate::domain::{Batch, BatchResponse, BatchStatus};
+
 pub static MEILISEARCH_CLIENT_MAX_RETRY: &str = "MEILISEARCH_CLIENT_MAX_RETRY";
 pub static MEILISEARCH_CLIENT_RETRY_DELAY_MILLIS: &str = "MEILISEARCH_CLIENT_RETRY_DELAY_MILLIS";
 pub static MEILISEARCH_CLIENT_REQUEST_TIMEOUT_SEC: &str = "MEILISEARCH_CLIENT_REQUEST_TIMEOUT_SEC";
@@ -86,6 +88,55 @@ impl MeilisearchClient {
         let response = response.error_for_status()?;
         let body = response.json().await?;
         Ok(body)
+    }
+    pub async fn get_batches_paginated_response(
+        &self,
+        statuses: &[BatchStatus],
+        from: &mut Option<u64>,
+    ) -> anyhow::Result<Vec<Batch>> {
+        let statuses = statuses
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        let response = self
+            .client
+            .get(format!(
+                "{}/batches?statuses={}{}",
+                self.endpoint,
+                statuses,
+                if let Some(from) = from.as_ref() {
+                    format!("&from={from}")
+                } else {
+                    "".into()
+                }
+            ))
+            .send()
+            .await?
+            .error_for_status()?;
+        let body: BatchResponse = response.json().await?;
+        *from = body.next;
+        Ok(body.results)
+    }
+
+    pub async fn get_batches(&self, statuses: Vec<BatchStatus>) -> anyhow::Result<Vec<Batch>> {
+        let mut from = None;
+        let mut response = vec![];
+
+        response.append(
+            &mut self
+                .get_batches_paginated_response(&statuses, &mut from)
+                .await?,
+        );
+        while from.is_some() {
+            response.append(
+                &mut self
+                    .get_batches_paginated_response(&statuses, &mut from)
+                    .await?,
+            );
+        }
+
+        Ok(response)
     }
     pub async fn set_filterable_attributes(
         &self,
