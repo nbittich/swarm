@@ -1,5 +1,5 @@
 use mongodb::{Client, Database, bson::doc, options::ClientOptions};
-use tracing::info;
+use tracing::{debug, info};
 
 use std::{env::var, time::Duration};
 
@@ -63,11 +63,20 @@ impl StoreClient {
         let client =
             Client::with_options(client_options).map_err(|e| StoreError { msg: e.to_string() })?;
 
-        let _ = client
-            .database(&mongo_admin_db)
-            .run_command(doc! {"ping": 1})
-            .await
-            .map_err(|e| StoreError { msg: e.to_string() })?;
+        loop {
+            info!("waiting for mongodb...");
+            if let Err(e) = client
+                .database(&mongo_admin_db)
+                .run_command(doc! {"ping": 1})
+                .await
+            {
+                debug!("cannot ping mongodb {e}");
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            } else {
+                info!("mongodb: connected!");
+                break;
+            }
+        }
 
         info!("Successfully connected");
         Ok(client)

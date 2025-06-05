@@ -6,7 +6,7 @@ use chrono::{DateTime, Local};
 use itertools::Itertools;
 use serde_json::{Number, Value};
 use sparql_client::{SparqlClient, SparqlUpdateType};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::{borrow::Cow, env::var, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 use swarm_common::compress::{gzip_str, ungzip};
 use swarm_common::constant::{
@@ -40,6 +40,11 @@ pub const NS_TYPE: Node = Node::Iri(Cow::Borrowed(
     "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
 ));
 
+#[derive(Debug)]
+pub enum MeiliSearchUpdateType {
+    Deletes(HashMap<String, HashSet<String>>), // idx => uuids
+    Inserts(HashMap<String, HashSet<BTreeMap<String, Value>>>),
+}
 #[derive(Clone)]
 struct Config {
     nc: NatsClient,
@@ -370,44 +375,111 @@ async fn handle_task(config: &Config, task: &mut Task) -> anyhow::Result<Option<
 }
 
 async fn index(lines: &[String], config: &Config) -> anyhow::Result<()> {
-    let mut tasks = JoinSet::new();
+    // OPTIMIZATION
+    // virtuoso_tasks will gather properties from virtuoso in parallel (by default, 255 tasks)
+    // we then reduce it to a single meilisearch task.
+    // So 255 virtuoso task = 1 meilisearch task
+    // We can thus do more work in parallel without (hopefully) choking neither meilisearch nor
+    // virtuoso
+    let mut virtuoso_tasks = JoinSet::new();
+    let mut meilisearch_tasks = JoinSet::new();
+    let virtuoso_tasks_consumer =
+        async |config: &Config,
+               tasks: &mut JoinSet<anyhow::Result<Vec<MeiliSearchUpdateType>>>,
+               meilisearch_tasks: &mut JoinSet<anyhow::Result<()>>| {
+            let mut delete_ops = HashMap::new();
+            let mut insert_ops = HashMap::new();
+            while let Some(task) = tasks.join_next().await {
+                let ops = task??;
+                for op in ops {
+                    match op {
+                        MeiliSearchUpdateType::Deletes(deletes) => {
+                            delete_ops.extend(deletes.into_iter())
+                        }
+                        MeiliSearchUpdateType::Inserts(inserts) => {
+                            insert_ops.extend(inserts.into_iter())
+                        }
+                    }
+                }
+            }
+            let config = config.clone();
+            meilisearch_tasks.spawn(async move {
+                for (idx, delete_op) in delete_ops {
+                    let task = config
+                        .search_client
+                        .delete_documents(&idx, &delete_op.into_iter().collect_vec())
+                        .await?;
+                    debug!("{task:?}");
+                    debug!("waiting for task to complete...");
+                    config
+                        .search_client
+                        .wait_for_task(
+                            task.task_uid,
+                            config.index_interval_wait_for_task,
+                            config.index_max_wait_for_task,
+                        )
+                        .await?;
+                }
+                for (idx, insert_op) in insert_ops {
+                    add_or_replace_documents(&config, &idx, insert_op.into_iter().collect()).await?
+                }
+                Ok(()) as anyhow::Result<()>
+            });
+
+            Ok(()) as anyhow::Result<()>
+        };
     for line in lines {
         let payload = DiffResult::deserialize(line).map_err(|e| anyhow!("{e}"))?;
         let config_clone = config.clone();
-        tasks.spawn(async move {
+        virtuoso_tasks.spawn(async move {
             if let Some(to_remove) = payload.to_remove_path.as_ref() {
                 let to_remove = to_remove.clone();
-                update(&config_clone, to_remove, SparqlUpdateType::Delete).await?;
-            }
-            if let Some(to_insert) = payload.new_insert_path.as_ref() {
+                prepare_update_for_meilisearch_task(
+                    &config_clone,
+                    to_remove,
+                    SparqlUpdateType::Delete,
+                )
+                .await
+            } else if let Some(to_insert) = payload.new_insert_path.as_ref() {
                 let to_insert = to_insert.clone();
-                update(&config_clone, to_insert, SparqlUpdateType::Insert).await?;
+                prepare_update_for_meilisearch_task(
+                    &config_clone,
+                    to_insert,
+                    SparqlUpdateType::Insert,
+                )
+                .await
+            } else {
+                Ok(vec![]) as anyhow::Result<Vec<MeiliSearchUpdateType>>
             }
-            Ok(()) as anyhow::Result<()>
         });
-        if tasks.len() >= config.chunk_size {
-            while let Some(task) = tasks.join_next().await {
+        if virtuoso_tasks.len() >= config.chunk_size {
+            virtuoso_tasks_consumer(config, &mut virtuoso_tasks, &mut meilisearch_tasks).await?;
+        }
+        if meilisearch_tasks.len() >= config.chunk_size {
+            while let Some(task) = meilisearch_tasks.join_next().await {
                 task??;
             }
         }
     }
 
-    while let Some(task) = tasks.join_next().await {
+    virtuoso_tasks_consumer(config, &mut virtuoso_tasks, &mut meilisearch_tasks).await?;
+    while let Some(task) = meilisearch_tasks.join_next().await {
         task??;
     }
-
     Ok(())
 }
 
-async fn update(
+async fn prepare_update_for_meilisearch_task(
     config: &Config,
     triples_path: PathBuf,
     update_type: SparqlUpdateType,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Vec<MeiliSearchUpdateType>> {
     debug!("index {triples_path:?} with operation type {update_type:?}");
 
     let turtle_str = ungzip(&triples_path).await?;
     let doc = TurtleDoc::try_from((turtle_str.as_str(), None)).map_err(|e| anyhow!("{e}"))?;
+    let mut meilisearch_deletes = HashMap::new();
+    let mut meilisearch_inserts = HashMap::new();
 
     for ic in config.index_config.iter() {
         let idx = &ic.name;
@@ -440,17 +512,11 @@ async fn update(
                     "deleting the following documents in index {}: {uuids:?}",
                     idx
                 );
-                let task = config.search_client.delete_documents(idx, &uuids).await?;
-                debug!("{task:?}");
-                debug!("waiting for task to complete...");
-                config
-                    .search_client
-                    .wait_for_task(
-                        task.task_uid,
-                        config.index_interval_wait_for_task,
-                        config.index_max_wait_for_task,
-                    )
-                    .await?;
+                let entry = meilisearch_deletes
+                    .entry(idx.clone())
+                    .or_insert(HashSet::with_capacity(uuids.len()));
+
+                entry.extend(uuids.into_iter());
             }
             SparqlUpdateType::Insert => {
                 // inserting is a bit more work
@@ -497,13 +563,21 @@ async fn update(
                     }
                     documents.push(doc_data);
                 }
-                add_or_replace_documents(config, idx, documents).await?;
+
+                let entry = meilisearch_inserts
+                    .entry(idx.clone())
+                    .or_insert(HashSet::with_capacity(documents.len()));
+
+                entry.extend(documents.into_iter());
             }
             SparqlUpdateType::NoOp => info!("index update: no op"),
         }
     }
 
-    Ok(())
+    Ok(vec![
+        MeiliSearchUpdateType::Deletes(meilisearch_deletes),
+        MeiliSearchUpdateType::Inserts(meilisearch_inserts),
+    ])
 }
 async fn add_or_replace_documents(
     config: &Config,

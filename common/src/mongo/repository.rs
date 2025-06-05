@@ -91,18 +91,23 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
 
     #[instrument(level = "debug")]
     async fn find_all(&self) -> Result<Vec<T>, StoreError> {
+        self.find_all_batched(None).await
+    }
+
+    #[instrument(level = "debug")]
+    async fn find_all_batched(&self, batch_size: Option<u32>) -> Result<Vec<T>, StoreError> {
         let collection = self.get_collection();
-        let cursor = collection
-            .find(doc! {})
-            .await
-            .map_err(|e| StoreError { msg: e.to_string() })?;
+        let mut find = collection.find(doc! {});
+        if let Some(batch_size) = batch_size {
+            find = find.batch_size(batch_size);
+        }
+        let cursor = find.await.map_err(|e| StoreError { msg: e.to_string() })?;
         let collection: Vec<T> = cursor
             .try_collect()
             .await
             .map_err(|e| StoreError { msg: e.to_string() })?;
         Ok(collection)
     }
-
     #[instrument(level = "debug")]
     async fn count(&self, query: Option<Document>) -> Result<u64, StoreError> {
         let collection = self.get_collection();
@@ -146,6 +151,18 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
         last_element_id: Option<String>,
         limit: i64,
     ) -> Result<Vec<T>, StoreError> {
+        self.find_page_large_collection_batched(main_query, last_element_id, limit, None)
+            .await
+    }
+
+    #[instrument(level = "debug")]
+    async fn find_page_large_collection_batched(
+        &self,
+        main_query: Option<Document>,
+        last_element_id: Option<String>,
+        limit: i64,
+        batch_size: Option<u32>,
+    ) -> Result<Vec<T>, StoreError> {
         let collection = self.get_collection();
         let query = {
             let cursor_query = if let Some(last_element_id) = last_element_id {
@@ -166,7 +183,11 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
             }
         };
 
-        let options = FindOptions::builder().limit(Some(limit)).build();
+        let options = FindOptions::builder()
+            .limit(Some(limit))
+            .batch_size(batch_size)
+            .build();
+
         let cursor = collection
             .find(query)
             .with_options(options)
@@ -178,7 +199,6 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
             .map_err(|e| StoreError { msg: e.to_string() })?;
         Ok(collection)
     }
-
     #[instrument(level = "debug")]
     async fn find_page(&self, pageable: Pageable) -> Result<Page<T>, StoreError> {
         let (limit, page) = (pageable.limit.unwrap_or(10), pageable.page.unwrap_or(0));

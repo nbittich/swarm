@@ -3,7 +3,7 @@
 
 use anyhow::anyhow;
 use chrono::Local;
-use moka::future::Cache;
+use moka::{future::Cache, policy::EvictionPolicy};
 use std::{borrow::Cow, collections::HashMap, env::var, path::Path, sync::Arc};
 use swarm_common::{
     IdGenerator, StreamExt,
@@ -54,12 +54,32 @@ async fn main() -> anyhow::Result<()> {
     let mongo_client = StoreClient::new(app_name.to_string()).await?;
     let uuid_repository: StoreRepository<UuidSubject> =
         StoreRepository::get_repository(&mongo_client, UUID_COLLECTION, PUBLIC_TENANT);
-    let cache = moka::future::Cache::new(
-        var(CACHE_SIZE)
-            .ok()
-            .and_then(|cs| cs.parse::<u64>().ok())
-            .unwrap_or(100_000),
+    let cache_size = var(CACHE_SIZE)
+        .ok()
+        .and_then(|cs| cs.parse::<u64>().ok())
+        .unwrap_or(100_000);
+    let cache = moka::future::CacheBuilder::new(cache_size)
+        .eviction_policy(EvictionPolicy::tiny_lfu())
+        .build();
+    info!(
+        "prepopulate at most 70% of the cache capacity ({}) with data from mongo...",
+        cache_size * 70 / 100
     );
+    for (subject_hash, id) in uuid_repository
+        .find_page_large_collection_batched(
+            None,
+            None,
+            (cache_size * 70 / 100) as i64,
+            Some(100_000),
+        )
+        .await?
+        .into_iter()
+        .map(|u| (u.subject_hash, u.id))
+        .collect::<HashMap<_, _>>()
+    {
+        cache.insert(subject_hash, id).await;
+    }
+    info!("cache populated");
 
     let mut messages = task_event_consumer.messages().await?;
 
