@@ -28,12 +28,14 @@ use swarm_common::{
     mongo::{FindOptions, Page, Pageable, Repository, doc},
     retry_fs,
 };
+use swarm_meilisearch_client::domain::{Batch, BatchStatus};
 use tokio_util::io::ReaderStream;
 
 use crate::{
     domain::{
-        ApiError, AuthError, Claims, DownloadPayload, GetSubTasksPayload, KEYS, NewJobPayload,
-        NewScheduledJobPayload, SparqlQueryPayload, exp_from_now,
+        ApiError, AuthError, Claims, DownloadPayload, GetSubTasksPayload, KEYS,
+        MeilisearchGetBatchPayload, NewJobPayload, NewScheduledJobPayload, SparqlQueryPayload,
+        exp_from_now,
     },
     manager::JobManagerState,
 };
@@ -50,6 +52,7 @@ pub async fn serve(
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     let app = Router::new()
         .route("/sparql", get(sparql).post(sparql))
+        .route("/search/batches", post(search_batches))
         .route("/search/{index}", post(search))
         .route("/search/{index}/stats", get(index_stats))
         .route("/search-configuration", get(search_configuration))
@@ -558,4 +561,25 @@ async fn index_stats(
             })
         })
         .map_err(|e| ApiError::SearchError(e.to_string()))
+}
+
+async fn search_batches(
+    State(manager): State<JobManagerState>,
+    _: Claims,
+    Json(MeilisearchGetBatchPayload { statuses }): Json<MeilisearchGetBatchPayload>,
+) -> Result<Json<Vec<Batch>>, ApiError> {
+    let batches = manager
+        .search_client
+        .get_batches(statuses.unwrap_or_else(|| {
+            vec![
+                BatchStatus::Enqueued,
+                BatchStatus::Failed,
+                BatchStatus::Succeeded,
+                BatchStatus::Processing,
+                BatchStatus::Canceled,
+            ]
+        }))
+        .await
+        .map_err(|e| ApiError::SearchError(e.to_string()))?;
+    Ok(Json(batches))
 }

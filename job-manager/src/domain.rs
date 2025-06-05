@@ -18,6 +18,7 @@ use swarm_common::{
     constant::{JWT_EXPIRATION_TIME_SEC, JWT_SECRET, ROOT_OUTPUT_DIR},
     domain::TaskDefinition,
 };
+use swarm_meilisearch_client::domain::BatchStatus;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Claims {
@@ -68,6 +69,11 @@ pub struct NewJobPayload {
 pub struct GetSubTasksPayload {
     pub last_element_id: Option<String>,
     pub limit: i64,
+}
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeilisearchGetBatchPayload {
+    pub statuses: Option<Vec<BatchStatus>>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
