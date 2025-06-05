@@ -2,23 +2,21 @@ import React, { useEffect, useState } from "react";
 import {
   Alert,
   Button,
-  Col,
   Flex,
+  Pagination,
   Row,
   Select,
-  Space,
   Table,
   TableProps,
   Tag,
 } from "antd";
-import { useNavigate } from "react-router-dom"; // for accessing the dynamic route parameter
 import {
   Batch,
   BatchStatus,
   colorForBatchStatus,
   labelForBatchStatus,
 } from "@swarm/models/domain";
-import { ArrowLeftOutlined, SyncOutlined } from "@ant-design/icons";
+import { SyncOutlined } from "@ant-design/icons";
 import { useIsMobile } from "@swarm/hooks/is-mobile";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@swarm/states/Store";
@@ -34,7 +32,6 @@ const batchStatusOptions: BatchStatus[] = [
 const BatchTable: React.FC = () => {
   const isMobile = useIsMobile();
   const dispatch = useDispatch<AppDispatch>();
-  const navigate = useNavigate();
   const [statuses, setStatuses] = useState<BatchStatus[] | undefined>([
     "enqueued",
     "failed",
@@ -57,6 +54,14 @@ const BatchTable: React.FC = () => {
   }, [dispatch, statuses]);
 
   const columns: TableProps<Batch>["columns"] = [
+    {
+      title: "Index",
+      dataIndex: "indexUids",
+      key: "idx",
+      render: (_, record) => {
+        return <>{Object.keys(record.stats.indexUids)}</>;
+      },
+    },
     {
       title: "Start",
       dataIndex: "startedAt",
@@ -178,7 +183,9 @@ const BatchTable: React.FC = () => {
         rowKey="uid"
         loading={loading}
         scroll={{ x: "max-content" }}
-      />
+      >
+        <Pagination responsive />
+      </Table>
     </Flex>
   );
 };

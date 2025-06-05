@@ -271,7 +271,7 @@ export interface Batch {
   stats: Stats;
   duration: string;
   startedAt: string;
-  finishedAt: string;
+  finishedAt?: string;
   progress?: Progress;
 }
 
