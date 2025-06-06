@@ -652,15 +652,7 @@ async fn gather_properties(
     for prop in ic.properties.iter() {
         prop.validate()?;
         let where_clause = prop.to_query_op(subject);
-        let query = format!(
-            r#"
-                            SELECT DISTINCT ?{} WHERE {{
-                                # TODO do we want to limit to specific graphs?
-                                {where_clause}
-                            }}
-                        "#,
-            prop.name
-        );
+        let query = format!(r#"SELECT DISTINCT ?{} WHERE {{{where_clause}}}"#, prop.name);
         let res = config.sparql_client.query(query).await?;
         if res.results.bindings.is_empty()
             || res

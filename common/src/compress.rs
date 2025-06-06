@@ -13,7 +13,7 @@ use tracing::instrument;
 use crate::retry_fs;
 
 #[instrument(level = "debug")]
-pub async fn gzip_str<'a>(s: &'a str) -> anyhow::Result<Vec<u8>> {
+pub async fn gzip_str(s: &str) -> anyhow::Result<Vec<u8>> {
     use async_compression::tokio::write::GzipEncoder;
 
     if s.is_empty() {
