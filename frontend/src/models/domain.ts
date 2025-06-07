@@ -61,6 +61,11 @@ export interface Task {
   outputDir: string;
 }
 
+export interface CursorPage<T> {
+  next?: string;
+  current?: string;
+  content: T[];
+}
 export interface SubTask {
   _id: string;
   taskId: string;

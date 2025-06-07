@@ -1,26 +1,37 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import axios from "axios";
-import { SubTask } from "@swarm/models/domain";
+import { CursorPage, SubTask } from "@swarm/models/domain";
 
 interface SubTasksState {
-  data: SubTask[];
+  data: CursorPage<SubTask>;
   loading: boolean;
-  lastElementId: string | null;
 }
 
 const initialState: SubTasksState = {
-  data: [] as SubTask[],
+  data: { content: [] },
   loading: false,
-  lastElementId: null,
 };
 
 export const fetchSubTasks = createAsyncThunk(
   "subTasks/fetchSubTasks",
-  async ({ jobId, taskId, lastElementId, pageSize }: { jobId: string; taskId: string; lastElementId: string | null; pageSize: number }) => {
-    const params = { limit: pageSize, lastElementId };
-    const response = await axios.get(`/api/jobs/${jobId}/tasks/${taskId}/subtasks`, { params });
-    return response.data as SubTask[];
-  }
+  async ({
+    jobId,
+    taskId,
+    next,
+    pageSize,
+  }: {
+    jobId: string;
+    taskId: string;
+    next: string | null | undefined;
+    pageSize: number;
+  }) => {
+    const params = { limit: pageSize, next };
+    const response = await axios.get(
+      `/api/jobs/${jobId}/tasks/${taskId}/subtasks`,
+      { params },
+    );
+    return response.data as CursorPage<SubTask>;
+  },
 );
 
 const subTasksSlice = createSlice({
@@ -28,28 +39,27 @@ const subTasksSlice = createSlice({
   initialState,
   reducers: {
     reset: (state) => {
-      state.lastElementId = null;
-      state.data = [];
+      state.data = { content: [] };
       state.loading = false;
-    }
-
+    },
   },
   extraReducers: (builder) => {
     builder
       .addCase(fetchSubTasks.pending, (state) => {
         state.loading = true;
       })
-      .addCase(fetchSubTasks.fulfilled, (state, action: PayloadAction<SubTask[]>) => {
-        const newSubTasks = action.payload;
-        state.data = state.lastElementId ? [...state.data, ...newSubTasks as SubTask[]] : newSubTasks;
-        state.lastElementId = newSubTasks.length > 0 ? newSubTasks[newSubTasks.length - 1]._id : null;
-        state.loading = false;
-      })
+      .addCase(
+        fetchSubTasks.fulfilled,
+        (state, action: PayloadAction<CursorPage<SubTask>>) => {
+          state.data = action.payload;
+          state.loading = false;
+        },
+      )
       .addCase(fetchSubTasks.rejected, (state) => {
         state.loading = false;
       });
   },
 });
 
-export const { reset } = subTasksSlice.actions
+export const { reset } = subTasksSlice.actions;
 export default subTasksSlice.reducer;
