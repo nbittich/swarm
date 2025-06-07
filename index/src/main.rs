@@ -450,6 +450,7 @@ async fn index(mut manifest: Lines<BufReader<File>>, config: &Config) -> anyhow:
     }
 
     virtuoso_tasks_consumer(&mut virtuoso_tasks, &mut meilisearch_tasks_batch).await?;
+    let mut meilisearch_tasks = JoinSet::new();
     for batch in chunk_drain(&mut meilisearch_tasks_batch, config.chunk_size) {
         let (deletes, inserts) = batch.into_iter().fold(
             (HashMap::new(), HashMap::new()),
@@ -462,7 +463,7 @@ async fn index(mut manifest: Lines<BufReader<File>>, config: &Config) -> anyhow:
             },
         );
         let config_clone = config.clone();
-        let mut meilisearch_tasks = JoinSet::new();
+
         meilisearch_tasks.spawn(async move {
             for (idx, delete_op) in deletes {
                 let task = config_clone
@@ -491,6 +492,9 @@ async fn index(mut manifest: Lines<BufReader<File>>, config: &Config) -> anyhow:
             config.sleep_before_next_meilisearch_task.as_millis()
         );
         tokio::time::sleep(config.sleep_before_next_meilisearch_task).await;
+    }
+    while let Some(task) = meilisearch_tasks.join_next().await {
+        task??;
     }
 
     Ok(())
