@@ -28,12 +28,12 @@ use swarm_common::{
     mongo::{FindOptions, Page, Pageable, Repository, doc},
     retry_fs,
 };
-use swarm_meilisearch_client::domain::{Batch, BatchStatus};
+use swarm_meilisearch_client::domain::{BatchResponse, BatchStatus};
 use tokio_util::io::ReaderStream;
 
 use crate::{
     domain::{
-        ApiError, AuthError, Claims, DownloadPayload, GetSubTasksPayload, KEYS,
+        ApiBatchResponse, ApiError, AuthError, Claims, DownloadPayload, GetSubTasksPayload, KEYS,
         MeilisearchGetBatchPayload, NewJobPayload, NewScheduledJobPayload, SparqlQueryPayload,
         exp_from_now,
     },
@@ -566,20 +566,33 @@ async fn index_stats(
 async fn search_batches(
     State(manager): State<JobManagerState>,
     _: Claims,
-    Json(MeilisearchGetBatchPayload { statuses }): Json<MeilisearchGetBatchPayload>,
-) -> Result<Json<Vec<Batch>>, ApiError> {
-    let batches = manager
+    Json(MeilisearchGetBatchPayload { statuses, from }): Json<MeilisearchGetBatchPayload>,
+) -> Result<Json<ApiBatchResponse>, ApiError> {
+    let BatchResponse {
+        results,
+        from: current,
+        next,
+        ..
+    } = manager
         .search_client
-        .get_batches(statuses.unwrap_or_else(|| {
-            vec![
-                BatchStatus::Enqueued,
-                BatchStatus::Failed,
-                BatchStatus::Succeeded,
-                BatchStatus::Processing,
-                BatchStatus::Canceled,
-            ]
-        }))
+        .get_batches_paginated_response(
+            &statuses.unwrap_or_else(|| {
+                vec![
+                    BatchStatus::Enqueued,
+                    BatchStatus::Failed,
+                    BatchStatus::Succeeded,
+                    BatchStatus::Processing,
+                    BatchStatus::Canceled,
+                ]
+            }),
+            &from,
+        )
         .await
         .map_err(|e| ApiError::SearchError(e.to_string()))?;
-    Ok(Json(batches))
+    Ok(Json(ApiBatchResponse {
+        batches: results,
+        current,
+        next,
+        prev: from,
+    }))
 }

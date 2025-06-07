@@ -92,8 +92,8 @@ impl MeilisearchClient {
     pub async fn get_batches_paginated_response(
         &self,
         statuses: &[BatchStatus],
-        from: &mut Option<u64>,
-    ) -> anyhow::Result<Vec<Batch>> {
+        from: &Option<u64>,
+    ) -> anyhow::Result<BatchResponse> {
         let statuses = statuses
             .iter()
             .map(|s| s.to_string())
@@ -115,25 +115,29 @@ impl MeilisearchClient {
             .await?
             .error_for_status()?;
         let body: BatchResponse = response.json().await?;
-        *from = body.next;
-        Ok(body.results)
+        Ok(body)
     }
 
     pub async fn get_batches(&self, statuses: Vec<BatchStatus>) -> anyhow::Result<Vec<Batch>> {
-        let mut from = None;
         let mut response = vec![];
 
-        response.append(
-            &mut self
-                .get_batches_paginated_response(&statuses, &mut from)
-                .await?,
-        );
+        let BatchResponse {
+            results: mut page,
+            mut from,
+            ..
+        } = self
+            .get_batches_paginated_response(&statuses, &None)
+            .await?;
+        response.append(&mut page);
         while from.is_some() {
-            response.append(
-                &mut self
-                    .get_batches_paginated_response(&statuses, &mut from)
-                    .await?,
-            );
+            BatchResponse {
+                results: page,
+                from,
+                ..
+            } = self
+                .get_batches_paginated_response(&statuses, &from)
+                .await?;
+            response.append(&mut page);
         }
 
         Ok(response)
