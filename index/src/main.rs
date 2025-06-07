@@ -473,7 +473,7 @@ async fn index(mut manifest: Lines<BufReader<File>>, config: &Config) -> anyhow:
             for (idx, delete_op) in deletes {
                 let task = config_clone
                     .search_client
-                    .delete_documents(&idx, &delete_op.into_iter().collect_vec())
+                    .delete_documents(&idx, &delete_op.into_iter().dedup().collect_vec())
                     .await?;
                 debug!("{task:?}");
                 debug!("waiting for task to complete...");
