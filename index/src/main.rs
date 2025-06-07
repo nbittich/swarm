@@ -715,11 +715,19 @@ async fn gather_properties(
                 match o.datatype.as_deref() {
                     Some(XSD_DATE) | Some(XSD_DATE_TIME) => DATE_FORMATS
                         .iter()
-                        .find_map(|f| match parse_from_str(v, f) {
-                            Ok(v) => Some(v),
-                            Err(e) => {
-                                debug!("could not parse {}. err: {}", v, e);
-                                None
+                        .find_map(|f| {
+                            // fix data vendors
+                            let v = if v.ends_with(".") {
+                                &v[0..v.len() - 1]
+                            } else {
+                                v
+                            };
+                            match parse_from_str(v, f) {
+                                Ok(v) => Some(v),
+                                Err(e) => {
+                                    debug!("could not parse {}. err: {}", v, e);
+                                    None
+                                }
                             }
                         })
                         .or_else(|| DateTime::parse_from_rfc3339(v).ok())
