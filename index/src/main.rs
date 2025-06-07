@@ -7,7 +7,6 @@ use itertools::Itertools;
 use serde_json::{Number, Value};
 use sparql_client::{SparqlClient, SparqlUpdateType};
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fmt::format;
 use std::{borrow::Cow, env::var, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 use swarm_common::compress::{gzip_str, ungzip};
 use swarm_common::constant::{

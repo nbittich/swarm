@@ -317,7 +317,7 @@ pub mod index_config {
 
     pub static SUBJECT_BINDING_TYPE: &str = "$type";
     pub static INDEX_ID_KEY: &str = "_id";
-    pub static CONSTRUCT_PREFIX: &str = "http://construct-query.com/construct/";
+    pub static CONSTRUCT_PREFIX: &str = "http://c.com/cst/";
     pub static CONSTRUCT: fn(&str) -> String = |s| format!("{CONSTRUCT_PREFIX}{s}");
     pub static PREFIXES: &[(&str, &str)] = &[
         ("rdf:", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"),
