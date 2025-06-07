@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   Alert,
   Button,
   Flex,
-  Pagination,
   Row,
   Select,
+  Space,
   Table,
   TableProps,
   Tag,
@@ -22,6 +22,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@swarm/states/Store";
 import { fetchSearchBatches } from "@swarm/states/SearchSlice";
 import dayjs from "dayjs";
+import useMountEffect from "@swarm/hooks/useMountEffect";
 const batchStatusOptions: BatchStatus[] = [
   "enqueued",
   "processing",
@@ -39,6 +40,7 @@ const BatchTable: React.FC = () => {
     "canceled",
     "succeeded",
   ]);
+  const [currentPages, setCurrentPages] = useState<(number | undefined)[]>([]);
   const batches = useSelector(
     (state: RootState) => state.appReducer.search.batches,
   );
@@ -49,10 +51,37 @@ const BatchTable: React.FC = () => {
   const error = useSelector(
     (state: RootState) => state.appReducer.search.error,
   );
-  useEffect(() => {
-    dispatch(fetchSearchBatches(statuses));
-  }, [dispatch, statuses]);
 
+  useMountEffect(() => {
+    dispatch(
+      fetchSearchBatches({
+        statuses: statuses,
+        next: batches?.next,
+      }),
+    );
+  });
+
+  const handleNext = () => {
+    if (batches?.next) {
+      setCurrentPages([...currentPages, batches.current]);
+      dispatch(
+        fetchSearchBatches({
+          statuses: statuses,
+          next: batches.next,
+        }),
+      );
+    }
+  };
+
+  const handleBack = () => {
+    const prev = currentPages.pop();
+    dispatch(
+      fetchSearchBatches({
+        statuses: statuses,
+        next: prev,
+      }),
+    );
+  };
   const columns: TableProps<Batch>["columns"] = [
     {
       title: "Index",
@@ -178,14 +207,25 @@ const BatchTable: React.FC = () => {
       </Row>
       <Table
         bordered
-        dataSource={batches}
+        dataSource={batches?.batches || []}
         columns={columns}
         rowKey="uid"
         loading={loading}
         scroll={{ x: "max-content" }}
-      >
-        <Pagination responsive />
-      </Table>
+        pagination={false} // Disable built-in pagination
+      ></Table>
+      {batches && (
+        <Flex justify="end">
+          <Space>
+            <Button disabled={!currentPages.length} onClick={handleBack}>
+              Prev
+            </Button>
+            <Button disabled={!batches?.next} onClick={handleNext}>
+              Next
+            </Button>
+          </Space>
+        </Flex>
+      )}
     </Flex>
   );
 };

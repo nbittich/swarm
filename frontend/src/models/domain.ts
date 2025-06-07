@@ -308,6 +308,12 @@ export interface SearchBatchStatus {
   failed?: number;
   canceled?: number;
 }
+export interface BatchResponse {
+  batches: Batch[];
+  next?: number;
+  prev?: number;
+  current?: number;
+}
 
 export type BatchStatus =
   | "enqueued"

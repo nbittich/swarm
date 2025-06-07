@@ -102,7 +102,7 @@ impl MeilisearchClient {
         let response = self
             .client
             .get(format!(
-                "{}/batches?statuses={}{}",
+                "{}/batches?limit=10&statuses={}{}",
                 self.endpoint,
                 statuses,
                 if let Some(from) = from.as_ref() {

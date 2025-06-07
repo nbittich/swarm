@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import {
-  Batch,
+  BatchResponse,
   BatchStatus,
   IndexConfiguration,
   IndexStatistics,
@@ -11,7 +11,7 @@ import axios from "axios";
 
 interface SearchState {
   configurations: IndexConfiguration[];
-  batches: Batch[];
+  batches: BatchResponse;
   loading: boolean;
   searchResult: SearchQueryResponse | undefined;
   searching: boolean;
@@ -21,7 +21,7 @@ interface SearchState {
 
 const initialState: SearchState = {
   configurations: [],
-  batches: [],
+  batches: { batches: [] },
   loading: false,
   searchResult: undefined,
   searching: false,
@@ -31,15 +31,27 @@ const initialState: SearchState = {
 
 export const fetchSearchBatches = createAsyncThunk(
   "fetchSearchBatches",
-  async (statuses?: BatchStatus[]) => {
-    const response = await axios.post<Batch[]>("/api/search/batches", {
+  async ({
+    statuses,
+    next,
+  }: {
+    statuses: BatchStatus[] | undefined;
+    next: number | undefined;
+  }) => {
+    const response = await axios.post<BatchResponse>("/api/search/batches", {
       statuses: statuses?.length ? statuses : null,
+      next: next && next > 0 ? next : null,
     });
-    const sortedByStartedAt = response.data.sort(
+    const sortedByStartedAt = response.data.batches.sort(
       (a, b) =>
         new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
     );
-    return sortedByStartedAt;
+    const batchResponse = {
+      ...response.data,
+      batches: sortedByStartedAt,
+    } as BatchResponse;
+
+    return batchResponse;
   },
 );
 
@@ -114,7 +126,7 @@ const searchSlice = createSlice({
       })
       .addCase(
         fetchSearchBatches.fulfilled,
-        (state, action: PayloadAction<Batch[]>) => {
+        (state, action: PayloadAction<BatchResponse>) => {
           state.batches = action.payload;
           state.loading = false;
         },
