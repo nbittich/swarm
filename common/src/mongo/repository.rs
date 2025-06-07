@@ -211,7 +211,7 @@ pub trait Repository<
         collection.sort_by(|a, b| a.get_id().cmp(b.get_id()));
 
         // we are at the end
-        if collection.len() < 2 {
+        if (collection.len() as i64) < limit {
             let current = collection.first().map(|a| a.get_id().to_string());
             return Ok(CursorPage {
                 next: None,
