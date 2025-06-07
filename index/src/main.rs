@@ -59,7 +59,7 @@ struct Config {
     index_interval_wait_for_task: Option<Duration>,
     sleep_before_next_virtuoso_query: Duration,
     sleep_before_next_task: Duration,
-    sleep_before_next_meilisearch_task: Duration,
+    // sleep_before_next_meilisearch_task: Duration,
     index_max_retry: u64,
     index_delay_before_next_retry: u64,
     chunk_size: usize,
@@ -103,7 +103,7 @@ async fn main() -> anyhow::Result<()> {
         .last()
         .map(Duration::from_millis)
         .unwrap_or_else(|| Duration::from_millis(30));
-    let sleep_before_next_meilisearch_task = var(SLEEP_BEFORE_NEXT_MEILISEARCH_BATCH)
+    let _sleep_before_next_meilisearch_task = var(SLEEP_BEFORE_NEXT_MEILISEARCH_BATCH)
         .iter()
         .flat_map(|r| r.parse::<u64>())
         .last()
@@ -198,7 +198,7 @@ async fn main() -> anyhow::Result<()> {
         index_max_wait_for_task,
         sleep_before_next_task,
         sleep_before_next_virtuoso_query,
-        sleep_before_next_meilisearch_task,
+        // sleep_before_next_meilisearch_task,
         sparql_client: SparqlClient::new()?,
     };
 
@@ -492,11 +492,11 @@ async fn index(mut manifest: Lines<BufReader<File>>, config: &Config) -> anyhow:
             }
             Ok(()) as anyhow::Result<()>
         });
-        debug!(
-            "sleeping {} millis before next meilisearch task.",
-            config.sleep_before_next_meilisearch_task.as_millis()
-        );
-        tokio::time::sleep(config.sleep_before_next_meilisearch_task).await;
+        // debug!(
+        //     "sleeping {} millis before next meilisearch task.",
+        //     config.sleep_before_next_meilisearch_task.as_millis()
+        // );
+        // tokio::time::sleep(config.sleep_before_next_meilisearch_task).await;
     }
     while let Some(task) = meilisearch_tasks.join_next().await {
         task??;
