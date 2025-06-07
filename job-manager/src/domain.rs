@@ -74,7 +74,6 @@ pub struct GetSubTasksPayload {
 #[serde(rename_all = "camelCase")]
 pub struct MeilisearchGetBatchPayload {
     pub statuses: Option<Vec<BatchStatus>>,
-    pub current: Option<u64>,
     pub next: Option<u64>,
 }
 #[derive(Serialize, Deserialize)]
@@ -97,7 +96,6 @@ pub struct ApiBatchResponse {
     pub batches: Vec<Batch>,
     pub current: Option<u64>,
     pub next: Option<u64>,
-    pub prev: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize)]

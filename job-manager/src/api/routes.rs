@@ -566,11 +566,7 @@ async fn index_stats(
 async fn search_batches(
     State(manager): State<JobManagerState>,
     _: Claims,
-    Json(MeilisearchGetBatchPayload {
-        statuses,
-        next,
-        current: prev,
-    }): Json<MeilisearchGetBatchPayload>,
+    Json(MeilisearchGetBatchPayload { statuses, next }): Json<MeilisearchGetBatchPayload>,
 ) -> Result<Json<ApiBatchResponse>, ApiError> {
     let BatchResponse {
         results,
@@ -597,6 +593,5 @@ async fn search_batches(
         batches: results,
         current,
         next,
-        prev,
     }))
 }
