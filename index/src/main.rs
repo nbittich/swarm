@@ -669,7 +669,7 @@ async fn gather_properties(
         .map(|p| (CONSTRUCT(&p.name), p))
         .collect::<HashMap<_, _>>();
     let construct_block = format!(
-        r#"CONSTRUCT {{<{subject}>}} {}"#,
+        r#"CONSTRUCT {{<{subject}> {} }}"#,
         construct_properties
             .iter()
             .map(|(prefix, p)| { format!("<{prefix}> ?{}", p.name) })
