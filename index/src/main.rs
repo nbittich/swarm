@@ -663,18 +663,19 @@ async fn gather_properties(
     ic: &IndexConfiguration,
     doc_data: &mut BTreeMap<String, Value>,
 ) -> anyhow::Result<bool> {
+    let dummy_pred = CONSTRUCT("prop");
     let construct_properties = ic
         .properties
         .iter()
         .map(|p| (CONSTRUCT(&p.name), p))
         .collect::<HashMap<_, _>>();
     let construct_block = format!(
-        r#"CONSTRUCT {{<{subject}> {} }}"#,
+        r#"CONSTRUCT {{ {} }}"#,
         construct_properties
             .iter()
-            .map(|(prefix, p)| { format!("<{prefix}> ?{}", p.name) })
+            .map(|(subject_prop, p)| { format!("<{subject_prop}> <{dummy_pred}> ?{}", p.name) })
             .collect_vec()
-            .join(";")
+            .join(".")
     );
     let where_block = format!(
         r#"WHERE {{{}}}"#,
@@ -690,12 +691,8 @@ async fn gather_properties(
     let bindings = res.results.bindings;
 
     // validate
-    for (construct_predicate, p) in construct_properties.iter() {
-        if !bindings
-            .iter()
-            .any(|b| &b["p"].value == construct_predicate)
-            && !p.optional
-        {
+    for (construct_subject, p) in construct_properties.iter() {
+        if !bindings.iter().any(|b| &b["s"].value == construct_subject) && !p.optional {
             debug!(
                 "{} is not optional in {}. skipping indexing document {subject}",
                 p.name, ic.name
@@ -706,10 +703,10 @@ async fn gather_properties(
     let parse_from_str = DateTime::parse_from_str;
     let parse_from_str_no_tz = NaiveDateTime::parse_from_str;
     // make doc
-    for (construct_predicate, p) in construct_properties.iter() {
+    for (construct_subject, p) in construct_properties.iter() {
         let mut values = bindings
             .iter()
-            .filter(|b| &b["p"].value == construct_predicate)
+            .filter(|b| &b["s"].value == construct_subject)
             .map(|b| {
                 let o = &b["o"];
                 let v = o.value.trim();
