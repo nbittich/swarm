@@ -7,7 +7,7 @@ use reqwest::{
 };
 use serde::{Deserialize, Serialize};
 use swarm_retryable_fut::retryable_fut;
-use tracing::{debug, instrument};
+use tracing::debug;
 
 pub static SPARQL_ENDPOINT: &str = "SPARQL_ENDPOINT";
 pub static TARGET_GRAPH: &str = "TARGET_GRAPH";
@@ -108,7 +108,6 @@ impl SparqlClient {
         .await
     }
 
-    #[instrument(level = "debug")]
     pub async fn query(&self, query: String) -> anyhow::Result<SparqlResponse> {
         self._query(query, None, true, async |response| {
             let r = response.json::<SparqlResponse>().await?;
@@ -118,7 +117,6 @@ impl SparqlClient {
     }
 
     /// this variation doesn't retry
-    #[instrument(level = "debug")]
     pub async fn query_with_accept_header(
         &self,
         query: String,
@@ -152,7 +150,6 @@ impl SparqlClient {
     }
 
     /// this variation doesn't retry
-    #[instrument(level = "debug")]
     pub async fn _update(client: &Client, endpoint: &str, query: &str) -> anyhow::Result<()> {
         let client = &client;
         let _ = client
@@ -166,12 +163,10 @@ impl SparqlClient {
         Ok(())
     }
 
-    #[instrument(level = "debug")]
     pub async fn update(&self, query: String) -> anyhow::Result<()> {
         self._update_retry(query).await
     }
 
-    #[instrument(level = "debug")]
     pub async fn bulk_update(
         &self,
         target_graph: &str,

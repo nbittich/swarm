@@ -7,6 +7,7 @@ use itertools::Itertools;
 use serde_json::{Number, Value};
 use sparql_client::{SparqlClient, SparqlUpdateType};
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fmt::format;
 use std::{borrow::Cow, env::var, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 use swarm_common::compress::{gzip_str, ungzip};
 use swarm_common::constant::{
@@ -14,7 +15,7 @@ use swarm_common::constant::{
     INDEX_MAX_TOTAL_HITS, INDEX_MAX_WAIT_FOR_TASK, RESET_INDEX, RESET_INDEX_NAME,
     SLEEP_BEFORE_NEXT_MEILISEARCH_BATCH, SLEEP_BEFORE_NEXT_TASK, SLEEP_BEFORE_NEXT_VIRTUOSO_QUERY,
 };
-use swarm_common::domain::index_config::{CONSTRUCT, INDEX_ID_KEY, IndexConfiguration};
+use swarm_common::domain::index_config::{CONSTRUCT, INDEX_ID_KEY, IndexConfiguration, PREFIXES};
 use swarm_common::{
     StreamExt,
     constant::{
@@ -670,7 +671,13 @@ async fn gather_properties(
         .map(|p| (CONSTRUCT(&p.name), p))
         .collect::<HashMap<_, _>>();
     let construct_block = format!(
-        r#"CONSTRUCT {{ {} }}"#,
+        r#"{}
+        CONSTRUCT {{ {} }}"#,
+        PREFIXES
+            .iter()
+            .map(|(p, uri)| format!("PREFIX {p} <{uri}>"))
+            .collect_vec()
+            .join("\n"),
         construct_properties
             .iter()
             .map(|(subject_prop, p)| { format!("<{subject_prop}> <{dummy_pred}> ?{}", p.name) })

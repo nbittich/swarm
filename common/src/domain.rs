@@ -319,6 +319,34 @@ pub mod index_config {
     pub static INDEX_ID_KEY: &str = "_id";
     pub static CONSTRUCT_PREFIX: &str = "http://construct-query.com/construct/";
     pub static CONSTRUCT: fn(&str) -> String = |s| format!("{CONSTRUCT_PREFIX}{s}");
+    pub static PREFIXES: &[(&str, &str)] = &[
+        ("rdf:", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"),
+        ("rdfs:", "http://www.w3.org/2000/01/rdf-schema#"),
+        ("xsd:", "http://www.w3.org/2001/XMLSchema#"),
+        ("foaf:", "http://xmlns.com/foaf/0.1/"),
+        ("dc:", "http://purl.org/dc/elements/1.1/"),
+        ("dcterms:", "http://purl.org/dc/terms/"),
+        ("skos:", "http://www.w3.org/2004/02/skos/core#"),
+        ("prov:", "http://www.w3.org/ns/prov#"),
+        ("schema:", "http://schema.org/"),
+        ("dcat:", "http://www.w3.org/ns/dcat#"),
+        ("adms:", "http://www.w3.org/ns/adms#"),
+        ("mu:", "http://mu.semte.ch/vocabularies/core/"),
+        ("besluit:", "http://data.vlaanderen.be/ns/besluit#"),
+        ("mandaat:", "http://data.vlaanderen.be/ns/mandaat#"),
+        ("eli:", "http://data.europa.eu/eli/ontology#"),
+        ("euvoc:", "http://publications.europa.eu/ontology/euvoc#"),
+        ("besluit:", "http://data.vlaanderen.be/ns/besluit#"),
+    ];
+    pub static PREFIX_OR_NONE: fn(&str) -> Option<String> = |s| {
+        PREFIXES.iter().find_map(|(p, uri)| {
+            if s.contains(uri) {
+                Some(s.replace(uri, p))
+            } else {
+                None
+            }
+        })
+    };
 
     #[derive(Serialize, Deserialize, Debug, Clone)]
     #[serde(rename_all = "camelCase")]
@@ -358,7 +386,9 @@ pub mod index_config {
                 .paths
                 .iter()
                 .map(|p| {
-                    if let Some(stripped) = p.strip_prefix('^') {
+                    if let Some(prefixed) = PREFIX_OR_NONE(p) {
+                        prefixed
+                    } else if let Some(stripped) = p.strip_prefix('^') {
                         format!("^<{}>", stripped)
                     } else {
                         format!("<{p}>")
