@@ -4,6 +4,8 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
 
+use crate::mongo::Identifiable;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct JobDefinition {
@@ -53,6 +55,11 @@ pub struct Job {
     pub status: Status,
     pub definition: JobDefinition,
 }
+impl Identifiable for Job {
+    fn get_id(&self) -> &str {
+        &self.id
+    }
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScheduledJob {
@@ -65,7 +72,11 @@ pub struct ScheduledJob {
     pub definition_id: String,
     pub cron_expr: String,
 }
-
+impl Identifiable for ScheduledJob {
+    fn get_id(&self) -> &str {
+        &self.id
+    }
+}
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Task {
@@ -83,6 +94,12 @@ pub struct Task {
     pub output_dir: PathBuf,
 }
 
+impl Identifiable for Task {
+    fn get_id(&self) -> &str {
+        &self.id
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SubTask {
@@ -93,6 +110,12 @@ pub struct SubTask {
     pub modified_date: Option<DateTime<Local>>,
     pub status: Status,
     pub result: Option<SubTaskResult>,
+}
+
+impl Identifiable for SubTask {
+    fn get_id(&self) -> &str {
+        &self.id
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -229,12 +252,24 @@ pub struct User {
     pub service_account: bool,
 }
 
+impl Identifiable for User {
+    fn get_id(&self) -> &str {
+        &self.id
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UuidSubject {
     #[serde(rename = "_id")]
     pub subject_hash: String,
     pub id: String,
+}
+
+impl Identifiable for UuidSubject {
+    fn get_id(&self) -> &str {
+        &self.id
+    }
 }
 
 pub trait JsonMapper: Serialize + DeserializeOwned + Unpin + Send + Sync {

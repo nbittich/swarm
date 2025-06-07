@@ -65,17 +65,19 @@ async fn main() -> anyhow::Result<()> {
         "prepopulate at most 80% of the cache capacity ({}) with data from mongo...",
         cache_size * 80 / 100
     );
-    for (subject_hash, id) in uuid_repository
+
+    let data_in_db = uuid_repository
         .find_page_large_collection_batched(
             None,
             None,
             (cache_size * 70 / 100) as i64,
             Some(100_000),
         )
-        .await?
+        .await?;
+    for (subject_hash, id) in data_in_db
+        .content
         .into_iter()
         .map(|u| (u.subject_hash, u.id))
-        .collect::<HashMap<_, _>>()
     {
         cache.insert(subject_hash, id).await;
     }

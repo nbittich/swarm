@@ -27,17 +27,26 @@ pub struct Page<T: Serialize + DeserializeOwned> {
     pub page_size: usize,
     pub content: Vec<T>,
 }
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CursorPage<T: Serialize + DeserializeOwned> {
+    pub current: Option<String>,
+    pub next: Option<String>,
+    pub content: Vec<T>,
+}
 #[derive(Debug, Clone)]
-pub struct StoreRepository<T: Serialize + DeserializeOwned + Unpin + Send + Sync> {
+pub struct StoreRepository<T: Identifiable + Serialize + DeserializeOwned + Unpin + Send + Sync> {
     collection: Collection<T>,
     _db_name: String,
     _collection_name: String,
     _client: StoreClient,
 }
-
+pub trait Identifiable {
+    fn get_id(&self) -> &str;
+}
 impl<T> StoreRepository<T>
 where
-    T: Serialize + DeserializeOwned + Unpin + Send + Sync,
+    T: Identifiable + Serialize + DeserializeOwned + Unpin + Send + Sync,
 {
     pub fn new(
         client: &StoreClient,
@@ -56,7 +65,7 @@ where
 
 impl<T> StoreRepository<T>
 where
-    T: Serialize + DeserializeOwned + Unpin + Send + Sync,
+    T: Identifiable + Serialize + DeserializeOwned + Unpin + Send + Sync,
 {
     pub fn get_repository(client: &StoreClient, collection_name: &str, tenant_id: &str) -> Self {
         let db = client.get_db(tenant_id);
@@ -73,7 +82,7 @@ where
 
 impl<T> Repository<T> for StoreRepository<T>
 where
-    T: Serialize + DeserializeOwned + Unpin + Send + Sync + std::fmt::Debug,
+    T: Identifiable + Serialize + DeserializeOwned + Unpin + Send + Sync + std::fmt::Debug,
 {
     fn get_collection(&self) -> &Collection<T> {
         &self.collection
@@ -82,9 +91,11 @@ where
         &self._client
     }
 }
+
 #[async_trait]
-pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std::fmt::Debug>:
-    std::fmt::Debug
+pub trait Repository<
+    T: Identifiable + Serialize + DeserializeOwned + Unpin + Send + Sync + std::fmt::Debug,
+>: std::fmt::Debug
 {
     fn get_collection(&self) -> &Collection<T>;
     fn get_client(&self) -> &StoreClient;
@@ -148,10 +159,10 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
     async fn find_page_large_collection(
         &self,
         main_query: Option<Document>,
-        last_element_id: Option<String>,
+        next: Option<String>,
         limit: i64,
-    ) -> Result<Vec<T>, StoreError> {
-        self.find_page_large_collection_batched(main_query, last_element_id, limit, None)
+    ) -> Result<CursorPage<T>, StoreError> {
+        self.find_page_large_collection_batched(main_query, next, limit, None)
             .await
     }
 
@@ -159,13 +170,13 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
     async fn find_page_large_collection_batched(
         &self,
         main_query: Option<Document>,
-        last_element_id: Option<String>,
+        next: Option<String>,
         limit: i64,
         batch_size: Option<u32>,
-    ) -> Result<Vec<T>, StoreError> {
+    ) -> Result<CursorPage<T>, StoreError> {
         let collection = self.get_collection();
         let query = {
-            let cursor_query = if let Some(last_element_id) = last_element_id {
+            let cursor_query = if let Some(last_element_id) = next {
                 doc! {
                     "_id": {
                         "$gt": last_element_id
@@ -184,7 +195,7 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
         };
 
         let options = FindOptions::builder()
-            .limit(Some(limit))
+            .limit(Some(limit + 1))
             .batch_size(batch_size)
             .build();
 
@@ -193,11 +204,18 @@ pub trait Repository<T: Serialize + DeserializeOwned + Unpin + Send + Sync + std
             .with_options(options)
             .await
             .map_err(|e| StoreError { msg: e.to_string() })?;
-        let collection: Vec<T> = cursor
+        let mut collection: Vec<T> = cursor
             .try_collect()
             .await
             .map_err(|e| StoreError { msg: e.to_string() })?;
-        Ok(collection)
+        collection.sort_by(|a, b| a.get_id().cmp(b.get_id()));
+        let next = collection.pop().map(|a| a.get_id().to_string());
+        let current = collection.first().map(|a| a.get_id().to_string());
+        Ok(CursorPage {
+            next,
+            current,
+            content: collection,
+        })
     }
     #[instrument(level = "debug")]
     async fn find_page(&self, pageable: Pageable) -> Result<Page<T>, StoreError> {

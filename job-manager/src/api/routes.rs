@@ -25,7 +25,7 @@ use swarm_common::{
         },
     },
     info,
-    mongo::{FindOptions, Page, Pageable, Repository, doc},
+    mongo::{CursorPage, FindOptions, Page, Pageable, Repository, doc},
     retry_fs,
 };
 use swarm_meilisearch_client::domain::{BatchResponse, BatchStatus};
@@ -375,11 +375,10 @@ async fn all_subtasks(
     State(manager): State<JobManagerState>,
     _: Option<Claims>,
     axum::extract::Path((job_id, task_id)): axum::extract::Path<(String, String)>,
-    axum::extract::Query(GetSubTasksPayload {
-        last_element_id,
-        limit,
-    }): axum::extract::Query<GetSubTasksPayload>,
-) -> Result<Json<Vec<SubTask>>, ApiError> {
+    axum::extract::Query(GetSubTasksPayload { next, limit }): axum::extract::Query<
+        GetSubTasksPayload,
+    >,
+) -> Result<Json<CursorPage<SubTask>>, ApiError> {
     let task = manager
         .task_repository
         .find_one(Some(doc! {
@@ -397,14 +396,18 @@ async fn all_subtasks(
                     Some(doc! {
                         "taskId": task.id,
                     }),
-                    last_element_id,
+                    next,
                     limit,
                 )
                 .await
                 .map_err(|e| ApiError::AllSubTasks(e.to_string()))?;
             Ok(Json(st))
         }
-        None => Ok(Json(vec![])),
+        None => Ok(Json(CursorPage {
+            current: None,
+            next: None,
+            content: Vec::with_capacity(0),
+        })),
     }
 }
 async fn all_tasks(
