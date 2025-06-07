@@ -5,7 +5,7 @@ use anyhow::anyhow;
 use chrono::{DateTime, Local};
 use itertools::Itertools;
 use serde_json::{Number, Value};
-use sparql_client::{Binding, SparqlClient, SparqlUpdateType};
+use sparql_client::{SparqlClient, SparqlUpdateType};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::{borrow::Cow, env::var, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 use swarm_common::compress::{gzip_str, ungzip};
