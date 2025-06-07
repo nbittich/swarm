@@ -5,7 +5,7 @@ use anyhow::anyhow;
 use chrono::{DateTime, Local};
 use itertools::Itertools;
 use serde_json::{Number, Value};
-use sparql_client::{SparqlClient, SparqlUpdateType};
+use sparql_client::{Binding, SparqlClient, SparqlUpdateType};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::{borrow::Cow, env::var, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 use swarm_common::compress::{gzip_str, ungzip};
@@ -14,7 +14,7 @@ use swarm_common::constant::{
     INDEX_MAX_TOTAL_HITS, INDEX_MAX_WAIT_FOR_TASK, RESET_INDEX, RESET_INDEX_NAME,
     SLEEP_BEFORE_NEXT_MEILISEARCH_BATCH, SLEEP_BEFORE_NEXT_TASK, SLEEP_BEFORE_NEXT_VIRTUOSO_QUERY,
 };
-use swarm_common::domain::index_config::{INDEX_ID_KEY, IndexConfiguration};
+use swarm_common::domain::index_config::{CONSTRUCT, INDEX_ID_KEY, IndexConfiguration};
 use swarm_common::{
     StreamExt,
     constant::{
@@ -138,6 +138,11 @@ async fn main() -> anyhow::Result<()> {
         info!("reading index config file {index_config_path}...");
         let config_str = retry_fs::read_to_string(&index_config_path).await?;
         let ic: Vec<IndexConfiguration> = serde_json::from_str(&config_str)?;
+        for c in ic.iter() {
+            for p in c.properties.iter() {
+                p.validate()?;
+            }
+        }
         Arc::new(ic)
     };
 
@@ -563,6 +568,7 @@ async fn prepare_update_for_meilisearch_task(
                 {
                     let subject = &subject[1..subject.len() - 1]; // remove first and last character <url>
                     let mut doc_data = BTreeMap::new();
+                    debug!("processing {subject}");
 
                     let uuid = {
                         let uuid_stmt = doc.list_statements(
@@ -588,10 +594,14 @@ async fn prepare_update_for_meilisearch_task(
                         INDEX_ID_KEY.to_string(),
                         Value::from_str(&uuid).unwrap_or_else(|_| Value::String(uuid)),
                     );
-                    if !gather_properties(config, subject, ic, &mut doc_data).await? {
+                    if !gather_properties(config, subject, ic, &mut doc_data).await?
+                        || doc_data.is_empty()
+                    {
                         continue 'sub;
                     }
                     documents.push(doc_data);
+                    debug!("sleep before next virtuoso query...");
+                    tokio::time::sleep(config.sleep_before_next_virtuoso_query).await;
                 }
 
                 let entry = meilisearch_inserts
@@ -653,36 +663,56 @@ async fn gather_properties(
     ic: &IndexConfiguration,
     doc_data: &mut BTreeMap<String, Value>,
 ) -> anyhow::Result<bool> {
-    for prop in ic.properties.iter() {
-        prop.validate()?;
-        let where_clause = prop.to_query_op(subject);
-        let query = format!(r#"SELECT DISTINCT ?{} WHERE {{{where_clause}}}"#, prop.name);
-        let res = config.sparql_client.query(query).await?;
-        if res.results.bindings.is_empty()
-            || res
-                .results
-                .bindings
-                .iter()
-                .all(|v| v.values().all(|v1| v1.value.trim().is_empty()))
-                && !prop.optional
+    let construct_properties = ic
+        .properties
+        .iter()
+        .map(|p| (CONSTRUCT(&p.name), p))
+        .collect::<HashMap<_, _>>();
+    let construct_block = format!(
+        r#"CONSTRUCT {{<{subject}>}} {}"#,
+        construct_properties
+            .iter()
+            .map(|(prefix, p)| { format!("<{prefix}> ?{}", p.name) })
+            .collect_vec()
+            .join(";")
+    );
+    let where_block = format!(
+        r#"WHERE {{{}}}"#,
+        ic.properties
+            .iter()
+            .map(|p| p.to_query_op(subject))
+            .collect_vec()
+            .join(".")
+    );
+    let construct_query = format!("{construct_block} {where_block}");
+
+    let res = config.sparql_client.query(construct_query).await?;
+    let bindings = res.results.bindings;
+
+    // validate
+    for (construct_predicate, p) in construct_properties.iter() {
+        if !bindings
+            .iter()
+            .any(|b| &b["p"].value == construct_predicate)
+            && !p.optional
         {
             debug!(
                 "{} is not optional in {}. skipping indexing document {subject}",
-                prop.name, ic.name
+                p.name, ic.name
             );
             return Ok(false);
         }
-        let parse_from_str = DateTime::parse_from_str;
-
-        let mut res = res
-            .results
-            .bindings
-            .into_iter()
-            .flat_map(|b| b.into_values())
-            .filter(|b| !b.value.trim().is_empty())
+    }
+    let parse_from_str = DateTime::parse_from_str;
+    // make doc
+    for (construct_predicate, p) in construct_properties.iter() {
+        let mut values = bindings
+            .iter()
+            .filter(|b| &b["p"].value == construct_predicate)
             .map(|b| {
-                let v = b.value.trim();
-                match b.datatype.as_deref() {
+                let o = &b["o"];
+                let v = o.value.trim();
+                match o.datatype.as_deref() {
                     Some(XSD_DATE) | Some(XSD_DATE_TIME) => DATE_FORMATS
                         .iter()
                         .find_map(|f| match parse_from_str(v, f) {
@@ -697,21 +727,21 @@ async fn gather_properties(
                         .and_then(|n| Number::from_i128(n as i128))
                         .map(Value::Number)
                         .unwrap_or_else(|| Value::String(v.to_string())),
-                    Some(XSD_DECIMAL) | Some(XSD_DOUBLE) => b
+                    Some(XSD_DECIMAL) | Some(XSD_DOUBLE) => o
                         .value
                         .parse::<f64>()
                         .ok()
                         .and_then(Number::from_f64)
                         .map(Value::Number)
                         .unwrap_or_else(|| Value::String(v.to_string())),
-                    Some(XSD_INTEGER) => b
+                    Some(XSD_INTEGER) => o
                         .value
                         .parse::<i128>()
                         .ok()
                         .and_then(Number::from_i128)
                         .map(Value::Number)
                         .unwrap_or_else(|| Value::String(v.to_string())),
-                    Some(XSD_BOOLEAN) => b
+                    Some(XSD_BOOLEAN) => o
                         .value
                         .parse::<bool>()
                         .map(Value::Bool)
@@ -721,18 +751,17 @@ async fn gather_properties(
             })
             .dedup()
             .collect_vec();
-        if res.is_empty() {
+        if values.is_empty() {
             continue;
         }
-        let value = if res.len() == 1 {
-            res.remove(0)
+        let value = if values.len() == 1 {
+            values.remove(0)
         } else {
-            Value::Array(res)
+            Value::Array(values)
         };
-        doc_data.insert(prop.name.clone(), value);
-        // sleep a little bit to avoid choking virtuoso
-        tokio::time::sleep(config.sleep_before_next_virtuoso_query).await;
+        doc_data.insert(p.name.clone(), value);
     }
+
     Ok(true)
 }
 fn remove_datatype_xsd_string(mut term: Node<'_>) -> Node<'_> {
