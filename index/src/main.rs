@@ -2,7 +2,7 @@
 //pub use swarm_common::alloc;
 //
 use anyhow::anyhow;
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Local, NaiveDateTime};
 use itertools::Itertools;
 use serde_json::{Number, Value};
 use sparql_client::{SparqlClient, SparqlUpdateType};
@@ -704,6 +704,7 @@ async fn gather_properties(
         }
     }
     let parse_from_str = DateTime::parse_from_str;
+    let parse_from_str_no_tz = NaiveDateTime::parse_from_str;
     // make doc
     for (construct_predicate, p) in construct_properties.iter() {
         let mut values = bindings
@@ -715,22 +716,24 @@ async fn gather_properties(
                 match o.datatype.as_deref() {
                     Some(XSD_DATE) | Some(XSD_DATE_TIME) => DATE_FORMATS
                         .iter()
-                        .find_map(|f| {
-                            // fix data vendors
-                            let v = if v.ends_with(".") {
-                                &v[0..v.len() - 1]
-                            } else {
-                                v
-                            };
-                            match parse_from_str(v, f) {
-                                Ok(v) => Some(v),
-                                Err(e) => {
-                                    debug!("could not parse {}. err: {}", v, e);
-                                    None
-                                }
+                        .find_map(|f| match parse_from_str(v, f) {
+                            Ok(v) => Some(v),
+                            Err(e) => {
+                                debug!("could not parse {}. err: {}", v, e);
+                                None
                             }
                         })
                         .or_else(|| DateTime::parse_from_rfc3339(v).ok())
+                        .or_else(|| {
+                            DATE_FORMATS
+                                .iter()
+                                .find_map(|f| parse_from_str_no_tz(v, f).ok())
+                                .and_then(|f| {
+                                    f.and_local_timezone(Local::now().timezone())
+                                        .map(|f| f.fixed_offset())
+                                        .latest()
+                                })
+                        })
                         .map(|d| d.timestamp())
                         .and_then(|n| Number::from_i128(n as i128))
                         .map(Value::Number)
