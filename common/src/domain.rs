@@ -366,11 +366,8 @@ pub mod index_config {
                 })
                 .collect::<Vec<_>>()
                 .join("/");
-            if self.optional {
-                format!("OPTIONAL {{ <{subject}> {path} ?{} }}", self.name)
-            } else {
-                format!("<{subject}> {path} ?{}", self.name)
-            }
+
+            format!("{{<{subject}> {path} ?{}}}", self.name)
         }
 
         pub fn validate(&self) -> anyhow::Result<()> {

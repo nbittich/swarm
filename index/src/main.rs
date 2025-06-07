@@ -682,7 +682,7 @@ async fn gather_properties(
             .iter()
             .map(|p| p.to_query_op(subject))
             .collect_vec()
-            .join(".")
+            .join(" UNION ")
     );
     let construct_query = format!("{construct_block} {where_block}");
 
