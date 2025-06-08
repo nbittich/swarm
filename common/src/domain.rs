@@ -316,6 +316,7 @@ pub mod index_config {
     use serde_json::Value;
 
     pub static SUBJECT_BINDING_TYPE: &str = "$type";
+    pub static SUBJECT_BINDING: &str = "?_sub_";
     pub static INDEX_ID_KEY: &str = "_id";
     pub static CONSTRUCT_PREFIX: &str = "http://c.com/cst/";
     pub static CONSTRUCT: fn(&str) -> String = |s| format!("{CONSTRUCT_PREFIX}{s}");
@@ -337,7 +338,6 @@ pub mod index_config {
         ("mandaat:", "http://data.vlaanderen.be/ns/mandaat#"),
         ("eli:", "http://data.europa.eu/eli/ontology#"),
         ("euvoc:", "http://publications.europa.eu/ontology/euvoc#"),
-        ("besluit:", "http://data.vlaanderen.be/ns/besluit#"),
     ];
     pub static PREFIX_OR_NONE: fn(&str) -> Option<String> = |s| {
         PREFIXES.iter().find_map(|(p, uri)| {
@@ -382,7 +382,7 @@ pub mod index_config {
     }
 
     impl RdfProperty {
-        pub fn to_query_op(&self, subject: &str) -> String {
+        pub fn to_query_op(&self) -> String {
             let path = self
                 .paths
                 .iter()
@@ -398,13 +398,16 @@ pub mod index_config {
                 .collect::<Vec<_>>()
                 .join("/");
 
-            format!("{{<{subject}> {path} ?{}}}", self.name)
+            format!("{{?{SUBJECT_BINDING} {path} ?{}}}", self.name)
         }
 
         pub fn validate(&self) -> anyhow::Result<()> {
-            if self.name == SUBJECT_BINDING_TYPE || self.name == INDEX_ID_KEY {
+            if self.name == SUBJECT_BINDING_TYPE
+                || self.name == SUBJECT_BINDING
+                || self.name == INDEX_ID_KEY
+            {
                 return Err(anyhow!(
-                    "you cannot name a property with {SUBJECT_BINDING_TYPE} or {INDEX_ID_KEY} in your config, because it's used internally."
+                    "you cannot name a property with {SUBJECT_BINDING_TYPE} or {SUBJECT_BINDING} or {INDEX_ID_KEY} in your config, because it's used internally."
                 ));
             }
             Ok(())

@@ -15,7 +15,7 @@ use swarm_common::constant::{
     SLEEP_BEFORE_NEXT_MEILISEARCH_BATCH, SLEEP_BEFORE_NEXT_TASK, SLEEP_BEFORE_NEXT_VIRTUOSO_QUERY,
 };
 use swarm_common::domain::index_config::{
-    CONSTRUCT_PREFIX, INDEX_ID_KEY, IndexConfiguration, PREFIXES,
+    CONSTRUCT_PREFIX, INDEX_ID_KEY, IndexConfiguration, PREFIXES, SUBJECT_BINDING,
 };
 use swarm_common::{
     StreamExt,
@@ -688,10 +688,10 @@ async fn gather_properties(
             .join(".")
     );
     let where_block = format!(
-        r#"WHERE {{{}}}"#,
+        r#"WHERE {{VALUES ?{SUBJECT_BINDING} {{<{subject}>}} {}}}"#,
         ic.properties
             .iter()
-            .map(|p| p.to_query_op(subject))
+            .map(|p| p.to_query_op())
             .collect_vec()
             .join(" UNION ")
     );
