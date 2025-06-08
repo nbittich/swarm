@@ -14,7 +14,9 @@ use swarm_common::constant::{
     INDEX_MAX_TOTAL_HITS, INDEX_MAX_WAIT_FOR_TASK, RESET_INDEX, RESET_INDEX_NAME,
     SLEEP_BEFORE_NEXT_MEILISEARCH_BATCH, SLEEP_BEFORE_NEXT_TASK, SLEEP_BEFORE_NEXT_VIRTUOSO_QUERY,
 };
-use swarm_common::domain::index_config::{CONSTRUCT, INDEX_ID_KEY, IndexConfiguration, PREFIXES};
+use swarm_common::domain::index_config::{
+    CONSTRUCT_PREFIX, INDEX_ID_KEY, IndexConfiguration, PREFIXES,
+};
 use swarm_common::{
     StreamExt,
     constant::{
@@ -595,7 +597,7 @@ async fn prepare_update_for_meilisearch_task(
                         Value::from_str(&uuid).unwrap_or_else(|_| Value::String(uuid)),
                     );
                     if !gather_properties(config, subject, ic, &mut doc_data).await?
-                        || doc_data.is_empty()
+                        || doc_data.len() == 1
                     {
                         continue 'sub;
                     }
@@ -663,14 +665,16 @@ async fn gather_properties(
     ic: &IndexConfiguration,
     doc_data: &mut BTreeMap<String, Value>,
 ) -> anyhow::Result<bool> {
-    let dummy_pred = CONSTRUCT("prop");
+    let dummy_pred = "cst:prop";
     let construct_properties = ic
         .properties
         .iter()
-        .map(|p| (CONSTRUCT(&p.name), p))
+        .enumerate()
+        .map(|(idx, p)| (format!("cst:{idx}"), p))
         .collect::<HashMap<_, _>>();
     let construct_block = format!(
-        r#"{}
+        r#"PREFIX cst: <{CONSTRUCT_PREFIX}>
+        {}
         CONSTRUCT {{ {} }}"#,
         PREFIXES
             .iter()
@@ -679,7 +683,7 @@ async fn gather_properties(
             .join("\n"),
         construct_properties
             .iter()
-            .map(|(subject_prop, p)| { format!("<{subject_prop}> <{dummy_pred}> ?{}", p.name) })
+            .map(|(subject_prop, p)| { format!("{subject_prop} {dummy_pred} ?{}", p.name) })
             .collect_vec()
             .join(".")
     );

@@ -431,7 +431,7 @@ async fn all_tasks(
 }
 async fn restart_task(
     State(manager): State<JobManagerState>,
-    _: Option<Claims>,
+    _: Claims,
     axum::extract::Path((job_id, task_id)): axum::extract::Path<(String, String)>,
 ) -> Result<Json<Value>, ApiError> {
     let task = manager
