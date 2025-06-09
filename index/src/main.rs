@@ -670,7 +670,7 @@ async fn gather_properties(
         .properties
         .iter()
         .enumerate()
-        .map(|(idx, p)| (format!("cst:{idx}"), p))
+        .map(|(idx, p)| (format!("cst:{idx}"), (idx, p)))
         .collect::<HashMap<_, _>>();
     let construct_block = format!(
         r#"PREFIX cst: <{CONSTRUCT_PREFIX}>
@@ -683,8 +683,7 @@ async fn gather_properties(
             .join("\n"),
         construct_properties
             .iter()
-            .enumerate()
-            .map(|(idx, (subject_prop, _))| {
+            .map(|(subject_prop, (idx, _))| {
                 format!("{subject_prop} {dummy_pred} ?{VAR_BINDING}{idx}")
             })
             .collect_vec()
@@ -705,7 +704,7 @@ async fn gather_properties(
     let bindings = res.results.bindings;
 
     // validate
-    for (construct_subject, p) in construct_properties.iter() {
+    for (construct_subject, (_, p)) in construct_properties.iter() {
         if !bindings.iter().any(|b| &b["s"].value == construct_subject) && !p.optional {
             debug!(
                 "{} is not optional in {}. skipping indexing document {subject}",
@@ -717,7 +716,7 @@ async fn gather_properties(
     let parse_from_str = DateTime::parse_from_str;
     let parse_from_str_no_tz = NaiveDateTime::parse_from_str;
     // make doc
-    for (construct_subject, p) in construct_properties.iter() {
+    for (construct_subject, (_, p)) in construct_properties.iter() {
         let mut values = bindings
             .iter()
             .filter(|b| &b["s"].value == construct_subject)
