@@ -665,7 +665,7 @@ async fn gather_properties(
     ic: &IndexConfiguration,
     doc_data: &mut BTreeMap<String, Value>,
 ) -> anyhow::Result<bool> {
-    let dummy_pred = "cst:prop";
+    let dummy_pred = "cst:p";
     let construct_properties = ic
         .properties
         .iter()
