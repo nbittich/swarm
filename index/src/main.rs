@@ -15,7 +15,7 @@ use swarm_common::constant::{
     SLEEP_BEFORE_NEXT_MEILISEARCH_BATCH, SLEEP_BEFORE_NEXT_TASK, SLEEP_BEFORE_NEXT_VIRTUOSO_QUERY,
 };
 use swarm_common::domain::index_config::{
-    CONSTRUCT_PREFIX, INDEX_ID_KEY, IndexConfiguration, PREFIXES, SUBJECT_BINDING, VAR_BINDING,
+    CONSTRUCT_PREFIX_URI, INDEX_ID_KEY, IndexConfiguration, PREFIXES, SUBJECT_BINDING, VAR_BINDING,
 };
 use swarm_common::{
     StreamExt,
@@ -673,7 +673,7 @@ async fn gather_properties(
         .map(|(idx, p)| (format!("cst:{idx}"), (idx, p)))
         .collect::<HashMap<_, _>>();
     let construct_block = format!(
-        r#"PREFIX cst: <{CONSTRUCT_PREFIX}>
+        r#"PREFIX cst: <{CONSTRUCT_PREFIX_URI}>
         {}
         CONSTRUCT {{ {} }}"#,
         PREFIXES
@@ -705,6 +705,7 @@ async fn gather_properties(
 
     // validate
     for (construct_subject, (_, p)) in construct_properties.iter() {
+        let construct_subject = &construct_subject.replace("cst:", CONSTRUCT_PREFIX_URI);
         if !bindings.iter().any(|b| &b["s"].value == construct_subject) && !p.optional {
             debug!(
                 "{} is not optional in {}. skipping indexing document {subject}",
@@ -717,6 +718,7 @@ async fn gather_properties(
     let parse_from_str_no_tz = NaiveDateTime::parse_from_str;
     // make doc
     for (construct_subject, (_, p)) in construct_properties.iter() {
+        let construct_subject = &construct_subject.replace("cst:", CONSTRUCT_PREFIX_URI);
         let mut values = bindings
             .iter()
             .filter(|b| &b["s"].value == construct_subject)
