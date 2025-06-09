@@ -383,7 +383,7 @@ pub mod index_config {
     }
 
     impl RdfProperty {
-        pub fn to_query_op(&self) -> String {
+        pub fn to_query_op(&self, idx: usize) -> String {
             let path = self
                 .paths
                 .iter()
@@ -399,7 +399,7 @@ pub mod index_config {
                 .collect::<Vec<_>>()
                 .join("/");
 
-            format!("{{?{SUBJECT_BINDING} {path} ?{}}}", self.name)
+            format!("{{?{SUBJECT_BINDING} {path} ?{VAR_BINDING}{idx}}}")
         }
 
         pub fn validate(&self) -> anyhow::Result<()> {
