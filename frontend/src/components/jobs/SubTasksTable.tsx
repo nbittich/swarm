@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom"; // For extracting path variables
 import {
   Table,
@@ -25,7 +25,6 @@ import dayjs from "dayjs";
 import Link from "antd/es/typography/Link";
 import { useAuth } from "@swarm/auth/authContextHook";
 import { useIsMobile } from "@swarm/hooks/is-mobile";
-import useMountEffect from "@swarm/hooks/useMountEffect";
 
 const { Text } = Typography;
 const SubTasksTable: React.FC = () => {
@@ -43,14 +42,22 @@ const SubTasksTable: React.FC = () => {
     (state: RootState) => state.appReducer.subTasks,
   );
 
-  const [currentPages, setCurrentPages] = useState<(string | undefined)[]>([]);
+  const [currentPages, setCurrentPages] = useState<(string | undefined)[]>([]); // for the prev mechanism
   const [pageSize, setPageSize] = useState(10);
-  useMountEffect(() => {
+  const pageSizeRef = useRef(pageSize);
+  useEffect(() => {
     dispatch(reset());
     if (jobId && taskId) {
-      dispatch(fetchSubTasks({ jobId, taskId, next: null, pageSize }));
+      dispatch(
+        fetchSubTasks({
+          jobId,
+          taskId,
+          next: null,
+          pageSize: pageSizeRef.current,
+        }),
+      );
     }
-  });
+  }, [dispatch, pageSizeRef, jobId, taskId]);
   const reload = (newPageSize?: number) => {
     if (jobId && taskId && data.next) {
       setCurrentPages([]);

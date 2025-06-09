@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -22,7 +22,6 @@ import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@swarm/states/Store";
 import { fetchSearchBatches } from "@swarm/states/SearchSlice";
 import dayjs from "dayjs";
-import useMountEffect from "@swarm/hooks/useMountEffect";
 const batchStatusOptions: BatchStatus[] = [
   "enqueued",
   "processing",
@@ -41,6 +40,7 @@ const BatchTable: React.FC = () => {
     "succeeded",
   ]);
   const [currentPages, setCurrentPages] = useState<(number | undefined)[]>([]);
+
   const batches = useSelector(
     (state: RootState) => state.appReducer.search.batches,
   );
@@ -52,14 +52,16 @@ const BatchTable: React.FC = () => {
     (state: RootState) => state.appReducer.search.error,
   );
 
-  useMountEffect(() => {
+  const batchesRef = useRef(batches);
+
+  useEffect(() => {
     dispatch(
       fetchSearchBatches({
         statuses: statuses,
-        next: batches?.next,
+        next: batchesRef.current?.next,
       }),
     );
-  });
+  }, [dispatch, statuses, batchesRef]);
 
   const handleNext = () => {
     if (batches?.next) {
