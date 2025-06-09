@@ -673,14 +673,13 @@ async fn gather_properties(
         .map(|(idx, p)| (format!("cst:{idx}"), (idx, p)))
         .collect::<HashMap<_, _>>();
     let construct_block = format!(
-        r#"PREFIX cst: <{CONSTRUCT_PREFIX_URI}>
-        {}
+        r#"PREFIX cst: <{CONSTRUCT_PREFIX_URI}>{}
         CONSTRUCT {{ {} }}"#,
         PREFIXES
             .iter()
             .map(|(p, uri)| format!("PREFIX {p} <{uri}>"))
             .collect_vec()
-            .join("\n"),
+            .join(""),
         construct_properties
             .iter()
             .map(|(subject_prop, (idx, _))| {
