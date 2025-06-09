@@ -685,7 +685,7 @@ async fn gather_properties(
             .iter()
             .enumerate()
             .map(|(idx, (subject_prop, p))| {
-                format!("{subject_prop} {dummy_pred} ?{}", p.to_query_op(idx))
+                format!("{subject_prop} {dummy_pred} {}", p.to_query_op(idx))
             })
             .collect_vec()
             .join(".")
