@@ -15,7 +15,7 @@ use swarm_common::constant::{
     SLEEP_BEFORE_NEXT_MEILISEARCH_BATCH, SLEEP_BEFORE_NEXT_TASK, SLEEP_BEFORE_NEXT_VIRTUOSO_QUERY,
 };
 use swarm_common::domain::index_config::{
-    CONSTRUCT_PREFIX, INDEX_ID_KEY, IndexConfiguration, PREFIXES, SUBJECT_BINDING,
+    CONSTRUCT_PREFIX, INDEX_ID_KEY, IndexConfiguration, PREFIXES, SUBJECT_BINDING, VAR_BINDING,
 };
 use swarm_common::{
     StreamExt,
@@ -684,8 +684,8 @@ async fn gather_properties(
         construct_properties
             .iter()
             .enumerate()
-            .map(|(idx, (subject_prop, p))| {
-                format!("{subject_prop} {dummy_pred} {}", p.to_query_op(idx))
+            .map(|(idx, (subject_prop, _))| {
+                format!("{subject_prop} {dummy_pred} ?{VAR_BINDING}{idx}")
             })
             .collect_vec()
             .join(".")
