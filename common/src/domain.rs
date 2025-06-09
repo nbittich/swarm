@@ -316,7 +316,8 @@ pub mod index_config {
     use serde_json::Value;
 
     pub static SUBJECT_BINDING_TYPE: &str = "$type";
-    pub static SUBJECT_BINDING: &str = "?_sub_";
+    pub static SUBJECT_BINDING: &str = "_sub_";
+    pub static VAR_BINDING: &str = "_var_";
     pub static INDEX_ID_KEY: &str = "_id";
     pub static CONSTRUCT_PREFIX: &str = "http://c.com/cst/";
     pub static CONSTRUCT: fn(&str) -> String = |s| format!("{CONSTRUCT_PREFIX}{s}");
@@ -405,9 +406,10 @@ pub mod index_config {
             if self.name == SUBJECT_BINDING_TYPE
                 || self.name == SUBJECT_BINDING
                 || self.name == INDEX_ID_KEY
+                || self.name == VAR_BINDING
             {
                 return Err(anyhow!(
-                    "you cannot name a property with {SUBJECT_BINDING_TYPE} or {SUBJECT_BINDING} or {INDEX_ID_KEY} in your config, because it's used internally."
+                    "you cannot name a property with {SUBJECT_BINDING_TYPE} or {SUBJECT_BINDING} or {INDEX_ID_KEY} or {VAR_BINDING} in your config, because it's used internally."
                 ));
             }
             Ok(())
