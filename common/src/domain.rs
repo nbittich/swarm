@@ -350,15 +350,6 @@ pub mod index_config {
         })
     };
 
-    pub static PREFIX_TO_FULL_URI: fn(&str) -> Option<String> = |s| {
-        PREFIXES.iter().find_map(|(p, uri)| {
-            if s.contains(uri) {
-                Some(s.replace(uri, p))
-            } else {
-                None
-            }
-        })
-    };
     #[derive(Serialize, Deserialize, Debug, Clone)]
     #[serde(rename_all = "camelCase")]
     pub struct IndexConfiguration {
