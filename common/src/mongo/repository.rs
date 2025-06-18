@@ -196,6 +196,7 @@ pub trait Repository<
 
         let options = FindOptions::builder()
             .limit(Some(limit + 1))
+            .sort(doc! { "_id": 1 })
             .batch_size(batch_size)
             .build();
 
@@ -208,7 +209,6 @@ pub trait Repository<
             .try_collect()
             .await
             .map_err(|e| StoreError { msg: e.to_string() })?;
-        collection.sort_by(|a, b| a.get_id().cmp(b.get_id()));
 
         // we are at the end
         if (collection.len() as i64) < limit {

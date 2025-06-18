@@ -31,11 +31,6 @@ RUN cargo build --release --bin ${CRATE_NAME}
 FROM public.ecr.aws/docker/library/alpine:3.21 AS runtime
 RUN apk add --no-cache  ca-certificates 
 
-RUN apk add \
-    --no-cache \
-    --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing \
-    --repository http://dl-cdn.alpinelinux.org/alpine/edge/main \
-    gperftools-dev
 
 # set timezone
 RUN apk add --no-cache tzdata
@@ -52,6 +47,7 @@ ARG USER_GID=$USER_UID
 WORKDIR /app
 
 COPY --from=builder /app/target/release/${CRATE_NAME} /app
+COPY --from=builder /usr/lib/libtcmalloc.so /usr/lib/libtcmalloc.so
 
 ENV CRATE=${CRATE_NAME}
 ENV RUST_LOG=INFO
