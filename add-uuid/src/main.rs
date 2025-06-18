@@ -61,18 +61,14 @@ async fn main() -> anyhow::Result<()> {
     let cache = moka::future::CacheBuilder::new(cache_size)
         .eviction_policy(EvictionPolicy::tiny_lfu())
         .build();
+    let cache_size_fill = cache_size * 90 / 100;
     info!(
-        "prepopulate at most 80% of the cache capacity ({}) with data from mongo...",
-        cache_size * 80 / 100
+        "prepopulate at most 90% of the cache capacity ({}) with data from mongo...",
+        cache_size_fill
     );
 
     let data_in_db = uuid_repository
-        .find_page_large_collection_batched(
-            None,
-            None,
-            (cache_size * 70 / 100) as i64,
-            Some(100_000),
-        )
+        .find_page_large_collection_batched(None, None, (cache_size_fill) as i64, Some(100_000))
         .await?;
     for (subject_hash, id) in data_in_db
         .content
