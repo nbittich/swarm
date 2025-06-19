@@ -1,6 +1,9 @@
 use std::borrow::Cow;
 
-use swarm_common::constant::{RDF, RDFS, XSD};
+use swarm_common::{
+    REGEX_CLEAN_JSESSIONID, REGEX_CLEAN_S_UUID,
+    constant::{RDF, RDFS, XSD},
+};
 use tortank::turtle::turtle_doc::{Node, Statement, TurtleDoc};
 
 pub fn fix_triples(doc: TurtleDoc<'_>) -> anyhow::Result<TurtleDoc<'_>> {
@@ -29,7 +32,20 @@ pub fn fix_triples(doc: TurtleDoc<'_>) -> anyhow::Result<TurtleDoc<'_>> {
 // I was really lazy, so this is the bare minimum I think
 fn fix_term(mut term: Node<'_>) -> Option<Node<'_>> {
     match term {
-        Node::Iri(_) => Some(term),
+        Node::Iri(iri) => {
+            if REGEX_CLEAN_JSESSIONID.is_match(iri.as_ref())
+                || REGEX_CLEAN_S_UUID.is_match(iri.as_ref())
+            {
+                Some(Node::Iri(Cow::Owned(
+                    REGEX_CLEAN_JSESSIONID
+                        .replace_all(REGEX_CLEAN_S_UUID.replace_all(iri.as_ref(), "").trim(), "")
+                        .trim()
+                        .to_string(),
+                )))
+            } else {
+                Some(Node::Iri(iri))
+            }
+        }
         Node::Literal(ref mut literal) => match literal {
             tortank::turtle::turtle_doc::Literal::Quoted {
                 datatype,
