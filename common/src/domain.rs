@@ -425,7 +425,8 @@ pub mod index_config {
         pub sort_direction: Option<Order>,
         pub filters: Option<String>,
         pub limit: usize,
-        pub page: usize,
+        pub offset: Option<usize>,
+        pub page: Option<usize>,
     }
 
     #[derive(Debug, Serialize, Deserialize)]

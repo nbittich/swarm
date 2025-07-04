@@ -600,16 +600,26 @@ impl JobManagerState {
             }
         };
         let search_req = swarm_meilisearch_client::domain::SearchQuery {
-            hits_per_page: (if req.limit == 0 {
+            limit: (if req.limit == 0 {
                 Some(10)
             } else {
                 Some(req.limit)
             }),
-            page: if req.page == 0 {
-                Some(1)
+            offset: if let Some(offset) = req.offset {
+                Some(offset)
             } else {
-                Some(req.page)
+                Some(0)
             },
+            // hits_per_page: (if req.limit == 0 {
+            //     Some(10)
+            // } else {
+            //     Some(req.limit)
+            // }),
+            // page: if req.page == 0 {
+            //     Some(1)
+            // } else {
+            //     Some(req.page)
+            // },
             filter: req.filters.take(),
             q,
             sort,

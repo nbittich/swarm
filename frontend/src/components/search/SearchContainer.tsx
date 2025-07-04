@@ -1,5 +1,5 @@
 import { AppDispatch, RootState } from "@swarm/states/Store";
-import { Alert, Button, Col, Divider, Empty, Flex, Input, List, Pagination, Select, Space, Spin, Typography, } from "antd";
+import { Alert, Button, Col, Divider, Empty, Flex, Input, List, Select, Space, Spin, Typography, } from "antd";
 import { ReactElement, useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import FilterBuilder from "./FilterBuilder";
@@ -46,6 +46,7 @@ const SearchContainer: React.FC = () => {
     const [selectedIndex, setSelectedIndex] = useState<undefined | string>();
     const [query, setQuery] = useState<undefined | string>("");
     const [limit, _] = useState(5);
+    const [offset, setOffset] = useState(0);
     const [filters, setFilters] = useState<{ key: string, operator: string, joiner: string, value: string }[]>([]);
 
     useEffect(() => {
@@ -61,8 +62,9 @@ const SearchContainer: React.FC = () => {
         dispatch(fetchIndexStatistics(index));
     }
 
-    function handleSearch(page = 1) {
+    function handleSearch(off = 0) {
         if (!selectedIndex) return;
+        setOffset(off);
         let filter: undefined | string = undefined;
         const filteredFilters = filters.filter(f => f.key?.length);
         if (filteredFilters.length) {
@@ -76,7 +78,7 @@ const SearchContainer: React.FC = () => {
             filters: filter ? `(${filter})` : undefined,
             query: query?.length ? query.split(' ').length > 1 ? { type: "phrase", value: query } : { type: "word", value: query } : undefined,
             limit,
-            page,
+            offset,
             neg: false, // fixme sort not done, neg probably not needed
         };
         dispatch(performSearch({ index: selectedIndex!, request: req }));
@@ -195,17 +197,22 @@ const SearchContainer: React.FC = () => {
                                 )}
                             />
                         ))}
-                        {(searchResults.totalPages || 1) > 1 && (
-                            <Pagination responsive showSizeChanger={false} align="end"
-                                current={searchResults.page || 1}
-                                pageSize={limit}
-                                total={searchResults.totalHits || (searchResults.totalPages || 1 * limit)}
-                                onChange={p => { handleSearch(p) }}
-                            />
-                        )}
-                    </>)
+                        {searchResults.hits && (
+                            <Flex justify="end">
+                                <Space>
+                                    <Button disabled={offset == 0} onClick={(_) => handleSearch(offset - ((offset || 1) * limit))}>
+                                        Prev
+                                    </Button>
+                                    <Button disabled={searchResults.hits.length < limit} onClick={(_) => handleSearch(offset + ((offset || 1) * limit))}>
+                                        Next
+                                    </Button>
+                                </Space>
+                            </Flex>
+                        )
+                        }</>)
+
                     }
-                </Spin >
+                </Spin>
             </Col>
 
         </Flex>
