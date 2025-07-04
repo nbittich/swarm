@@ -339,6 +339,8 @@ pub mod index_config {
         ("mandaat:", "http://data.vlaanderen.be/ns/mandaat#"),
         ("eli:", "http://data.europa.eu/eli/ontology#"),
         ("euvoc:", "http://publications.europa.eu/ontology/euvoc#"),
+        ("mobiliteit:", "https://data.vlaanderen.be/ns/mobiliteit#"),
+        ("ldes:", "http://w3id.org/ldes#"),
     ];
     pub static PREFIX_OR_NONE: fn(&str) -> Option<String> = |s| {
         PREFIXES.iter().find_map(|(p, uri)| {

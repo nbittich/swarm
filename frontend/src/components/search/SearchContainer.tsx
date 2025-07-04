@@ -77,7 +77,7 @@ const SearchContainer: React.FC = () => {
         const req: SearchQueryRequest = {
             filters: filter ? `(${filter})` : undefined,
             query: query?.length ? query.split(' ').length > 1 ? { type: "phrase", value: query } : { type: "word", value: query } : undefined,
-            limit,
+            limit: limit + 1,
             offset,
             neg: false, // fixme sort not done, neg probably not needed
         };
@@ -150,7 +150,7 @@ const SearchContainer: React.FC = () => {
             <Col span={isMobile ? 24 : 14}>
                 <Spin spinning={loading || searching}>
                     {searchResults && selectedIndex && (<>
-                        {searchResults.hits.map((hit) => (
+                        {searchResults.hits.slice(0, limit).map((hit) => (
                             <List
                                 key={hit._id as string}
                                 bordered
@@ -203,7 +203,7 @@ const SearchContainer: React.FC = () => {
                                     <Button disabled={offset == 0} onClick={(_) => handleSearch(offset - ((offset || 1) * limit))}>
                                         Prev
                                     </Button>
-                                    <Button disabled={searchResults.hits.length < limit} onClick={(_) => handleSearch(offset + ((offset || 1) * limit))}>
+                                    <Button disabled={searchResults.hits.length < limit + 1} onClick={(_) => handleSearch(offset + ((offset || 1) * limit))}>
                                         Next
                                     </Button>
                                 </Space>
