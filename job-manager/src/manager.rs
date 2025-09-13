@@ -304,8 +304,8 @@ impl JobManagerState {
                                 {
                                     job.modified_date = Some(Local::now());
                                     let mut allow_running_job = true;
-                                    if !job.definition.allow_concurrent_run {
-                                        if let Ok(result) = self
+                                    if !job.definition.allow_concurrent_run
+                                        && let Ok(result) = self
                                         .job_repository
                                         .find_by_query(
                                             doc! {
@@ -317,16 +317,13 @@ impl JobManagerState {
                                             None,
                                         )
                                         .await
-                                    {
-                                        if !result.is_empty() {
+                                        && !result.is_empty() {
                                             allow_running_job = false;
                                             job.status = Status::Failed(vec![
                                                 "only one concurrent job".into(),
                                             ]);
                                             self.task_repository.delete_by_id(&task.id).await?;
                                         }
-                                    }
-                                    }
 
                                     if allow_running_job {
                                         if matches!(task.status, Status::Failed(_)) {

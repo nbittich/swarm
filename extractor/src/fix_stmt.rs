@@ -70,7 +70,7 @@ fn fix_term(mut term: Node<'_>) -> Option<Node<'_>> {
                             || iri.as_ref() == &Node::Iri(Cow::Owned(RDF("XMLLiteral")))
                         {
                             *datatype = Some(Box::new(Node::Iri(Cow::Owned(XSD("string")))));
-                            return Some(term);
+                            Some(term)
                         } else {
                             Some(term)
                         }

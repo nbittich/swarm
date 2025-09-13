@@ -13,6 +13,7 @@ use axum::{
 use jsonwebtoken::Header;
 use mime_guess::mime::APPLICATION_OCTET_STREAM;
 use serde_json::{Value, json};
+use spargebra::SparqlParser;
 use sparql_client::{Head, SparqlClient, SparqlResponse, SparqlResult};
 use swarm_common::{
     TryFutureExt,
@@ -183,7 +184,8 @@ async fn sparql(
     let query = query
         .or(update)
         .ok_or_else(|| ApiError::SparqlError("missing query param".to_string()))?;
-    let is_update = spargebra::Update::parse(&query, None).is_ok();
+
+    let is_update = SparqlParser::new().parse_update(&query).is_ok();
     if claims.is_none() && is_update {
         return Err(ApiError::SparqlError("illegal access".into()));
     }
@@ -208,7 +210,9 @@ async fn sparql(
         })
         .into_response())
     } else {
-        spargebra::Query::parse(&query, None).map_err(|e| ApiError::SparqlError(e.to_string()))?;
+        SparqlParser::new()
+            .parse_query(&query)
+            .map_err(|e| ApiError::SparqlError(e.to_string()))?;
         let accept_header = headers
             .get(ACCEPT)
             .and_then(|h| h.to_str().ok())

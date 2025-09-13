@@ -329,17 +329,15 @@ async fn crawl(
                 for a_property in document.select(&configuration.href_selector) {
                     if let Some(interesting_properties) =
                         configuration.interesting_properties.as_ref()
-                    {
-                        if a_property
+                        && a_property
                             .attr("property")
                             .map(|s| s.to_lowercase())
                             .inspect(|p| debug!("property {p}"))
                             .filter(|p| interesting_properties.iter().any(|ip| p.contains(ip)))
                             .is_none()
-                        {
-                            debug!("{a_property:?} doesn't have interesting properties");
-                            continue;
-                        }
+                    {
+                        debug!("{a_property:?} doesn't have interesting properties");
+                        continue;
                     }
                     match a_property.attr("href").map(str::to_owned) {
                         Some(url) => match Url::parse(&url) {
