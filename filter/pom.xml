@@ -6,7 +6,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.4.5</version>
+        <version>3.5.5</version>
         <relativePath /> <!-- lookup parent from repository -->
     </parent>
     <groupId>be.bittich</groupId>
@@ -30,9 +30,9 @@
     </developers>
     <properties>
         <java.version>24</java.version>
-        <commons-text.version>1.13.1</commons-text.version>
-        <jena.version>5.3.0</jena.version>
-        <nats.version>2.21.1</nats.version>
+        <commons-text.version>1.14.0</commons-text.version>
+        <jena.version>5.5.0</jena.version>
+        <nats.version>2.22.0</nats.version>
     </properties>
     <dependencies>
         <dependency>
