@@ -78,7 +78,7 @@ const SearchContainer: React.FC = () => {
             filters: filter ? `(${filter})` : undefined,
             query: query?.length ? query.split(' ').length > 1 ? { type: "phrase", value: query } : { type: "word", value: query } : undefined,
             limit: limit + 1,
-            offset,
+            offset: off,
             neg: false, // fixme sort not done, neg probably not needed
         };
         dispatch(performSearch({ index: selectedIndex!, request: req }));
@@ -93,8 +93,6 @@ const SearchContainer: React.FC = () => {
             <span style={{ color: '#ff5d8f' }}>M</span>
         </Typography.Title>
         <Flex justify="center" >
-
-
             <Col span={isMobile ? 24 : 14}>
                 <Flex vertical={isMobile} gap="middle" >
                     <Select
@@ -200,10 +198,10 @@ const SearchContainer: React.FC = () => {
                         {searchResults.hits && (
                             <Flex justify="end">
                                 <Space>
-                                    <Button disabled={offset == 0} onClick={(_) => handleSearch(offset - ((offset || 1) * limit))}>
+                                    <Button disabled={offset == 0} onClick={(_) => handleSearch(Math.max(0, offset - limit))}>
                                         Prev
                                     </Button>
-                                    <Button disabled={searchResults.hits.length < limit + 1} onClick={(_) => handleSearch(offset + ((offset || 1) * limit))}>
+                                    <Button disabled={searchResults.hits.length < limit + 1} onClick={(_) => handleSearch(offset + limit)}>
                                         Next
                                     </Button>
                                 </Space>
