@@ -19,7 +19,7 @@ use swarm_common::{
     domain::TaskDefinition,
 };
 use swarm_meilisearch_client::domain::{Batch, BatchStatus};
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Claims {
     pub sub: String,
